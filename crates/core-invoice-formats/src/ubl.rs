@@ -267,10 +267,12 @@ pub fn read(xml: &str) -> Result<Read, FormatError> {
     };
     invoice.type_code = child_text(root, type_tag).map(Code::new);
     invoice.tax_currency = child_text(root, "TaxCurrencyCode").map(Code::new);
-    if kind == DocumentKind::Invoice {
-        invoice.due_date = child_text(root, "DueDate").and_then(|s| Date::parse(&s).ok());
-    } else if child(root, "DueDate").is_some() {
-        malformed.push("CreditNote/DueDate".into());
+    if let Some(d) = child_text(root, "DueDate").and_then(|s| Date::parse(&s).ok()) {
+        invoice.due_date = Some(d);
+        if kind == DocumentKind::CreditNote {
+            // UBL 2.1 CreditNote has no DueDate child. LHDN samples still put BT-9 here.
+            // Store the date; do not treat it as a malformed amount (that would fail parse).
+        }
     }
     invoice.tax_point_date = child_text(root, "TaxPointDate").and_then(|s| Date::parse(&s).ok());
     invoice.notes = children(root, "Note")
@@ -1672,21 +1674,28 @@ mod tests {
     }
 
     #[test]
-    fn credit_note_duedate_is_reported_not_stored() {
+    fn credit_note_duedate_is_stored_not_written() {
         let mut inv = sample();
         inv.kind = core_invoice::DocumentKind::CreditNote;
         inv.type_code = Some(Code::new("381"));
         inv.due_date = Date::parse("2026-02-01").ok();
         let xml = write_unchecked(&inv);
-        assert!(!xml.contains("DueDate"));
+        assert!(
+            !xml.contains("DueDate"),
+            "UBL CreditNote writer omits DueDate"
+        );
         let xml = xml.replacen(
             "<cbc:CreditNoteTypeCode>",
             "<cbc:DueDate>2026-02-01</cbc:DueDate><cbc:CreditNoteTypeCode>",
             1,
         );
         let traced = read(&xml).unwrap();
-        assert!(traced.malformed.iter().any(|m| m.contains("DueDate")));
-        assert!(traced.invoice.due_date.is_none());
+        assert!(
+            traced.malformed.iter().all(|m| !m.contains("DueDate")),
+            "{:?}",
+            traced.malformed
+        );
+        assert_eq!(traced.invoice.due_date, Date::parse("2026-02-01").ok());
     }
 
     #[test]

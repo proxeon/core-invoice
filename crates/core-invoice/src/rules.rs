@@ -335,21 +335,28 @@ fn br_05(invoice: &Invoice, report: &mut Report) {
 }
 
 fn br_53(invoice: &Invoice, report: &mut Report) {
-    // BR-53: BT-111 is supplied, never derived. BT-6 without BT-111 is Fatal.
-    let has_bt6 = invoice
+    // BR-53 artefact: every TaxCurrencyCode (BT-6) has a TaxTotal/TaxAmount @currencyID of that code.
+    // When BT-6 equals BT-5, the document TaxTotal (BT-110) satisfies it. BT-111 is a second
+    // TaxTotal only when the currencies differ. Never derive BT-111.
+    let Some(tax_ccy) = invoice
         .tax_currency
         .as_ref()
-        .is_some_and(|c| !c.as_str().trim().is_empty());
-    let has_bt111 = invoice
-        .totals
-        .as_ref()
-        .and_then(|t| t.tax_total_accounting)
-        .is_some();
-    if has_bt6 != has_bt111 {
+        .map(|c| c.as_str())
+        .filter(|c| !c.trim().is_empty())
+    else {
+        return;
+    };
+    let totals = invoice.totals.as_ref();
+    let has_amount = if tax_ccy.eq_ignore_ascii_case(&invoice.currency) {
+        totals.and_then(|t| t.tax_total).is_some()
+    } else {
+        totals.and_then(|t| t.tax_total_accounting).is_some()
+    };
+    if !has_amount {
         report.push(Finding::fatal(
             "BR-53",
             Path::term(BtId(111)),
-            "VAT accounting currency amount (BT-111) shall be present if and only if VAT accounting currency code (BT-6) is present",
+            "If the VAT accounting currency code (BT-6) is present, then a TaxAmount in that currency shall be provided",
         ));
     }
 }
@@ -924,7 +931,7 @@ pub static ALL: &[Rule] = &[
     Rule {
         id: "BR-53",
         severity: Severity::Fatal,
-        text: "If BT-6 (VAT accounting currency) is present, BT-111 shall be present, and conversely. BT-111 is never derived.",
+        text: "If BT-6 is present, a TaxAmount in that currency shall exist (BT-110 when BT-6=BT-5, else BT-111). Never derived.",
         source: Source::Both,
         eval: br_53,
     },

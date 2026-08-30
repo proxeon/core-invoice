@@ -299,6 +299,54 @@ mod tests {
     }
 
     #[test]
+    fn official_en_sample_discount_price() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../refers/en16931/ubl/examples/sample-discount-price.xml");
+        if !path.exists() {
+            if std::env::var("CORE_INVOICE_REQUIRE_SPEC").ok().as_deref() == Some("1") {
+                panic!("missing {}", path.display());
+            }
+            return;
+        }
+        let xml = std::fs::read_to_string(&path).unwrap();
+        let report = core_invoice_formats::validate_xml(&xml, Some(Profile::En16931)).unwrap();
+        assert!(
+            report.findings.iter().all(|f| f.id != "BR-53"),
+            "BT-6=BT-5 uses BT-110 for BR-53: {report}"
+        );
+        assert!(report.ok(), "sample-discount-price: {report}");
+    }
+
+    #[test]
+    fn official_pint_my_lhdn_complete_credit_note() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(
+            "../../refers/pint-my-1.3.0/unpacked/trn-invoice/example/CompleteSample_LHDN-CreditNote.xml",
+        );
+        if !path.exists() {
+            if std::env::var("CORE_INVOICE_REQUIRE_SPEC").ok().as_deref() == Some("1") {
+                panic!("missing {}", path.display());
+            }
+            return;
+        }
+        let xml = std::fs::read_to_string(&path).unwrap();
+        let traced = core_invoice_formats::read_with_trace(&xml).unwrap();
+        assert!(
+            traced.malformed.iter().all(|m| !m.contains("DueDate")),
+            "{:?}",
+            traced.malformed
+        );
+        let report = validate(&traced.invoice);
+        assert!(
+            report.ok()
+                || report
+                    .findings
+                    .iter()
+                    .all(|f| f.severity != core_invoice::Severity::Fatal),
+            "CompleteSample_LHDN-CreditNote: {report}"
+        );
+    }
+
+    #[test]
     fn sa_plus_ttx_omits_percent_and_uses_aal() {
         let mut inv = pint_my_sst();
         inv.lines.push(Line::new(
