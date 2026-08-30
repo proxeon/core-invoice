@@ -41,7 +41,8 @@ CLASS: mapped as `Line.classifications` with `listID` (`CG` is CLASS in PINT-MY)
 
 ## Pint GST
 
-- `pint_gst_category` helper exists; GST family table on `Profile::Pint` is not a full IBR set. Owner: P12/P9.
+- Pint international 1.1.2 zip has no official example XML (`refers/pint-billing-1.1.2/unpacked/trn-invoice/` is genericode + Schematron only). Authored `pint_gst_sr` is not an oracle.
+- `pint_gst_category` helper exists; GST family table on `Profile::Pint` is not a full IBR set. Owner: P13.09.
 
 ## P14 / P18
 

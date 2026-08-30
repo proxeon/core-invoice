@@ -53,6 +53,8 @@ pub fn pint_my_sst() -> Invoice {
     inv
 }
 
+/// Authored MIT fixture for `Profile::Pint` GST (`SR`). Not an official PINT 1.1.2 sample
+/// (that zip has no example XML; see `docs/UNCOVERED.md`).
 pub fn pint_gst_sr() -> Invoice {
     let mut inv = Invoice::blank(
         Profile::Pint,
