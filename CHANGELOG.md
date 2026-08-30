@@ -19,8 +19,10 @@ down here**, not that there are none.
 
 ### Changed
 
-- **Honesty (0.1.x skeleton).** Do not treat `validate().ok()` as EN 16931 / Peppol / PINT compliance.
-- **CII.** `convert --to cii` and CII parse are refused (`FormatError::CiiNotImplemented`, CLI exit 2). The previous UBL-in-`CrossIndustryInvoice` wrapper is gone.
+- **Honesty (0.1.x skeleton).** Do not treat `validate().ok()` as EN 16931 / Peppol / PINT compliance. Do not treat convert as a legal write path yet: it still serialises invoices that would fail `validate` (proof wiring is the next slice).
+- **CII (historical, crates.io 0.1.0 / 004 P0).** `convert --to cii` used to wrap UBL in `CrossIndustryInvoice` and was then refused as `CiiNotImplemented`. That wrapper is gone.
+- **CII (current).** Three-part D16B **subset** for EN 16931 and Peppol BIS (lines before header, format 102). Qty, price, payment, allowances, and delivery are not mapped yet. **PINT-MY is UBL-only:** `FormatError::CiiNotForProfile`, CLI exit 2.
+- **Breaking (0.1.x).** `FormatError::CiiNotImplemented` is renamed to `CiiNotForProfile` and is returned when writing CII for PINT-MY.
 - **CLI.** `--profile` default is `auto` (BT-24). Invalid findings print on **stdout**. `explain` unknown ids exit 2. `explain` covers BR-06 and BR-07.
 - **BR-05** is currency **presence**, not a 3-letter length check.
 - **BR-CO-16** is no longer emitted for `payable = line net + tax total`. The CEN formula is documented by `explain` as not evaluated until document totals exist.
@@ -48,8 +50,8 @@ down here**, not that there are none.
   categories restricted to SA/SE/HVG/LVG/TTX/E/O. `wire_scheme()` maps SST to
   TaxScheme `VAT` (never `SST` on the wire).
 - Presence: BR-01, BR-03, BR-04, BR-09, BR-11, BR-21, BR-25.
-- CII D16B is a real three-part mapping (lines before header, format 102
-  dates), not a UBL wrapper. `--to cii` is enabled.
+- CII D16B three-part **subset** (lines before header, format 102). Not a UBL
+  wrapper. `--to cii` is enabled for EN/Peppol only; PINT-MY is refused.
 - Peppol extra_rules: R001/R003/R004/R007, R120 ±0.02 inclusive, R046 exact.
   They do not run on EN core or PINT-MY.
 - CLI: `rules --format json`, `inspect` (no verdict), `profiles`. `diff`

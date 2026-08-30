@@ -1,8 +1,12 @@
 # core-invoice-cli
 
-Offline binary `core-invoice`. No network. **0.1.x is a skeleton.**
+Offline binary `core-invoice`. No network. **0.1.x is a skeleton.** `inspect` prints fields, not a valid/invalid verdict.
 
-Exit codes (validate): **0** valid, **1** invalid (findings on stdout), **2** unreadable / I/O.
+| Exit | Meaning |
+|---|---|
+| **0** | valid / no semantic difference / explained / listed |
+| **1** | invalid (findings on **stdout**) / documents differ (`diff`) |
+| **2** | unreadable XML, I/O, unknown `explain` id, CII refused for PINT-MY |
 
 `--profile` default is **`auto`** (BT-24 / CustomizationID). Named slugs: `en16931`, `peppol`, `pint`, `pint-my`. A named profile forces that rule set (“would this pass as Peppol?”).
 
@@ -14,4 +18,4 @@ cargo run -p core-invoice-cli -- diff a.xml b.xml
 cargo run -p core-invoice-cli -- explain BR-05
 ```
 
-`convert --to cii` exits **2** until UN/CEFACT CII D16B exists. Unknown `explain` ids exit **2**.
+`convert --to cii` writes a **subset** D16B envelope for EN/Peppol (qty/price/payment still incomplete). On a **PINT-MY** invoice it exits **2** (`CiiNotForProfile`): PINT-MY is UBL-only. Convert does not yet refuse semantically invalid sources (that is the next slice). Unknown `explain` ids exit **2**.

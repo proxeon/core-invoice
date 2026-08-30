@@ -13,10 +13,12 @@ pub enum FormatError {
     UnsupportedSyntax(String),
     #[error("parse error: {0}")]
     Parse(String),
-    #[error(
-        "CII D16B is not implemented; convert --to cii is refused until a real UN/CEFACT mapping exists"
-    )]
-    CiiNotImplemented,
+    /// PINT-MY is UBL-only. EN/Peppol may emit D16B under the subset policy.
+    ///
+    /// PINT-MY Billing 1.3.0 has no CII binding. Returning this (instead of
+    /// emitting a costume `CrossIndustryInvoice`) keeps convert honest.
+    #[error("CII D16B is not a PINT-MY syntax; PINT-MY Billing 1.3.0 is UBL-only")]
+    CiiNotForProfile,
     #[error(transparent)]
     Semantic(#[from] SemanticReject),
 }
@@ -130,5 +132,13 @@ mod tests {
         assert!(cii.contains("CrossIndustryInvoice"));
         assert!(cii.contains("SupplyChainTradeTransaction"));
         assert!(!cii.contains("<Invoice "));
+    }
+
+    #[test]
+    fn pint_my_convert_to_cii_is_cii_not_for_profile() {
+        // BT-24 prefix `urn:peppol:pint:billing-1@my-1` selects Profile::PintMy.
+        let ubl = r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"><cbc:CustomizationID>urn:peppol:pint:billing-1@my-1</cbc:CustomizationID><cbc:ID>1</cbc:ID><cbc:IssueDate>2026-01-15</cbc:IssueDate><cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode><cbc:DocumentCurrencyCode>MYR</cbc:DocumentCurrencyCode><cac:LegalMonetaryTotal><cbc:PayableAmount currencyID="MYR">0</cbc:PayableAmount></cac:LegalMonetaryTotal></Invoice>"#;
+        let err = convert(ubl, Syntax::Cii).unwrap_err();
+        assert!(matches!(err, FormatError::CiiNotForProfile), "{err:?}");
     }
 }

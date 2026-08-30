@@ -19,6 +19,10 @@ const NS_RAM: &str =
 const NS_UDT: &str = "urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100";
 
 pub fn write(invoice: &Invoice) -> Result<String, FormatError> {
+    // PINT-MY is UBL-only; CII is EN/Peppol (and later ZUGFeRD extract).
+    if invoice.profile == Profile::PintMy {
+        return Err(FormatError::CiiNotForProfile);
+    }
     let spec = invoice
         .specification_id
         .as_deref()

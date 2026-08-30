@@ -9,7 +9,7 @@ use std::process::ExitCode;
 #[command(
     name = "core-invoice",
     version,
-    about = "EN 16931 + Peppol PINT, offline. 0.1.x is a skeleton."
+    about = "EN 16931 + Peppol PINT, offline. 0.1.x is a skeleton. CII is a D16B subset for EN/Peppol; PINT-MY is UBL-only."
 )]
 struct Cli {
     #[command(subcommand)]
@@ -25,7 +25,7 @@ enum Command {
         #[arg(short, long, value_enum, default_value = "auto")]
         profile: ProfileArg,
     },
-    /// Convert through the semantic model (UBL ↔ CII D16B)
+    /// Convert through the semantic model (UBL; CII subset for EN/Peppol, not PINT-MY)
     Convert {
         path: PathBuf,
         #[arg(long, value_enum)]
@@ -122,6 +122,8 @@ fn run() -> Result<ExitCode, String> {
                     print!("{out}");
                     Ok(ExitCode::SUCCESS)
                 }
+                // FormatError (parse, CiiNotForProfile, …) is not a semantic finding.
+                // CLI contract: unreadable / refused syntax → exit 2 on stderr.
                 Err(e) => Err(e.to_string()),
             }
         }

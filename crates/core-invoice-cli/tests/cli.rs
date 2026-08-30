@@ -119,6 +119,30 @@ fn rules_json_lists_br_co_16() {
 }
 
 #[test]
+fn convert_pint_my_to_cii_is_2() {
+    let xml = core_invoice_formats::write(
+        &core_invoice_fixtures::pint_my_sst(),
+        core_invoice_formats::Syntax::Ubl,
+    )
+    .unwrap();
+    let path = write_tmp("pint-my", &xml);
+    let out = bin()
+        .args(["convert", path.to_str().unwrap(), "--to", "cii"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("UBL-only"), "{stderr}");
+    assert!(out.stdout.is_empty());
+}
+
+#[test]
 fn inspect_has_no_verdict() {
     let path = write_tmp("insp", &peppol_xml());
     let out = bin()

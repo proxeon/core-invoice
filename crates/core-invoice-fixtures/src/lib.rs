@@ -111,13 +111,22 @@ mod tests {
     }
 
     #[test]
-    fn cii_write_is_three_part_d16b() {
-        let xml = write(&pint_my_sst(), Syntax::Cii).unwrap();
+    fn cii_write_is_three_part_d16b_for_en_peppol() {
+        let xml = write(&peppol_vat(), Syntax::Cii).unwrap();
         assert!(xml.contains("CrossIndustryInvoice"));
         let line = xml.find("IncludedSupplyChainTradeLineItem").unwrap();
         let header = xml.find("ApplicableHeaderTradeAgreement").unwrap();
         assert!(line < header);
         assert!(!xml.contains(">SST<"));
+    }
+
+    #[test]
+    fn pint_my_cii_is_refused() {
+        let err = write(&pint_my_sst(), Syntax::Cii).unwrap_err();
+        assert!(
+            matches!(err, core_invoice_formats::FormatError::CiiNotForProfile),
+            "{err}"
+        );
     }
 
     #[test]
