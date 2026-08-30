@@ -42,6 +42,7 @@ pub fn catalogue() -> &'static [Rule] {
         ALL.iter()
             .copied()
             .chain(crate::category::RULES.iter().copied())
+            .chain(crate::codes::RULES.iter().copied())
             .collect()
     })
 }

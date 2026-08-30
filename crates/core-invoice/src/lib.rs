@@ -9,6 +9,7 @@ pub mod attachment;
 pub mod bt;
 pub mod category;
 pub mod code;
+pub mod codes;
 pub mod date;
 pub mod error;
 pub mod identifier;
@@ -17,6 +18,7 @@ pub mod kind;
 pub mod numeric;
 pub mod payment;
 pub mod profile;
+pub mod proof;
 pub mod reconcile;
 pub mod report;
 pub mod rules;
@@ -28,6 +30,7 @@ pub use attachment::Attachment;
 pub use bt::{BtId, Group, Path};
 pub use category::{CategoryProfile, VatCategory, pint_gst_category};
 pub use code::Code;
+pub use codes::{ARTEFACT_VERSION, currency as is_currency};
 pub use date::Date;
 pub use error::{AmountError, AttachmentError, DateError};
 pub use identifier::{DocumentReference, Identifier};
@@ -40,6 +43,10 @@ pub use kind::DocumentKind;
 pub use numeric::{Percentage, Quantity};
 pub use payment::{CreditTransfer, DirectDebit, PaymentCard, PaymentMeans};
 pub use profile::{Edition, Profile, ProfileLookup};
+pub use proof::{
+    Check, En16931 as En16931Marker, PeppolBis3 as PeppolBis3Marker, Pint as PintMarker,
+    PintMy as PintMyMarker, ProfileMarker, ProveError, Underlies, Validated,
+};
 pub use reconcile::{ReconcileError, Reconciled, Reconciler, reconcile};
 pub use report::{Finding, Report, Severity, Source};
 pub use rules::{catalogue, explain};

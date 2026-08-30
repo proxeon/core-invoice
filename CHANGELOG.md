@@ -48,6 +48,13 @@ down here**, not that there are none.
   categories restricted to SA/SE/HVG/LVG/TTX/E/O. `wire_scheme()` maps SST to
   TaxScheme `VAT` (never `SST` on the wire).
 - Presence: BR-01, BR-03, BR-04, BR-09, BR-11, BR-21, BR-25.
+- Code lists (hand-curated subsets): `BR-CL-01` UNTDID 1001 split by
+  `DocumentKind`, `BR-CL-04` ISO 4217 (not length-3; `XXX` allowed),
+  `BR-CL-14` ISO 3166, `BR-CL-17`/`BR-CL-18` UNCL 5305 on VAT profiles only.
+  Artefact pins `validation-1.3.16` / Peppol `v3.0.20` / PINT-MY `1.3.0`.
+  `task spec` fetches into gitignored `/spec/`.
+- `Validated<P>` proof type. `Check::without` cannot `prove`. Peppol proof may
+  widen to EN 16931 (CIUS); Pint/PintMy do not.
 - Category families: real `BR-S-*` / `BR-Z-*` / `BR-E-*` / `BR-AE-*` /
   `BR-IC-*` / `BR-G-*` / `BR-O-*` / `BR-AF-*` / `BR-AG-*` / `BR-B-*` ids on VAT
   profiles; PINT-MY uses `ALIGNED-IBRP-*-MY` (never `BR-S-08` for SST). GST `SR`
