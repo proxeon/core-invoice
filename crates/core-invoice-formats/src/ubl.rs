@@ -329,6 +329,9 @@ pub fn read(xml: &str) -> Result<Read, FormatError> {
             invoice.supporting_documents.push(doc);
         }
     }
+    invoice.payee = child(root, "PayeeParty").map(read_payee);
+    invoice.tax_representative = child(root, "TaxRepresentativeParty").map(read_tax_rep);
+    invoice.delivery = child(root, "Delivery").map(read_delivery);
     invoice.payment = child(root, "PaymentMeans").map(read_payment);
     invoice.payment_terms = child(root, "PaymentTerms").and_then(|n| child_text(n, "Note"));
     invoice.document_allowances = children(root, "AllowanceCharge")
@@ -557,22 +560,32 @@ fn write_payee(s: &mut String, payee: &Payee) {
 }
 
 fn write_tax_rep(s: &mut String, tr: &TaxRepresentative) {
+    // TaxRepresentativeParty is PartyType: PartyName / PostalAddress / PartyTaxScheme
+    // sit directly under it. Do not wrap an extra cac:Party (XSD-invalid).
     open(s, 1, "TaxRepresentativeParty");
-    open(s, 2, "Party");
     if !tr.name.is_empty() {
-        open(s, 3, "PartyName");
-        leaf(s, 4, "Name", &tr.name, None);
-        close(s, 3, "PartyName");
+        open(s, 2, "PartyName");
+        leaf(s, 3, "Name", &tr.name, None);
+        close(s, 2, "PartyName");
+    }
+    if let Some(addr) = tr.address.as_ref()
+        && let Some(cc) = addr.country.as_ref().map(Code::as_str)
+        && !cc.is_empty()
+    {
+        open(s, 2, "PostalAddress");
+        open(s, 3, "Country");
+        leaf(s, 4, "IdentificationCode", cc, None);
+        close(s, 3, "Country");
+        close(s, 2, "PostalAddress");
     }
     if let Some(vat) = tr.vat_identifier.as_ref() {
-        open(s, 3, "PartyTaxScheme");
-        leaf(s, 4, "CompanyID", &vat.value, None);
-        open(s, 4, "TaxScheme");
-        leaf(s, 5, "ID", "VAT", None);
-        close(s, 4, "TaxScheme");
-        close(s, 3, "PartyTaxScheme");
+        open(s, 2, "PartyTaxScheme");
+        leaf(s, 3, "CompanyID", &vat.value, None);
+        open(s, 3, "TaxScheme");
+        leaf(s, 4, "ID", "VAT", None);
+        close(s, 3, "TaxScheme");
+        close(s, 2, "PartyTaxScheme");
     }
-    close(s, 2, "Party");
     close(s, 1, "TaxRepresentativeParty");
 }
 
@@ -580,6 +593,27 @@ fn write_delivery(s: &mut String, d: &Delivery) {
     open(s, 1, "Delivery");
     if let Some(date) = d.date {
         leaf(s, 2, "ActualDeliveryDate", &date.to_string(), None);
+    }
+    let country = d
+        .address
+        .as_ref()
+        .and_then(|a| a.country.as_ref().map(Code::as_str))
+        .filter(|c| !c.is_empty());
+    if d.name.is_some() || country.is_some() {
+        open(s, 2, "DeliveryLocation");
+        open(s, 3, "Address");
+        if let Some(n) = d.name.as_deref() {
+            open(s, 4, "AddressLine");
+            leaf(s, 5, "Line", n, None);
+            close(s, 4, "AddressLine");
+        }
+        if let Some(cc) = country {
+            open(s, 4, "Country");
+            leaf(s, 5, "IdentificationCode", cc, None);
+            close(s, 4, "Country");
+        }
+        close(s, 3, "Address");
+        close(s, 2, "DeliveryLocation");
     }
     close(s, 1, "Delivery");
 }
@@ -1119,6 +1153,72 @@ fn read_party(node: roxmltree::Node<'_, '_>, profile: Profile) -> Party {
     party
 }
 
+fn read_payee(node: roxmltree::Node<'_, '_>) -> Payee {
+    Payee {
+        name: child(node, "PartyName")
+            .and_then(|n| child_text(n, "Name"))
+            .unwrap_or_default(),
+        identifier: child(node, "PartyIdentification")
+            .and_then(|n| child(n, "ID"))
+            .map(ident),
+        legal_registration: child(node, "PartyLegalEntity")
+            .and_then(|n| child(n, "CompanyID"))
+            .map(ident),
+    }
+}
+
+fn read_tax_rep(node: roxmltree::Node<'_, '_>) -> TaxRepresentative {
+    // Spec-valid: PartyType children directly. Nested cac:Party (older writer / some samples) also accepted.
+    let party = child(node, "Party").unwrap_or(node);
+    let country = child(party, "PostalAddress")
+        .and_then(|n| child(n, "Country"))
+        .and_then(|n| child_text(n, "IdentificationCode"))
+        .map(Code::new);
+    TaxRepresentative {
+        name: child(party, "PartyName")
+            .and_then(|n| child_text(n, "Name"))
+            .unwrap_or_default(),
+        vat_identifier: child(party, "PartyTaxScheme")
+            .and_then(|n| child(n, "CompanyID"))
+            .map(ident),
+        address: country.map(|c| core_invoice::PostalAddress {
+            line1: None,
+            line2: None,
+            line3: None,
+            city: None,
+            post_code: None,
+            subdivision: None,
+            country: Some(c),
+        }),
+    }
+}
+
+fn read_delivery(node: roxmltree::Node<'_, '_>) -> Delivery {
+    let loc = child(node, "DeliveryLocation").and_then(|n| child(n, "Address"));
+    let country = loc
+        .and_then(|a| child(a, "Country"))
+        .and_then(|n| child_text(n, "IdentificationCode"))
+        .map(Code::new);
+    Delivery {
+        name: loc
+            .and_then(|a| child(a, "AddressLine"))
+            .and_then(|n| child_text(n, "Line")),
+        location_id: child(node, "DeliveryLocation")
+            .and_then(|n| child(n, "ID"))
+            .map(ident),
+        date: child_text(node, "ActualDeliveryDate").and_then(|s| Date::parse(&s).ok()),
+        address: country.map(|c| core_invoice::PostalAddress {
+            line1: None,
+            line2: None,
+            line3: None,
+            city: None,
+            post_code: None,
+            subdivision: None,
+            country: Some(c),
+        }),
+    }
+}
+
 fn ident(node: roxmltree::Node<'_, '_>) -> Identifier {
     Identifier {
         value: text(node).unwrap_or_default(),
@@ -1649,7 +1749,10 @@ fn amount_unit(s: &mut String, indent: usize, tag: &str, value: UnitPriceAmount,
 #[cfg(test)]
 mod tests {
     use super::*;
-    use core_invoice::{Identifier, ItemAttribute, Line, Party, TaxCategory, reconcile};
+    use core_invoice::{
+        Delivery, Identifier, ItemAttribute, Line, Party, Payee, PostalAddress, TaxCategory,
+        TaxRepresentative, reconcile,
+    };
     use rust_decimal::Decimal;
 
     fn sample() -> Invoice {
@@ -1732,6 +1835,61 @@ mod tests {
         );
         assert_eq!(back.lines[0].attributes[0].name, "Colour");
         assert_eq!(back.lines[0].attributes[0].value, "blue");
+    }
+
+    #[test]
+    fn round_trip_payee_tax_rep_delivery() {
+        let mut inv = sample();
+        inv.payee = Some(Payee {
+            name: "Payee AG".into(),
+            identifier: None,
+            legal_registration: None,
+        });
+        inv.tax_representative = Some(TaxRepresentative {
+            name: "TaxRep GmbH".into(),
+            vat_identifier: Some(Identifier::new("DE123")),
+            address: Some(PostalAddress {
+                line1: None,
+                line2: None,
+                line3: None,
+                city: None,
+                post_code: None,
+                subdivision: None,
+                country: Some(Code::new("DE")),
+            }),
+        });
+        inv.delivery = Some(Delivery {
+            name: None,
+            location_id: None,
+            date: Date::parse("2026-01-20").ok(),
+            address: Some(PostalAddress {
+                line1: None,
+                line2: None,
+                line3: None,
+                city: None,
+                post_code: None,
+                subdivision: None,
+                country: Some(Code::new("DE")),
+            }),
+        });
+        let xml = write_unchecked(&inv);
+        assert!(
+            !xml.contains("TaxRepresentativeParty><cac:Party>"),
+            "PartyType children sit directly under TaxRepresentativeParty: {xml}"
+        );
+        let back = read(&xml).unwrap().invoice;
+        assert_eq!(
+            back.payee.as_ref().map(|p| p.name.as_str()),
+            Some("Payee AG")
+        );
+        assert_eq!(
+            back.tax_representative.as_ref().map(|t| t.name.as_str()),
+            Some("TaxRep GmbH")
+        );
+        assert_eq!(
+            back.delivery.as_ref().and_then(|d| d.date),
+            inv.delivery.as_ref().and_then(|d| d.date)
+        );
     }
 
     #[test]
