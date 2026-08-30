@@ -48,6 +48,10 @@ down here**, not that there are none.
   categories restricted to SA/SE/HVG/LVG/TTX/E/O. `wire_scheme()` maps SST to
   TaxScheme `VAT` (never `SST` on the wire).
 - Presence: BR-01, BR-03, BR-04, BR-09, BR-11, BR-21, BR-25.
+- UBL 2.1 codec is a tree walk (`roxmltree`): Invoice and CreditNote roots,
+  no first-tag-wins, no invented EUR/XX/S. DTD refused. Writer emits IssueDate,
+  type code, EndpointID, TaxSubtotal, LegalMonetaryTotal children, quantity/price.
+  PINT-MY TaxScheme is `VAT` (never `SST`). `write_validated` stamps from a proof.
 - Code lists (hand-curated subsets): `BR-CL-01` UNTDID 1001 split by
   `DocumentKind`, `BR-CL-04` ISO 4217 (not length-3; `XXX` allowed),
   `BR-CL-14` ISO 3166, `BR-CL-17`/`BR-CL-18` UNCL 5305 on VAT profiles only.

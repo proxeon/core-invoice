@@ -51,8 +51,15 @@ impl Syntax {
 pub fn write(invoice: &Invoice, syntax: Syntax) -> Result<String, FormatError> {
     match syntax {
         Syntax::Ubl => Ok(ubl::write(invoice)),
-        Syntax::Cii => Err(FormatError::CiiNotImplemented),
+        Syntax::Cii => cii::write(invoice),
     }
+}
+
+pub fn write_validated<P: core_invoice::ProfileMarker>(
+    proof: &core_invoice::Validated<P>,
+    syntax: Syntax,
+) -> Result<String, FormatError> {
+    write(proof.invoice(), syntax)
 }
 
 pub fn convert(xml: &str, to: Syntax) -> Result<String, FormatError> {
@@ -61,16 +68,17 @@ pub fn convert(xml: &str, to: Syntax) -> Result<String, FormatError> {
 }
 
 pub fn read(xml: &str) -> Result<Invoice, FormatError> {
-    let trimmed = xml.trim_start();
-    if trimmed.contains("CrossIndustryInvoice") {
-        // Wrapper and real D16B both refused until P12.
-        cii::read(xml)
-    } else if trimmed.contains("Invoice") || trimmed.contains("urn:oasis:names:specification:ubl") {
-        ubl::read(xml)
-    } else {
-        Err(FormatError::Parse(
-            "document is neither UBL Invoice nor CII CrossIndustryInvoice".into(),
-        ))
+    if xml.to_ascii_lowercase().contains("<!doctype") {
+        return Err(FormatError::Parse("DTD is refused".into()));
+    }
+    let rest = xml.trim_start();
+    if rest.contains("CrossIndustryInvoice") {
+        return cii::read(xml);
+    }
+    match ubl::sniff(xml) {
+        Ok(_) => ubl::read(xml),
+        Err(_) if rest.contains("urn:oasis:names:specification:ubl") => ubl::read(xml),
+        Err(e) => Err(e),
     }
 }
 

@@ -100,6 +100,14 @@ mod tests {
         assert_eq!(back.profile, Profile::PintMy);
         assert_eq!(back.seller.tax_id, None);
         assert_eq!(back.seller.id_scheme, None);
+        assert_eq!(
+            back.seller
+                .tax_registration
+                .as_ref()
+                .map(|i| i.value.as_str()),
+            Some("C12345678901")
+        );
+        assert_eq!(back.lines[0].tax.code, "SA");
     }
 
     #[test]
