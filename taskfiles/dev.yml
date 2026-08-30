@@ -49,26 +49,6 @@ tasks:
       - cargo doc --workspace --no-deps
 
   spec:
-    desc: Fetch EN 16931 / Peppol artefacts into spec/ (gitignored, EUPL)
+    desc: Fetch official artefacts into refers/ (clones/zips gitignored)
     cmds:
-      - |
-        set -euo pipefail
-        mkdir -p spec
-        if [ "${CORE_INVOICE_REQUIRE_SPEC:-0}" != "1" ]; then
-          echo "skipping spec fetch (set CORE_INVOICE_REQUIRE_SPEC=1 to clone pins)"
-          echo "pins: EN ${ARTEFACT:-validation-1.3.16}  Peppol v3.0.20  PINT-MY 1.3.0"
-          exit 0
-        fi
-        if [ ! -d spec/eInvoicing-EN16931 ]; then
-          git clone --depth 1 --branch validation-1.3.16 \
-            https://github.com/ConnectingEurope/eInvoicing-EN16931.git \
-            spec/eInvoicing-EN16931
-          git -C spec/eInvoicing-EN16931 fetch --depth 1 origin refs/tags/validation-1.3.16
-          git -C spec/eInvoicing-EN16931 checkout FETCH_HEAD
-        fi
-        if [ ! -d spec/peppol-bis-invoice-3 ]; then
-          git clone --depth 1 --branch v3.0.20 \
-            https://github.com/OpenPEPPOL/peppol-bis-invoice-3.git \
-            spec/peppol-bis-invoice-3
-        fi
-        echo "spec artefacts present (not for git add)"
+      - bash refers/fetch.sh

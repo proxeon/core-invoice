@@ -7,6 +7,10 @@
 
 plans/
 
-# Reference artefacts. CEN is EUPL-1.2; Peppol/PINT carry their own terms.
-# Fetch later with `task spec`. Keeping them out is what keeps MIT OR Apache-2.0.
+# Official artefacts (CEN EUPL-1.2, Peppol, OASIS, UNECE).
+# README + fetch.sh stay tracked; clones, zips, and unpacked trees do not.
+# `task spec` / `refers/fetch.sh` populate this. Never `git add` the bulky files.
 /spec/
+/refers/*
+!/refers/README.md
+!/refers/fetch.sh
