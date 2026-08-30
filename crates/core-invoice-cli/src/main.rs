@@ -1,12 +1,16 @@
 use clap::{Parser, Subcommand, ValueEnum};
 use core_invoice::Profile;
-use core_invoice_formats::{convert, diff, validate_xml, Syntax};
+use core_invoice_formats::{FormatError, Syntax, convert, diff, validate_xml};
 use std::fs;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 #[derive(Parser)]
-#[command(name = "core-invoice", version, about = "EN 16931 + Peppol PINT, offline")]
+#[command(
+    name = "core-invoice",
+    version,
+    about = "EN 16931 + Peppol PINT, offline. 0.1.x is a skeleton."
+)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -14,13 +18,14 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Validate a UBL or CII invoice against a profile
+    /// Validate a UBL invoice against a profile
     Validate {
         path: PathBuf,
-        #[arg(short, long, value_enum, default_value = "pint")]
+        /// `auto` reads BT-24 (CustomizationID). A named profile forces that rule set.
+        #[arg(short, long, value_enum, default_value = "auto")]
         profile: ProfileArg,
     },
-    /// Convert through the semantic model
+    /// Convert through the semantic model (UBL only until CII D16B exists)
     Convert {
         path: PathBuf,
         #[arg(long, value_enum)]
@@ -34,19 +39,21 @@ enum Command {
 
 #[derive(Clone, Copy, ValueEnum)]
 enum ProfileArg {
+    Auto,
     En16931,
     Peppol,
     Pint,
     PintMy,
 }
 
-impl From<ProfileArg> for Profile {
-    fn from(value: ProfileArg) -> Self {
-        match value {
-            ProfileArg::En16931 => Profile::En16931,
-            ProfileArg::Peppol => Profile::PeppolBis3,
-            ProfileArg::Pint => Profile::Pint,
-            ProfileArg::PintMy => Profile::PintMy,
+impl ProfileArg {
+    fn forced(self) -> Option<Profile> {
+        match self {
+            Self::Auto => None,
+            Self::En16931 => Some(Profile::En16931),
+            Self::Peppol => Some(Profile::PeppolBis3),
+            Self::Pint => Some(Profile::Pint),
+            Self::PintMy => Some(Profile::PintMy),
         }
     }
 }
@@ -81,20 +88,31 @@ fn run() -> Result<ExitCode, String> {
     match cli.command {
         Command::Validate { path, profile } => {
             let xml = fs::read_to_string(&path).map_err(|e| format!("{path:?}: {e}"))?;
-            let report = validate_xml(&xml, Some(profile.into())).map_err(|e| e.to_string())?;
+            let report = match validate_xml(&xml, profile.forced()) {
+                Ok(report) => report,
+                Err(e) => return Err(e.to_string()),
+            };
             if report.ok() {
-                println!("valid ({})", Profile::from(profile).slug());
+                println!("valid ({})", report.profile_slug);
                 Ok(ExitCode::SUCCESS)
             } else {
-                eprint!("{report}");
+                print!("{report}");
                 Ok(ExitCode::from(1))
             }
         }
         Command::Convert { path, to } => {
             let xml = fs::read_to_string(&path).map_err(|e| format!("{path:?}: {e}"))?;
-            let out = convert(&xml, to.into()).map_err(|e| e.to_string())?;
-            print!("{out}");
-            Ok(ExitCode::SUCCESS)
+            match convert(&xml, to.into()) {
+                Ok(out) => {
+                    print!("{out}");
+                    Ok(ExitCode::SUCCESS)
+                }
+                Err(FormatError::CiiNotImplemented) => {
+                    eprintln!("{}", FormatError::CiiNotImplemented);
+                    Ok(ExitCode::from(2))
+                }
+                Err(e) => Err(e.to_string()),
+            }
         }
         Command::Diff { left, right } => {
             let a = fs::read_to_string(&left).map_err(|e| format!("{left:?}: {e}"))?;
@@ -102,21 +120,38 @@ fn run() -> Result<ExitCode, String> {
             println!("{}", diff(&a, &b).map_err(|e| e.to_string())?);
             Ok(ExitCode::SUCCESS)
         }
-        Command::Explain { id } => {
-            println!("{}", explain(&id));
-            Ok(ExitCode::SUCCESS)
-        }
+        Command::Explain { id } => match explain(&id) {
+            Ok(text) => {
+                println!("{text}");
+                Ok(ExitCode::SUCCESS)
+            }
+            Err(text) => {
+                eprintln!("{text}");
+                Ok(ExitCode::from(2))
+            }
+        },
     }
 }
 
-fn explain(id: &str) -> String {
+fn explain(id: &str) -> Result<String, String> {
     match id.to_ascii_uppercase().as_str() {
-        "BR-02" => "Invoice number (BT-1) shall be present.".into(),
-        "BR-05" => "Invoice currency code (BT-5) shall be present.".into(),
-        "BR-16" => "An invoice shall have at least one invoice line (BG-25).".into(),
-        "BR-CO-16" => "Amount due for payment (BT-115) = invoice total with tax (BT-112) − paid (BT-113) + rounding (BT-114). Here: payable = line net + tax total.".into(),
-        "PINT-TAX" => "Tax system on a line must be allowed by the profile. EN 16931 / Peppol BIS 3.0: VAT only. PINT / PINT-MY: VAT, GST, SST, consumption.".into(),
-        "PINT-MY-ID" => "PINT-MY seller identification scheme must be TIN, BRN, NRIC or PASSPORT.".into(),
-        other => format!("no explanation registered for {other}"),
+        "BR-02" => Ok("Invoice number (BT-1) shall be present.".into()),
+        "BR-05" => Ok("Invoice currency code (BT-5) shall be present.".into()),
+        "BR-06" => Ok("Seller name (BT-27) shall be present.".into()),
+        "BR-07" => Ok("Buyer name (BT-44) shall be present.".into()),
+        "BR-16" => Ok("An invoice shall have at least one invoice line (BG-25).".into()),
+        "BR-CO-16" => Ok(
+            "Amount due for payment (BT-115) = invoice total with tax (BT-112) − paid (BT-113) + rounding (BT-114). Not evaluated until document totals exist."
+                .into(),
+        ),
+        "PINT-TAX" => Ok(
+            "Tax system on a line must be allowed by the profile. EN 16931 / Peppol BIS 3.0: VAT only. PINT / PINT-MY: VAT, GST, SST, consumption."
+                .into(),
+        ),
+        "PINT-MY-ID" => Ok(
+            "PINT-MY seller identification scheme must be TIN, BRN, NRIC or PASSPORT. Replaced by IBR-02/03/04-MY once party identifiers are split."
+                .into(),
+        ),
+        other => Err(format!("no explanation registered for {other}")),
     }
 }

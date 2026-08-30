@@ -13,6 +13,10 @@ pub enum FormatError {
     UnsupportedSyntax(String),
     #[error("parse error: {0}")]
     Parse(String),
+    #[error(
+        "CII D16B is not implemented; convert --to cii is refused until a real UN/CEFACT mapping exists"
+    )]
+    CiiNotImplemented,
     #[error(transparent)]
     Semantic(#[from] SemanticReject),
 }
@@ -47,7 +51,7 @@ impl Syntax {
 pub fn write(invoice: &Invoice, syntax: Syntax) -> Result<String, FormatError> {
     match syntax {
         Syntax::Ubl => Ok(ubl::write(invoice)),
-        Syntax::Cii => Ok(cii::write(invoice)),
+        Syntax::Cii => Err(FormatError::CiiNotImplemented),
     }
 }
 
@@ -59,6 +63,7 @@ pub fn convert(xml: &str, to: Syntax) -> Result<String, FormatError> {
 pub fn read(xml: &str) -> Result<Invoice, FormatError> {
     let trimmed = xml.trim_start();
     if trimmed.contains("CrossIndustryInvoice") {
+        // Wrapper and real D16B both refused until P12.
         cii::read(xml)
     } else if trimmed.contains("Invoice") || trimmed.contains("urn:oasis:names:specification:ubl") {
         ubl::read(xml)
@@ -74,7 +79,9 @@ pub fn validate_xml(xml: &str, profile: Option<Profile>) -> Result<Report, Forma
     if let Some(profile) = profile {
         invoice.profile = profile;
     }
-    Ok(core_invoice::validate(&invoice))
+    let mut report = core_invoice::validate(&invoice);
+    report.profile_slug = invoice.profile.slug();
+    Ok(report)
 }
 
 pub fn diff(left_xml: &str, right_xml: &str) -> Result<String, FormatError> {
@@ -101,5 +108,21 @@ pub fn diff(left_xml: &str, right_xml: &str) -> Result<String, FormatError> {
         Ok("no semantic difference".into())
     } else {
         Ok(lines.join("\n"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cii_is_refused() {
+        let xml = r#"<rsm:CrossIndustryInvoice xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100"/>"#;
+        assert!(matches!(read(xml), Err(FormatError::CiiNotImplemented)));
+        let ubl = r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"><cbc:CustomizationID>urn:peppol:pint:billing-1</cbc:CustomizationID><cbc:ID>1</cbc:ID><cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode><cac:LegalMonetaryTotal><cbc:PayableAmount>0</cbc:PayableAmount></cac:LegalMonetaryTotal></Invoice>"#;
+        assert!(matches!(
+            convert(ubl, Syntax::Cii),
+            Err(FormatError::CiiNotImplemented)
+        ));
     }
 }

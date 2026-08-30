@@ -102,10 +102,7 @@ pub fn read(xml: &str) -> Result<Invoice, FormatError> {
         let system = tag(chunk, "TaxScheme")
             .and_then(|s| extract_inner(&s).or(Some(s)))
             .and_then(|s| TaxSystem::parse(&s))
-            .or_else(|| {
-                tag(chunk, "cbc:ID")
-                    .and_then(|id| TaxSystem::parse(&id))
-            })
+            .or_else(|| tag(chunk, "cbc:ID").and_then(|id| TaxSystem::parse(&id)))
             .unwrap_or_else(|| default_tax(profile));
         // Prefer TaxScheme/ID if present
         let system = inner_tag(chunk, "TaxScheme", "ID")

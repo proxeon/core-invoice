@@ -17,7 +17,16 @@ down here**, not that there are none.
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- **Honesty (0.1.x skeleton).** Do not treat `validate().ok()` as EN 16931 / Peppol / PINT compliance.
+- **CII.** `convert --to cii` and CII parse are refused (`FormatError::CiiNotImplemented`, CLI exit 2). The previous UBL-in-`CrossIndustryInvoice` wrapper is gone.
+- **CLI.** `--profile` default is `auto` (BT-24). Invalid findings print on **stdout**. `explain` unknown ids exit 2. `explain` covers BR-06 and BR-07.
+- **BR-05** is currency **presence**, not a 3-letter length check.
+- **BR-CO-16** is no longer emitted for `payable = line net + tax total`. The CEN formula is documented by `explain` as not evaluated until document totals exist.
+- **PINT-MY fixture** category is `SA` (not Singapore `SR`).
+- **C ABI.** Unknown profile strings return 2 (not silent PINT). NULL profile is auto from BT-24. Error buffer truncation is byte-safe.
+- **`/spec/`** is gitignored (CEN artefacts are EUPL-1.2). See `docs/spec.md`.
 
 ## [0.1.0] — 2026-08-30
 

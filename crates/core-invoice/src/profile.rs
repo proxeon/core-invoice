@@ -60,4 +60,8 @@ impl Profile {
     pub fn allows(self, system: TaxSystem) -> bool {
         self.tax_systems().contains(&system)
     }
+
+    pub fn known_slugs() -> &'static str {
+        "en16931, peppol, pint, pint-my"
+    }
 }

@@ -26,14 +26,13 @@ impl Finding {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Report {
     pub findings: Vec<Finding>,
+    /// Profile slug that was actually checked (`en16931`, `peppol`, `pint`, `pint-my`).
+    pub profile_slug: &'static str,
 }
 
 impl Report {
     pub fn ok(&self) -> bool {
-        !self
-            .findings
-            .iter()
-            .any(|f| f.severity == Severity::Fatal)
+        !self.findings.iter().any(|f| f.severity == Severity::Fatal)
     }
 
     pub fn push(&mut self, finding: Finding) {

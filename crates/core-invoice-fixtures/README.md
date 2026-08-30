@@ -1,3 +1,3 @@
 # core-invoice-fixtures
 
-Pass/fail samples for EN 16931, Peppol BIS 3.0, PINT, and PINT-MY.
+In-memory constructors: PINT-MY SST (`SA`) and Peppol VAT. Not an official CEN/Peppol/PINT corpus.

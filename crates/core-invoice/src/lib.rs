@@ -38,7 +38,7 @@ mod tests {
                 id: "1".into(),
                 name: "Goods".into(),
                 net: Amount::parse("100.00").unwrap(),
-                tax: TaxCategory::sst("SR", Decimal::new(10, 2)),
+                tax: TaxCategory::sst("SA", Decimal::from(10)),
             }],
             tax_total: Amount::parse("10.00").unwrap(),
             payable: Amount::parse("110.00").unwrap(),
@@ -62,10 +62,23 @@ mod tests {
     }
 
     #[test]
-    fn payable_must_match_net_plus_tax() {
+    fn payable_mismatch_does_not_claim_br_co_16() {
         let mut inv = sst_invoice(Profile::Pint);
         inv.payable = Amount::parse("999.00").unwrap();
         let report = validate(&inv);
-        assert!(report.findings.iter().any(|f| f.id == "BR-CO-16"));
+        assert!(
+            report.findings.iter().all(|f| f.id != "BR-CO-16"),
+            "collapsed net+tax identity must not use the CEN id BR-CO-16: {report}"
+        );
+    }
+
+    #[test]
+    fn br_05_is_presence_not_length() {
+        let mut inv = sst_invoice(Profile::PintMy);
+        inv.currency.clear();
+        let report = validate(&inv);
+        assert!(report.findings.iter().any(|f| f.id == "BR-05"));
+        inv.currency = "MYR".into();
+        assert!(validate(&inv).ok(), "{}", validate(&inv));
     }
 }

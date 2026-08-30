@@ -3,25 +3,37 @@ use crate::report::{Finding, Report};
 
 /// Semantic checks on the in-memory invoice. Syntax (UBL/CII) lives in `core-invoice-formats`.
 pub fn validate(invoice: &Invoice) -> Report {
-    let mut report = Report::default();
+    let mut report = Report {
+        profile_slug: invoice.profile.slug(),
+        ..Report::default()
+    };
 
     if invoice.number.trim().is_empty() {
-        report.push(Finding::fatal("BR-02", "Invoice number (BT-1) shall be present"));
+        report.push(Finding::fatal(
+            "BR-02",
+            "Invoice number (BT-1) shall be present",
+        ));
     }
 
-    if invoice.currency.trim().len() != 3 {
+    if invoice.currency.trim().is_empty() {
         report.push(Finding::fatal(
             "BR-05",
-            "Invoice currency code (BT-5) shall be a 3-letter code",
+            "Invoice currency code (BT-5) shall be present",
         ));
     }
 
     if invoice.seller.name.trim().is_empty() {
-        report.push(Finding::fatal("BR-06", "Seller name (BT-27) shall be present"));
+        report.push(Finding::fatal(
+            "BR-06",
+            "Seller name (BT-27) shall be present",
+        ));
     }
 
     if invoice.buyer.name.trim().is_empty() {
-        report.push(Finding::fatal("BR-07", "Buyer name (BT-44) shall be present"));
+        report.push(Finding::fatal(
+            "BR-07",
+            "Buyer name (BT-44) shall be present",
+        ));
     }
 
     if invoice.lines.is_empty() {
@@ -45,17 +57,8 @@ pub fn validate(invoice: &Invoice) -> Report {
         }
     }
 
-    let net = invoice.line_net_sum();
-    let expected_payable = net.saturating_add(invoice.tax_total);
-    if expected_payable != invoice.payable {
-        report.push(Finding::fatal(
-            "BR-CO-16",
-            format!(
-                "Payable ({}) shall equal line net ({}) + tax total ({})",
-                invoice.payable, net, invoice.tax_total
-            ),
-        ));
-    }
+    // BR-CO-16 is not evaluated until BG-22 totals exist (BT-112 − BT-113 + BT-114).
+    // Do not emit a CEN id for the collapsed "payable = net + tax" identity.
 
     if invoice.profile == crate::profile::Profile::PintMy {
         match invoice.seller.id_scheme.as_deref() {

@@ -6,3 +6,7 @@
 .task/
 
 plans/
+
+# Reference artefacts. CEN is EUPL-1.2; Peppol/PINT carry their own terms.
+# Fetch later with `task spec`. Keeping them out is what keeps MIT OR Apache-2.0.
+/spec/

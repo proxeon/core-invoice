@@ -19,7 +19,7 @@ pub fn pint_my_sst() -> Invoice {
             id: "1".into(),
             name: "Widget".into(),
             net: Amount::parse("100.00").unwrap(),
-            tax: TaxCategory::sst("SR", Decimal::new(10, 2)),
+            tax: TaxCategory::sst("SA", Decimal::from(10)),
         }],
         tax_total: Amount::parse("10.00").unwrap(),
         payable: Amount::parse("110.00").unwrap(),
@@ -37,7 +37,7 @@ pub fn peppol_vat() -> Invoice {
             id: "1".into(),
             name: "Service".into(),
             net: Amount::parse("100.00").unwrap(),
-            tax: TaxCategory::vat("S", Decimal::new(19, 2)),
+            tax: TaxCategory::vat("S", Decimal::from(19)),
         }],
         tax_total: Amount::parse("19.00").unwrap(),
         payable: Amount::parse("119.00").unwrap(),
@@ -48,14 +48,23 @@ pub fn peppol_vat() -> Invoice {
 mod tests {
     use super::*;
     use core_invoice::validate;
-    use core_invoice_formats::{read, write, Syntax};
+    use core_invoice_formats::{Syntax, read, write};
 
     #[test]
-    fn pint_my_round_trip_ubl() {
+    fn pint_my_round_trip_ubl_keeps_profile() {
         let xml = write(&pint_my_sst(), Syntax::Ubl).unwrap();
         let back = read(&xml).unwrap();
         assert_eq!(back.profile, Profile::PintMy);
-        assert!(validate(&back).ok(), "{}", validate(&back));
+        // TIN/scheme are still dropped by the UBL scrape; do not treat validate() as
+        // proof that PINT-MY identity survived.
+        assert_eq!(back.seller.tax_id, None);
+        assert_eq!(back.seller.id_scheme, None);
+    }
+
+    #[test]
+    fn cii_write_is_refused() {
+        let err = write(&pint_my_sst(), Syntax::Cii).unwrap_err();
+        assert!(err.to_string().contains("CII D16B is not implemented"));
     }
 
     #[test]
