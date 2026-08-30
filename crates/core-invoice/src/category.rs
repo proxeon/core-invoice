@@ -609,6 +609,23 @@ fn check_my_groups(inv: &Invoice, report: &mut Report, code: &str, id: &'static 
     }
 }
 
+fn line_has_ttx(line: &crate::invoice::Line) -> bool {
+    line.tax.code.eq_ignore_ascii_case("TTX")
+        || line
+            .extra_tax
+            .iter()
+            .any(|t| t.code.eq_ignore_ascii_case("TTX"))
+}
+
+fn ttx_line_tax_sum(inv: &Invoice) -> Decimal {
+    inv.lines
+        .iter()
+        .filter(|l| line_has_ttx(l))
+        .filter_map(|l| l.tax_total)
+        .map(|a| a.raw())
+        .fold(Decimal::ZERO, |acc, v| acc + v)
+}
+
 fn check_my_taxable(inv: &Invoice, report: &mut Report, code: &str, id: &'static str) {
     if !my_families_apply(inv) {
         return;
@@ -655,12 +672,25 @@ fn check_my_tax(inv: &Invoice, report: &mut Report, code: &str, id: &'static str
                     format!("IBT-117 shall be 0 for {code}"),
                 ));
             }
-            if code.eq_ignore_ascii_case("TTX") && e.tax != e.taxable {
-                report.push(Finding::fatal(
-                    id,
-                    path,
-                    "TTX tax amount shall equal Σ TTX lines + charges − allowances",
-                ));
+            if code.eq_ignore_ascii_case("TTX")
+                && inv
+                    .lines
+                    .iter()
+                    .any(|l| line_has_ttx(l) && l.tax_total.is_some())
+            {
+                // ALIGNED-IBRP-TTX-09-MY: IBT-117 = Σ line TaxTotal on lines with TTX (±0.02).
+                let expected = ttx_line_tax_sum(inv);
+                let two = Decimal::new(2, 2);
+                if (e.tax.raw() - expected).abs() > two {
+                    report.push(Finding::fatal(
+                        id,
+                        path,
+                        format!(
+                            "TTX IBT-117 {} ≠ Σ line TaxTotal on TTX lines {expected}",
+                            e.tax
+                        ),
+                    ));
+                }
             }
             continue;
         }

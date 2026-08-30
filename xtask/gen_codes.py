@@ -58,7 +58,8 @@ def main() -> int:
         # XXX is ISO 4217 "no currency"; Peppol tokenize also includes CNH.
         rust_arr("ISO_4217", gc_ids(INV / "ISO4217.gc"), extra=["XXX", "CNH"]),
         rust_arr("ISO_3166", gc_ids(INV / "ISO3166.gc")),
-        rust_arr("EAS", gc_ids(INV / "eas.gc")),
+        # EN 16931 BR-CL-25 also lists letter EAS codes EM AN AQ AS AU.
+        rust_arr("EAS", gc_ids(INV / "eas.gc"), extra=["AN", "AQ", "AS", "AU", "EM"]),
         rust_arr("UNCL_1001_INVOICE", gc_ids(INV / "UNCL1001-inv.gc")),
         rust_arr("UNCL_1001_CREDIT_NOTE", gc_ids(cn_path)),
         # Z01/Z03–Z08 are PINT-MY extras on BT-81, not UNCL 4461 membership for EN/Peppol.

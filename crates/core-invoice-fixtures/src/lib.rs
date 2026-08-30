@@ -206,20 +206,42 @@ mod tests {
         let inv = core_invoice_formats::read(&xml).unwrap();
         assert_eq!(inv.profile, Profile::PintMy);
         let report = validate(&inv);
-        if !report.ok() {
-            for f in &report.findings {
-                assert!(
-                    f.id != "FormatError",
-                    "parse-shaped failure on official SA: {report}"
-                );
-            }
-        }
+        assert!(report.ok(), "official PINT-MY SA: {report}");
         let as_peppol = {
             let mut i = inv;
             i.profile = Profile::PeppolBis3;
             i
         };
         assert!(!validate(&as_peppol).ok());
+    }
+
+    #[test]
+    fn official_pint_my_samples_validate() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../refers/pint-my-1.3.0/unpacked/trn-invoice/example");
+        let names = [
+            "Invoice-Sample-SA_1.3.0.xml",
+            "Invoice-Sample-SE_1.3.0.xml",
+            "Invoice-Sample-HVG_1.3.0.xml",
+            "Invoice-Sample-LVG_1.3.0.xml",
+            "Invoice-Sample-TTX_1.3.0.xml",
+        ];
+        let mut missing = 0;
+        for name in names {
+            let path = dir.join(name);
+            if !path.exists() {
+                missing += 1;
+                continue;
+            }
+            let xml = std::fs::read_to_string(&path).unwrap();
+            let report = core_invoice_formats::validate_xml(&xml, Some(Profile::PintMy)).unwrap();
+            assert!(report.ok(), "{name}: {report}");
+        }
+        if missing == names.len()
+            && std::env::var("CORE_INVOICE_REQUIRE_SPEC").ok().as_deref() == Some("1")
+        {
+            panic!("missing PINT-MY official samples in {}", dir.display());
+        }
     }
 
     #[test]
@@ -254,14 +276,26 @@ mod tests {
         let inv = core_invoice_formats::read(&xml).unwrap();
         assert_eq!(inv.profile, Profile::En16931);
         let report = validate(&inv);
-        if !report.ok() {
-            for f in &report.findings {
-                assert!(
-                    f.id != "FormatError",
-                    "parse-shaped failure on official EN example: {report}"
-                );
+        assert!(report.ok(), "official EN example1: {report}");
+    }
+
+    #[test]
+    fn official_en16931_example5_eas_em() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../refers/en16931/ubl/examples/ubl-tc434-example5.xml");
+        if !path.exists() {
+            if std::env::var("CORE_INVOICE_REQUIRE_SPEC").ok().as_deref() == Some("1") {
+                panic!("missing {}", path.display());
             }
+            return;
         }
+        let xml = std::fs::read_to_string(&path).unwrap();
+        let report = core_invoice_formats::validate_xml(&xml, Some(Profile::En16931)).unwrap();
+        assert!(
+            report.findings.iter().all(|f| f.id != "BR-CL-25"),
+            "EAS EM must be accepted (BR-CL-25): {report}"
+        );
+        assert!(report.ok(), "official EN example5: {report}");
     }
 
     #[test]

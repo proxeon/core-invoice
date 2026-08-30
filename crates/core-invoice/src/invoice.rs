@@ -142,6 +142,10 @@ pub struct Line {
     pub invoiced_object: Option<Identifier>,
     /// UBL DocumentTypeCode on the line DocumentReference. Absent means 130.
     pub invoiced_object_code: Option<Code>,
+    /// Extra ClassifiedTaxCategory after BT-151 (PINT-MY TTX beside HVG/SA on the same line).
+    pub extra_tax: Vec<TaxCategory>,
+    /// Line TaxTotal/cbc:TaxAmount. ALIGNED-IBRP-TTX-09-MY sums this on TTX lines.
+    pub tax_total: Option<InvoiceAmount>,
 }
 
 impl Line {
@@ -170,6 +174,8 @@ impl Line {
             classifications: vec![],
             invoiced_object: None,
             invoiced_object_code: None,
+            extra_tax: vec![],
+            tax_total: None,
         }
     }
 }

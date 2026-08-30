@@ -897,6 +897,11 @@ fn write_line(
     for c in &line.charges {
         write_line_ac(s, c, true, cur);
     }
+    if let Some(tt) = line.tax_total {
+        open(s, 2, "TaxTotal");
+        amount(s, 3, "TaxAmount", tt, cur);
+        close(s, 2, "TaxTotal");
+    }
     open(s, 2, "Item");
     if let Some(d) = line.description.as_deref() {
         leaf(s, 3, "Description", d, None);
@@ -953,6 +958,23 @@ fn write_line(
             5,
             "ID",
             wire_scheme(invoice.profile, line.tax.system, &line.tax.code),
+            None,
+        );
+        close(s, 4, "TaxScheme");
+        close(s, 3, "ClassifiedTaxCategory");
+    }
+    for extra in &line.extra_tax {
+        open(s, 3, "ClassifiedTaxCategory");
+        leaf(s, 4, "ID", &extra.code, None);
+        if let Some(p) = extra.percent {
+            leaf(s, 4, "Percent", &p.to_string(), None);
+        }
+        open(s, 4, "TaxScheme");
+        leaf(
+            s,
+            5,
+            "ID",
+            wire_scheme(invoice.profile, extra.system, &extra.code),
             None,
         );
         close(s, 4, "TaxScheme");
@@ -1317,6 +1339,16 @@ fn read_line(
         invoiced_object_code: child(node, "DocumentReference")
             .and_then(|n| child_text(n, "DocumentTypeCode"))
             .map(Code::new),
+        extra_tax: item
+            .map(|n| {
+                children(n, "ClassifiedTaxCategory")
+                    .skip(1)
+                    .map(|c| read_tax_cat(c, profile))
+                    .collect()
+            })
+            .unwrap_or_default(),
+        tax_total: child(node, "TaxTotal")
+            .and_then(|n| child_amount(n, "TaxAmount", malformed, "InvoiceLine/TaxTotal")),
     })
 }
 

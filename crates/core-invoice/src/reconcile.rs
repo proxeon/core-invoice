@@ -448,12 +448,9 @@ fn tax_amount(
         .map_err(|_| ReconcileError::Overflow { term: "BT-117" })
 }
 
-pub(crate) fn counts_toward_tax_total(profile: Profile, row: &TaxBreakdown) -> bool {
-    if profile == Profile::PintMy {
-        wire_scheme(profile, row.system, row.category.as_str()) == "VAT"
-    } else {
-        true
-    }
+pub(crate) fn counts_toward_tax_total(_profile: Profile, _row: &TaxBreakdown) -> bool {
+    // IBR-CO-14 / BR-CO-14: BT-110 = Σ every BG-23 / IBG-23 tax amount, including TTX (AAL).
+    true
 }
 
 #[cfg(test)]

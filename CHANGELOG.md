@@ -36,6 +36,7 @@ down here**, not that there are none.
 - **Families.** BR-S-03/04/06/07 are RateContext allowance/charge, not aliases of BR-S-02/05. BR-O-11 groups vs BR-O-12 lines. BR-DEC-* explainable constant-pass.
 - **CLI.** `validate` batch paths, stdin `-`, `--quiet`. `rules --profile peppol`. `inspect` prints unmapped. `profiles` prints artefact pins.
 - **C ABI.** `core_invoice_validate`, convert, diff, version. Python ctypes wrapper.
+- **Official samples.** BR-CO-11/12 accept present `0` when there is no BG-20/21 (Schematron empty sum). EAS includes `EM` (EN BR-CL-25). PINT-MY BT-110 sums every IBG-23 row including TTX. TTX-09 uses line `TaxTotal`, not taxable=tax. Official SA/SE/HVG/LVG/TTX 1.3.0 samples `validate().ok()`.
 - **Breaking (0.1.x).** `FormatError::CiiNotImplemented` is renamed to `CiiNotForProfile` and is returned when writing CII for PINT-MY.
 - **CLI.** `--profile` default is `auto` (BT-24). Invalid findings print on **stdout**. `explain` unknown ids exit 2. `explain` covers BR-06 and BR-07.
 - **BR-05** is currency **presence**, not a 3-letter length check.

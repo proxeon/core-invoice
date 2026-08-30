@@ -536,10 +536,12 @@ fn br_co_11(invoice: &Invoice, report: &mut Report) {
         totals.allowance_total,
     ) {
         (true, None) => {}
+        // BR-CO-11 artefact: present BT-107 = Σ BG-20. Empty sum is 0, so 0 with no BG-20 is valid.
+        (true, Some(stated)) if stated.is_zero() => {}
         (true, Some(stated)) => report.push(Finding::fatal(
             "BR-CO-11",
             path,
-            format!("BT-107 shall be absent when there is no BG-20 (found {stated})"),
+            format!("BT-107 {stated} ≠ Σ BT-92 0.00 (no BG-20)"),
         )),
         (false, None) => report.push(Finding::fatal(
             "BR-CO-11",
@@ -568,10 +570,12 @@ fn br_co_12(invoice: &Invoice, report: &mut Report) {
     };
     match (invoice.document_charges.is_empty(), totals.charge_total) {
         (true, None) => {}
+        // BR-CO-12 artefact: present BT-108 = Σ BG-21. Empty sum is 0.
+        (true, Some(stated)) if stated.is_zero() => {}
         (true, Some(stated)) => report.push(Finding::fatal(
             "BR-CO-12",
             path,
-            format!("BT-108 shall be absent when there is no BG-21 (found {stated})"),
+            format!("BT-108 {stated} ≠ Σ BT-99 0.00 (no BG-21)"),
         )),
         (false, None) => report.push(Finding::fatal(
             "BR-CO-12",
@@ -962,14 +966,14 @@ pub static ALL: &[Rule] = &[
     Rule {
         id: "BR-CO-11",
         severity: Severity::Fatal,
-        text: "Sum of allowances on document level (BT-107) = Σ Document level allowance amount (BT-92). Absent if and only if there is no BG-20.",
+        text: "Sum of allowances on document level (BT-107) = Σ Document level allowance amount (BT-92). Present 0 with no BG-20 is valid (empty sum).",
         source: Source::Both,
         eval: br_co_11,
     },
     Rule {
         id: "BR-CO-12",
         severity: Severity::Fatal,
-        text: "Sum of charges on document level (BT-108) = Σ Document level charge amount (BT-99). Absent if and only if there is no BG-21.",
+        text: "Sum of charges on document level (BT-108) = Σ Document level charge amount (BT-99). Present 0 with no BG-21 is valid (empty sum).",
         source: Source::Both,
         eval: br_co_12,
     },
@@ -983,7 +987,7 @@ pub static ALL: &[Rule] = &[
     Rule {
         id: "BR-CO-14",
         severity: Severity::Fatal,
-        text: "Invoice total tax amount (BT-110) = Σ tax category tax amount (BT-117). Exact. On PINT-MY, sum VAT-scheme rows only.",
+        text: "Invoice total tax amount (BT-110) = Σ tax category tax amount (BT-117). Exact. PINT IBR-CO-14 sums every IBG-23 row, including TTX/AAL.",
         source: Source::Both,
         eval: br_co_14,
     },
@@ -1196,6 +1200,48 @@ mod tests {
         };
         eval(&inv, &mut from_eval);
         assert!(from_eval.findings.iter().any(|f| f.id == "IBR-03-MY"));
+    }
+
+    #[test]
+    fn present_zero_allowance_total_without_bg20_is_not_br_co_11() {
+        let mut inv = crate::invoice::Invoice::blank(
+            crate::profile::Profile::En16931,
+            "1",
+            "EUR",
+            {
+                let mut p = crate::invoice::Party::new("S", "DE");
+                p.vat_identifier = Some(crate::identifier::Identifier::new("DE1"));
+                p
+            },
+            crate::invoice::Party::new("B", "FR"),
+        );
+        inv.issue_date = crate::date::Date::parse("2026-01-15").ok();
+        inv.type_code = Some(Code::new("380"));
+        inv.payment_terms = Some("Net 30".into());
+        let mut line = crate::invoice::Line::new(
+            "1",
+            "A",
+            crate::amount::InvoiceAmount::parse("100.00").unwrap(),
+            crate::tax::TaxCategory::vat("S", rust_decimal::Decimal::from(19)),
+        );
+        line.quantity = Some(crate::numeric::Quantity::parse("1").unwrap());
+        line.unit = Some(Code::new("C62"));
+        line.price = Some(crate::invoice::Price {
+            net: crate::amount::UnitPriceAmount::parse("100.00").unwrap(),
+            discount: None,
+            gross: None,
+            base_qty: None,
+            base_unit: None,
+        });
+        inv.lines = vec![line];
+        crate::reconcile::reconcile(&mut inv).unwrap();
+        let t = inv.totals.as_mut().unwrap();
+        t.allowance_total = Some(crate::amount::InvoiceAmount::ZERO);
+        let report = crate::validate::validate(&inv);
+        assert!(
+            report.findings.iter().all(|f| f.id != "BR-CO-11"),
+            "{report}"
+        );
     }
 
     #[test]

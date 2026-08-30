@@ -256,7 +256,7 @@ fn br_cl_25(inv: &Invoice, report: &mut Report) {
             report.push(Finding::fatal(
                 "BR-CL-25",
                 Path::group_term(group, BtId(bt)),
-                format!("EAS {scheme} is not in the subset"),
+                format!("EAS {scheme} is not in the Electronic Address Identifier Scheme list"),
             ));
         }
     }
