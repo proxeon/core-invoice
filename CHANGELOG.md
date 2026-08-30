@@ -48,6 +48,12 @@ down here**, not that there are none.
   categories restricted to SA/SE/HVG/LVG/TTX/E/O. `wire_scheme()` maps SST to
   TaxScheme `VAT` (never `SST` on the wire).
 - Presence: BR-01, BR-03, BR-04, BR-09, BR-11, BR-21, BR-25.
+- Totals: `xpath_round` (`floor(x+0.5)`), real `BR-CO-10`…`BR-CO-16` on
+  `DocumentTotals` (absent ≠ 0, four presence branches, overflow is a finding),
+  `BR-CO-17` with artefact ±1.00 exclusive on abs. `reconcile()` fills BG-22/23;
+  empty document A/C leave BT-107/108 absent. Prepaid 250 on 137.50 gross yields
+  negative BT-115. Slack is per-rule: no HUF branch, no 5-sen slack, R046 exact
+  called out as a trap.
 
 ## [0.1.0] — 2026-08-30
 

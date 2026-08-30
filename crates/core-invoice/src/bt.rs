@@ -82,6 +82,14 @@ impl Path {
             term: None,
         }
     }
+
+    pub fn group_term(group: Group, term: BtId) -> Self {
+        Self {
+            group,
+            index: None,
+            term: Some(term),
+        }
+    }
 }
 
 impl fmt::Display for Path {

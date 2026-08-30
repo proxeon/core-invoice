@@ -4,6 +4,7 @@
 //! APIs, no accounting UI.
 
 pub mod amount;
+pub mod arith;
 pub mod attachment;
 pub mod bt;
 pub mod code;
@@ -15,6 +16,7 @@ pub mod kind;
 pub mod numeric;
 pub mod payment;
 pub mod profile;
+pub mod reconcile;
 pub mod report;
 pub mod rules;
 pub mod tax;
@@ -36,6 +38,7 @@ pub use kind::DocumentKind;
 pub use numeric::{Percentage, Quantity};
 pub use payment::{CreditTransfer, DirectDebit, PaymentCard, PaymentMeans};
 pub use profile::{Edition, Profile, ProfileLookup};
+pub use reconcile::{ReconcileError, Reconciled, Reconciler, reconcile};
 pub use report::{Finding, Report, Severity, Source};
 pub use rules::{catalogue, explain};
 pub use tax::{TaxCategory, TaxSystem, pint_my_category, wire_scheme};

@@ -50,6 +50,26 @@ impl InvoiceAmount {
             .checked_sub(other.0)
             .and_then(|d| Self::try_new(d).ok())
     }
+
+    pub fn abs(self) -> Self {
+        Self(self.0.abs())
+    }
+
+    pub fn checked_sum(amounts: impl IntoIterator<Item = Self>) -> Option<Self> {
+        let mut acc = Self::ZERO;
+        for a in amounts {
+            acc = acc.checked_add(a)?;
+        }
+        Some(acc)
+    }
+
+    /// Commercial rounding (half away from zero) to two decimals — producer
+    /// presentation. Validators use [`crate::arith::xpath_round`].
+    pub fn from_decimal_rounded(value: Decimal) -> Result<Self, AmountError> {
+        use rust_decimal::RoundingStrategy;
+        let rounded = value.round_dp_with_strategy(2, RoundingStrategy::MidpointAwayFromZero);
+        Self::try_new(rounded)
+    }
 }
 
 impl fmt::Display for InvoiceAmount {

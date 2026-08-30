@@ -1,5 +1,5 @@
 /// Tax system on the invoice. PINT is the reason this is not "VAT or nothing".
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum TaxSystem {
     Vat,
     Gst,

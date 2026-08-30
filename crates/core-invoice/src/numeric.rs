@@ -61,6 +61,14 @@ impl Percentage {
     pub fn is_zero(self) -> bool {
         self.0.is_zero()
     }
+
+    pub fn is_positive(self) -> bool {
+        self.0 > Decimal::ZERO
+    }
+
+    pub fn is_negative(self) -> bool {
+        self.0 < Decimal::ZERO
+    }
 }
 
 impl fmt::Display for Percentage {
