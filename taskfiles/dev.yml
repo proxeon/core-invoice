@@ -1,0 +1,44 @@
+version: "3"
+
+tasks:
+  test:
+    desc: cargo test --workspace
+    cmds:
+      - cargo test --workspace
+
+  build:
+    desc: cargo build --workspace
+    cmds:
+      - cargo build --workspace
+
+  fmt:
+    desc: cargo fmt --all
+    cmds:
+      - cargo fmt --all
+
+  fmt:check:
+    desc: cargo fmt --all -- --check
+    cmds:
+      - cargo fmt --all -- --check
+
+  clippy:
+    desc: cargo clippy --workspace --all-targets
+    cmds:
+      - cargo clippy --workspace --all-targets -- -D warnings
+
+  check:
+    desc: fmt check + clippy + test
+    cmds:
+      - task: fmt:check
+      - task: clippy
+      - task: test
+
+  cli:
+    desc: cargo run -p core-invoice-cli
+    cmds:
+      - cargo run -p core-invoice-cli -- {{.CLI_ARGS}}
+
+  doc:
+    desc: cargo doc --workspace --no-deps
+    cmds:
+      - cargo doc --workspace --no-deps --open

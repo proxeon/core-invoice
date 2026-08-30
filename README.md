@@ -13,8 +13,13 @@ convert UBL/CII offline, without talking to LHDN, Peppol, or any accounting UI.
 | [`core-invoice-sys`](crates/core-invoice-sys) | C, Python, WASM bindings |
 
 ```sh
-cargo run -p core-invoice-cli -- validate --profile pint-my path/to/invoice.xml
-cargo test --workspace
+task                 # list
+task test            # cargo test --workspace
+task check           # fmt + clippy + test
+task cli -- validate --profile pint-my path/to/invoice.xml
+task invoice:test    # one crate (invoice|formats|bin|fixtures|sys)
 ```
+
+Install the orchestrator: `brew install go-task`.
 
 License: MIT OR Apache-2.0. Releases: [CHANGELOG.md](CHANGELOG.md).

@@ -1,0 +1,75 @@
+# https://taskfile.dev
+#   brew install go-task
+#
+#   task              # list
+#   task test         # workspace tests
+#   task check        # fmt + clippy + test
+#   task cli -- --help
+version: "3"
+
+includes:
+  dev:
+    taskfile: taskfiles/dev.yml
+  release:
+    taskfile: taskfiles/release.yml
+  invoice:
+    taskfile: taskfiles/crate.yml
+    vars: { CRATE: core-invoice }
+  formats:
+    taskfile: taskfiles/crate.yml
+    vars: { CRATE: core-invoice-formats }
+  bin:
+    taskfile: taskfiles/crate.yml
+    vars: { CRATE: core-invoice-cli }
+  fixtures:
+    taskfile: taskfiles/crate.yml
+    vars: { CRATE: core-invoice-fixtures }
+  sys:
+    taskfile: taskfiles/crate.yml
+    vars: { CRATE: core-invoice-sys }
+
+tasks:
+  default:
+    desc: List tasks
+    cmds:
+      - task --list
+
+  test:
+    desc: cargo test --workspace
+    cmds:
+      - task: dev:test
+
+  build:
+    desc: cargo build --workspace
+    cmds:
+      - task: dev:build
+
+  fmt:
+    desc: cargo fmt --all
+    cmds:
+      - task: dev:fmt
+
+  clippy:
+    desc: cargo clippy --workspace --all-targets
+    cmds:
+      - task: dev:clippy
+
+  check:
+    desc: fmt check + clippy + test
+    cmds:
+      - task: dev:check
+
+  cli:
+    desc: "Run CLI (task cli -- validate --profile pint-my file.xml)"
+    cmds:
+      - task: dev:cli
+
+  publish:
+    desc: Publish all crates to crates.io (needs cargo login)
+    cmds:
+      - task: release:publish
+
+  publish:dry:
+    desc: Dry-run publish of core-invoice
+    cmds:
+      - task: release:dry

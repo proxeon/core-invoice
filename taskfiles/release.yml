@@ -1,0 +1,12 @@
+version: "3"
+
+tasks:
+  dry:
+    desc: cargo publish -p core-invoice --dry-run
+    cmds:
+      - cargo publish -p core-invoice --dry-run --allow-dirty
+
+  publish:
+    desc: Publish crates in dependency order
+    cmds:
+      - ./publish.sh

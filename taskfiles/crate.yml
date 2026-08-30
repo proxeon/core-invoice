@@ -1,0 +1,17 @@
+version: "3"
+
+tasks:
+  test:
+    desc: "cargo test -p {{.CRATE}}"
+    cmds:
+      - cargo test -p {{.CRATE}}
+
+  build:
+    desc: "cargo build -p {{.CRATE}}"
+    cmds:
+      - cargo build -p {{.CRATE}}
+
+  clippy:
+    desc: "cargo clippy -p {{.CRATE}}"
+    cmds:
+      - cargo clippy -p {{.CRATE}} --all-targets -- -D warnings

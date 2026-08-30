@@ -3,3 +3,4 @@
 *.pdb
 .DS_Store
 /mutants.out*
+.task/
