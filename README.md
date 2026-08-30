@@ -17,4 +17,4 @@ cargo run -p core-invoice-cli -- validate --profile pint-my path/to/invoice.xml
 cargo test --workspace
 ```
 
-License: MIT OR Apache-2.0
+License: MIT OR Apache-2.0. Releases: [CHANGELOG.md](CHANGELOG.md).
