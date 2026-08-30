@@ -48,6 +48,10 @@ down here**, not that there are none.
   categories restricted to SA/SE/HVG/LVG/TTX/E/O. `wire_scheme()` maps SST to
   TaxScheme `VAT` (never `SST` on the wire).
 - Presence: BR-01, BR-03, BR-04, BR-09, BR-11, BR-21, BR-25.
+- Category families: real `BR-S-*` / `BR-Z-*` / `BR-E-*` / `BR-AE-*` /
+  `BR-IC-*` / `BR-G-*` / `BR-O-*` / `BR-AF-*` / `BR-AG-*` / `BR-B-*` ids on VAT
+  profiles; PINT-MY uses `ALIGNED-IBRP-*-MY` (never `BR-S-08` for SST). GST `SR`
+  fixture on `Pint` (fails PintMy CL). `BR-CO-18` when totals exist.
 - Totals: `xpath_round` (`floor(x+0.5)`), real `BR-CO-10`…`BR-CO-16` on
   `DocumentTotals` (absent ≠ 0, four presence branches, overflow is a finding),
   `BR-CO-17` with artefact ±1.00 exclusive on abs. `reconcile()` fills BG-22/23;

@@ -307,7 +307,7 @@ fn content(inv: &Invoice) -> Vec<ContentRow<'_>> {
 
 fn group_key(inv: &Invoice, row: &ContentRow<'_>) -> Result<GroupKey, ReconcileError> {
     let scheme = wire_scheme(inv.profile, row.system, row.category).to_owned();
-    let rate = if grouped_by_rate(inv.profile, row.category) {
+    let rate = if crate::category::grouped_by_rate(inv.profile, row.category) {
         if needs_rate(row.category) && row.percent.is_zero() && !zero_tax_family(row.category) {
             return Err(ReconcileError::MissingRate {
                 at: row.path,
@@ -326,16 +326,6 @@ fn group_key(inv: &Invoice, row: &ContentRow<'_>) -> Result<GroupKey, ReconcileE
         rate,
         system: row.system,
     })
-}
-
-fn grouped_by_rate(profile: Profile, category: &str) -> bool {
-    match profile {
-        Profile::PintMy => matches!(
-            category,
-            "SA" | "SE" | "HVG" | "LVG" | "sa" | "se" | "hvg" | "lvg"
-        ),
-        _ => matches!(category, "S" | "L" | "M" | "B" | "s" | "l" | "m" | "b"),
-    }
 }
 
 fn needs_rate(category: &str) -> bool {

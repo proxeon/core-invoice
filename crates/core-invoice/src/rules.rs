@@ -3,6 +3,7 @@ use crate::invoice::Invoice;
 use crate::numeric::Percentage;
 use crate::report::{Finding, Report, Severity, Source};
 
+#[derive(Clone, Copy)]
 pub struct Rule {
     pub id: &'static str,
     pub severity: Severity,
@@ -29,11 +30,20 @@ fn canonical(id: &str) -> String {
 }
 
 pub fn explain(id: &str) -> Option<&'static str> {
-    ALL.iter().find(|r| matches_id(r.id, id)).map(|r| r.text)
+    catalogue()
+        .iter()
+        .find(|r| matches_id(r.id, id))
+        .map(|r| r.text)
 }
 
 pub fn catalogue() -> &'static [Rule] {
-    ALL
+    static CELL: std::sync::OnceLock<Vec<Rule>> = std::sync::OnceLock::new();
+    CELL.get_or_init(|| {
+        ALL.iter()
+            .copied()
+            .chain(crate::category::RULES.iter().copied())
+            .collect()
+    })
 }
 
 fn spec_lookup(invoice: &Invoice, report: &mut Report) {

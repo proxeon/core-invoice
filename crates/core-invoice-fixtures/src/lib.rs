@@ -1,6 +1,6 @@
 //! On-disk and in-crate sample invoices.
 
-use core_invoice::{Amount, Identifier, Invoice, Line, Party, Profile, TaxCategory};
+use core_invoice::{Amount, Identifier, Invoice, Line, Party, Profile, TaxCategory, reconcile};
 use rust_decimal::Decimal;
 
 pub fn pint_my_sst() -> Invoice {
@@ -34,13 +34,45 @@ pub fn pint_my_sst() -> Invoice {
     inv
 }
 
+pub fn pint_gst_sr() -> Invoice {
+    let mut inv = Invoice::blank(
+        Profile::Pint,
+        "SG-2026-0001",
+        "SGD",
+        {
+            let mut p = Party::new("Seller Pte Ltd", "SG");
+            p.tax_registration = Some(Identifier::new("GST123456789"));
+            p
+        },
+        Party::new("Buyer Pte Ltd", "SG"),
+    );
+    inv.lines = vec![Line::new(
+        "1",
+        "Service",
+        Amount::parse("100.00").unwrap(),
+        TaxCategory::gst("SR", Decimal::from(9)),
+    )];
+    inv.issue_date = core_invoice::Date::parse("2026-01-15").ok();
+    inv.type_code = Some(core_invoice::Code::new("380"));
+    let _ = reconcile(&mut inv);
+    inv
+}
+
 pub fn peppol_vat() -> Invoice {
     let mut inv = Invoice::blank(
         Profile::PeppolBis3,
         "EU-2026-0001",
         "EUR",
-        Party::new("Seller GmbH", "DE"),
-        Party::new("Buyer SARL", "FR"),
+        {
+            let mut p = Party::new("Seller GmbH", "DE");
+            p.vat_identifier = Some(Identifier::new("DE123456789"));
+            p
+        },
+        {
+            let mut b = Party::new("Buyer SARL", "FR");
+            b.vat_identifier = Some(Identifier::new("FR12345678901"));
+            b
+        },
     );
     inv.lines = vec![Line::new(
         "1",
@@ -86,5 +118,27 @@ mod tests {
         let mut inv = pint_my_sst();
         inv.profile = Profile::PeppolBis3;
         assert!(!validate(&inv).ok());
+    }
+
+    #[test]
+    fn pint_gst_sr_is_valid_on_pint_not_pint_my() {
+        assert!(
+            validate(&pint_gst_sr()).ok(),
+            "{}",
+            validate(&pint_gst_sr())
+        );
+        let mut my = pint_gst_sr();
+        my.profile = Profile::PintMy;
+        my.seller.legal_registration = Some(Identifier::new("2023010000001"));
+        my.seller.tax_registration = Some(Identifier::new("C12345678901"));
+        my.buyer.legal_registration = Some(Identifier::new("1999010000001"));
+        let report = validate(&my);
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|f| f.id == "ALIGNED-IBRP-CL-01-MY"),
+            "{report}"
+        );
     }
 }
