@@ -134,6 +134,14 @@ pub struct Line {
     pub standard_id: Option<Identifier>,
     /// BT-155 Seller's item identifier. UBL `SellersItemIdentification`. Not BT-156, not BT-157.
     pub item_id: Option<Identifier>,
+    /// BT-156 Buyer's item identifier. UBL `BuyersItemIdentification`. Not BT-155, not BT-157.
+    pub buyer_id: Option<Identifier>,
+    /// BT-132 referenced purchase order line (`OrderLineReference/LineID`). Not BT-13, not BT-126.
+    pub order_line: Option<String>,
+    /// BT-133 invoice line buyer accounting reference (`cbc:AccountingCost`). Not header BT-19.
+    pub accounting_reference: Option<String>,
+    /// BG-32 item attributes (BT-160 name, BT-161 value). Not BT-158 classifications.
+    pub attributes: Vec<ItemAttribute>,
     /// BT-159 item origin country (BR-CL-15), not BT-80.
     pub origin_country: Option<Code>,
     /// BG-32 classification identifiers (PINT-MY CLASS is listID `CG`, not LHDN).
@@ -170,6 +178,10 @@ impl Line {
             charges: vec![],
             standard_id: None,
             item_id: None,
+            buyer_id: None,
+            order_line: None,
+            accounting_reference: None,
+            attributes: vec![],
             origin_country: None,
             classifications: vec![],
             invoiced_object: None,
@@ -178,6 +190,13 @@ impl Line {
             tax_total: None,
         }
     }
+}
+
+/// BG-32 item attribute: BT-160 name + BT-161 value (`AdditionalItemProperty`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ItemAttribute {
+    pub name: String,
+    pub value: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

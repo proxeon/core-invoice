@@ -17,6 +17,10 @@ down here**, not that there are none.
 
 ## [Unreleased]
 
+### Added
+
+- Line BT-132 (`order_line`), BT-133 (`accounting_reference`), BT-156 (`buyer_id`), BG-32 (`attributes` BT-160/161). UBL read/write. CII still named-dropped.
+
 ## [0.2.0] — 2026-08-31
 
 Honest meaning engine for embedders to **build against**. Still **not** a legal validator: `validate().ok()` is not ConnectingEurope / OpenPEPPOL / IRBM Valid. Do not publish this tree as 0.1.1.

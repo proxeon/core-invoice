@@ -40,7 +40,7 @@ pub use date::Date;
 pub use error::{AmountError, AttachmentError, DateError};
 pub use identifier::{DocumentReference, Identifier};
 pub use invoice::{
-    AllowanceCharge, Contact, Delivery, DocumentTotals, Invoice, InvoiceNote, Line,
+    AllowanceCharge, Contact, Delivery, DocumentTotals, Invoice, InvoiceNote, ItemAttribute, Line,
     LineAllowanceCharge, Party, PartyTax, Payee, PaymentInstructions, Period, PostalAddress,
     PrecedingInvoice, Price, SupportingDocument, TaxBreakdown, TaxRepresentative,
 };

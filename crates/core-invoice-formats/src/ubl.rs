@@ -438,8 +438,12 @@ const MAPPED_LINE_CHILDREN: &[&str] = &[
     "InvoicedQuantity",
     "CreditedQuantity",
     "LineExtensionAmount",
+    "AccountingCost",
     "InvoicePeriod",
+    "OrderLineReference",
+    "DocumentReference",
     "AllowanceCharge",
+    "TaxTotal",
     "Item",
     "Price",
 ];
@@ -872,6 +876,10 @@ fn write_line(
         leaf(s, 2, qty_tag, &q.to_string(), unit);
     }
     amount(s, 2, "LineExtensionAmount", line.net, cur);
+    if let Some(acc) = line.accounting_reference.as_deref() {
+        // BT-133 InvoiceLine/cbc:AccountingCost. Not header BT-19.
+        leaf(s, 2, "AccountingCost", acc, None);
+    }
     if let Some(p) = line.period.as_ref() {
         open(s, 2, "InvoicePeriod");
         if let Some(d) = p.start {
@@ -881,6 +889,12 @@ fn write_line(
             leaf(s, 3, "EndDate", &d.to_string(), None);
         }
         close(s, 2, "InvoicePeriod");
+    }
+    if let Some(ol) = line.order_line.as_deref() {
+        // BT-132 OrderLineReference/LineID. Not BT-13, not BT-126.
+        open(s, 2, "OrderLineReference");
+        leaf(s, 3, "LineID", ol, None);
+        close(s, 2, "OrderLineReference");
     }
     if let Some(obj) = line.invoiced_object.as_ref() {
         open(s, 2, "DocumentReference");
@@ -920,6 +934,18 @@ fn write_line(
         );
         close(s, 3, "SellersItemIdentification");
     }
+    if let Some(id) = line.buyer_id.as_ref() {
+        // BT-156 BuyersItemIdentification. Not BT-155 (item_id), not BT-157 (standard_id).
+        open(s, 3, "BuyersItemIdentification");
+        leaf(
+            s,
+            4,
+            "ID",
+            &id.value,
+            id.scheme.as_deref().map(|sc| ("schemeID", sc)),
+        );
+        close(s, 3, "BuyersItemIdentification");
+    }
     if let Some(id) = line.standard_id.as_ref() {
         open(s, 3, "StandardItemIdentification");
         leaf(
@@ -946,6 +972,13 @@ fn write_line(
             cl.scheme.as_deref().map(|sc| ("listID", sc)),
         );
         close(s, 3, "CommodityClassification");
+    }
+    for attr in &line.attributes {
+        // BG-32 AdditionalItemProperty: BT-160 Name, BT-161 Value.
+        open(s, 3, "AdditionalItemProperty");
+        leaf(s, 4, "Name", &attr.name, None);
+        leaf(s, 4, "Value", &attr.value, None);
+        close(s, 3, "AdditionalItemProperty");
     }
     if !line.tax.code.trim().is_empty() {
         open(s, 3, "ClassifiedTaxCategory");
@@ -1309,6 +1342,10 @@ fn read_line(
         period,
         allowances,
         charges,
+        // BT-133; not Invoice.buyer_accounting (BT-19).
+        accounting_reference: child_text(node, "AccountingCost"),
+        // BT-132 OrderLineReference/LineID.
+        order_line: child(node, "OrderLineReference").and_then(|n| child_text(n, "LineID")),
         standard_id: item
             .and_then(|n| child(n, "StandardItemIdentification"))
             .and_then(|n| child(n, "ID"))
@@ -1317,6 +1354,22 @@ fn read_line(
             .and_then(|n| child(n, "SellersItemIdentification"))
             .and_then(|n| child(n, "ID"))
             .map(ident),
+        buyer_id: item
+            .and_then(|n| child(n, "BuyersItemIdentification"))
+            .and_then(|n| child(n, "ID"))
+            .map(ident),
+        attributes: item
+            .map(|n| {
+                children(n, "AdditionalItemProperty")
+                    .filter_map(|p| {
+                        Some(core_invoice::ItemAttribute {
+                            name: child_text(p, "Name")?,
+                            value: child_text(p, "Value").unwrap_or_default(),
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
         origin_country: item
             .and_then(|n| child(n, "OriginCountry"))
             .and_then(|n| child_text(n, "IdentificationCode"))
@@ -1596,7 +1649,7 @@ fn amount_unit(s: &mut String, indent: usize, tag: &str, value: UnitPriceAmount,
 #[cfg(test)]
 mod tests {
     use super::*;
-    use core_invoice::{Line, Party, TaxCategory, reconcile};
+    use core_invoice::{Identifier, ItemAttribute, Line, Party, TaxCategory, reconcile};
     use rust_decimal::Decimal;
 
     fn sample() -> Invoice {
@@ -1649,6 +1702,36 @@ mod tests {
         assert_eq!(back.issue_date, inv.issue_date);
         assert_eq!(back.type_code.as_ref().map(Code::as_str), Some("380"));
         assert!(back.totals.is_some());
+    }
+
+    #[test]
+    fn round_trip_keeps_line_bt132_133_156_and_bg32() {
+        let mut inv = sample();
+        inv.lines[0].order_line = Some("PO-LINE-9".into());
+        inv.lines[0].accounting_reference = Some("ACC-441".into());
+        inv.lines[0].buyer_id = Some(Identifier::new("BUY-SKU"));
+        inv.lines[0].attributes.push(ItemAttribute {
+            name: "Colour".into(),
+            value: "blue".into(),
+        });
+        let xml = write_unchecked(&inv);
+        assert!(xml.contains("OrderLineReference"), "{xml}");
+        assert!(xml.contains("PO-LINE-9"), "{xml}");
+        assert!(xml.contains("AccountingCost"), "{xml}");
+        assert!(xml.contains("BuyersItemIdentification"), "{xml}");
+        assert!(xml.contains("AdditionalItemProperty"), "{xml}");
+        let back = read(&xml).unwrap().invoice;
+        assert_eq!(back.lines[0].order_line.as_deref(), Some("PO-LINE-9"));
+        assert_eq!(
+            back.lines[0].accounting_reference.as_deref(),
+            Some("ACC-441")
+        );
+        assert_eq!(
+            back.lines[0].buyer_id.as_ref().map(|i| i.value.as_str()),
+            Some("BUY-SKU")
+        );
+        assert_eq!(back.lines[0].attributes[0].name, "Colour");
+        assert_eq!(back.lines[0].attributes[0].value, "blue");
     }
 
     #[test]
