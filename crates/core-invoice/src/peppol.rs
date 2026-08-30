@@ -67,14 +67,15 @@ fn r003(inv: &Invoice, report: &mut Report) {
     if !peppol_only(inv) {
         return;
     }
+    // PEPPOL-EN16931-R003: BT-10 or BT-13, not BG-3.
     let has_buyer_ref = inv
         .buyer_reference
         .as_ref()
         .is_some_and(|r| !r.as_str().trim().is_empty());
     let has_order = inv
-        .preceding
-        .iter()
-        .any(|p| !p.reference.as_str().is_empty());
+        .purchase_order
+        .as_ref()
+        .is_some_and(|r| !r.as_str().trim().is_empty());
     if !has_buyer_ref && !has_order {
         report.push(Finding::fatal(
             "PEPPOL-EN16931-R003",
@@ -99,13 +100,25 @@ fn r120(inv: &Invoice, report: &mut Report) {
             .map(|q| q.raw())
             .filter(|d| !d.is_zero())
             .unwrap_or(Decimal::ONE);
-        let Some(expected) = qty
+        let Some(mut expected) = qty
             .raw()
             .checked_mul(price.net.raw())
             .and_then(|v| v.checked_div(base))
         else {
             continue;
         };
+        for c in &line.charges {
+            let Some(v) = expected.checked_add(c.amount.raw()) else {
+                continue;
+            };
+            expected = v;
+        }
+        for a in &line.allowances {
+            let Some(v) = expected.checked_sub(a.amount.raw()) else {
+                continue;
+            };
+            expected = v;
+        }
         let delta = (expected - line.net.raw()).abs();
         if delta > two_cents {
             report.push(Finding::fatal(
@@ -336,6 +349,65 @@ mod tests {
             base_qty: None,
             base_unit: None,
         });
+        let report = validate(&inv);
+        assert!(
+            report
+                .findings
+                .iter()
+                .all(|f| f.id != "PEPPOL-EN16931-R120"),
+            "{report}"
+        );
+    }
+
+    #[test]
+    fn r003_bt13_not_preceding() {
+        let mut inv = peppol();
+        inv.buyer_reference = None;
+        inv.preceding.push(crate::invoice::PrecedingInvoice {
+            reference: crate::identifier::DocumentReference::new("INV-OLD"),
+            issue_date: None,
+        });
+        let report = validate(&inv);
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|f| f.id == "PEPPOL-EN16931-R003"),
+            "BG-3 alone must not satisfy R003: {report}"
+        );
+        inv.purchase_order = Some(crate::identifier::DocumentReference::new("PO-13"));
+        let report = validate(&inv);
+        assert!(
+            report
+                .findings
+                .iter()
+                .all(|f| f.id != "PEPPOL-EN16931-R003"),
+            "{report}"
+        );
+    }
+
+    #[test]
+    fn r120_includes_line_charges_minus_allowances() {
+        let mut inv = peppol();
+        inv.lines[0].quantity = Some(Quantity::parse("1").unwrap());
+        inv.lines[0].price = Some(Price {
+            net: crate::amount::UnitPriceAmount::parse("100.00").unwrap(),
+            discount: None,
+            gross: None,
+            base_qty: None,
+            base_unit: None,
+        });
+        inv.lines[0]
+            .charges
+            .push(crate::invoice::LineAllowanceCharge {
+                amount: InvoiceAmount::parse("5.00").unwrap(),
+                base: None,
+                percent: None,
+                reason: None,
+                reason_code: None,
+            });
+        inv.lines[0].net = InvoiceAmount::parse("105.00").unwrap();
+        let _ = reconcile(&mut inv);
         let report = validate(&inv);
         assert!(
             report

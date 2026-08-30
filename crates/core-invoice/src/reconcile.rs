@@ -404,6 +404,7 @@ pub(crate) fn taxable_for_breakdown(
 }
 
 fn taxable_for(inv: &Invoice, key: &GroupKey) -> Result<InvoiceAmount, ReconcileError> {
+    // Line A/C already sits in BT-131. Do not add them again in taxable_for.
     let mut pos = InvoiceAmount::ZERO;
     let mut neg = InvoiceAmount::ZERO;
     for row in content(inv) {

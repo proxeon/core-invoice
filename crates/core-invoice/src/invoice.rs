@@ -103,8 +103,20 @@ pub struct Price {
     pub base_unit: Option<Code>,
 }
 
+/// Line allowance/charge (BG-27/28). No tax child: Peppol/PINT inherit the line category.
+/// Line A/C already sits in BT-131. Do not add them again in taxable_for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LineAllowanceCharge {
+    pub amount: InvoiceAmount,
+    pub base: Option<InvoiceAmount>,
+    pub percent: Option<Percentage>,
+    pub reason: Option<String>,
+    pub reason_code: Option<Code>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Line {
+    /// BT-126 line identifier, not a GTIN (BT-157).
     pub id: String,
     pub name: String,
     pub net: Amount,
@@ -114,6 +126,18 @@ pub struct Line {
     pub price: Option<Price>,
     pub note: Option<String>,
     pub description: Option<String>,
+    /// BG-26 invoicing period (BT-134/BT-135). Not [`Invoice::period`] (BG-14).
+    pub period: Option<Period>,
+    pub allowances: Vec<LineAllowanceCharge>,
+    pub charges: Vec<LineAllowanceCharge>,
+    /// BT-155 standard item identification (often GTIN).
+    pub standard_id: Option<Identifier>,
+    /// BT-157 item identifier + BT-156/BT-158 scheme.
+    pub item_id: Option<Identifier>,
+    /// BT-159 item origin country (BR-CL-15), not BT-80.
+    pub origin_country: Option<Code>,
+    /// BG-32 classification identifiers (PINT-MY CLASS may use this).
+    pub classifications: Vec<Identifier>,
 }
 
 impl Line {
@@ -133,6 +157,13 @@ impl Line {
             price: None,
             note: None,
             description: None,
+            period: None,
+            allowances: vec![],
+            charges: vec![],
+            standard_id: None,
+            item_id: None,
+            origin_country: None,
+            classifications: vec![],
         }
     }
 }
@@ -149,6 +180,7 @@ pub struct PrecedingInvoice {
     pub issue_date: Option<Date>,
 }
 
+/// Header invoicing period BG-14 (BT-73/74) or line period BG-26 (BT-134/135).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Period {
     pub start: Option<Date>,
@@ -177,10 +209,15 @@ pub struct Delivery {
     pub address: Option<PostalAddress>,
 }
 
+/// Payment instructions. BT-81 is `means_code`. Account/IBAN/BIC, card PAN, and
+/// mandate live only on [`PaymentMeans`] (exclusive BG-17/18/19).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PaymentInstructions {
+    /// BT-81 Payment means type code.
     pub means_code: Option<Code>,
+    /// BT-82 Payment means text (`@name` on UBL PaymentMeansCode, not InstructionNote).
     pub means_text: Option<String>,
+    /// BT-83 Remittance information (UBL PaymentID).
     pub remittance: Option<String>,
     pub means: Option<PaymentMeans>,
 }
@@ -243,8 +280,30 @@ pub struct Invoice {
     pub type_code: Option<Code>,
     pub tax_currency: Option<Code>,
     pub due_date: Option<Date>,
+    /// BT-7 / BT-8. BR-CO-03 when both the date and the code rules apply.
+    pub tax_point_date: Option<Date>,
+    pub tax_point_code: Option<Code>,
     pub business_process: Option<String>,
+    /// BT-10 buyer reference. Do not overload with BT-13.
     pub buyer_reference: Option<DocumentReference>,
+    /// BT-11 project reference.
+    pub project: Option<DocumentReference>,
+    /// BT-12 contract reference.
+    pub contract: Option<DocumentReference>,
+    /// BT-13 purchase order reference (Peppol R003 with BT-10).
+    pub purchase_order: Option<DocumentReference>,
+    /// BT-14 sales order reference.
+    pub sales_order: Option<DocumentReference>,
+    /// BT-15 receiving advice reference.
+    pub receiving_advice: Option<DocumentReference>,
+    /// BT-16 despatch advice reference.
+    pub despatch: Option<DocumentReference>,
+    /// BT-17 tender or lot reference.
+    pub tender: Option<DocumentReference>,
+    /// BT-18 invoiced object identifier (not a BG-24 supporting document).
+    pub invoiced_object: Option<Identifier>,
+    /// BT-19 buyer accounting reference.
+    pub buyer_accounting: Option<String>,
     pub payment_terms: Option<String>,
     pub notes: Vec<InvoiceNote>,
     pub preceding: Vec<PrecedingInvoice>,
@@ -281,8 +340,19 @@ impl Invoice {
             type_code: None,
             tax_currency: None,
             due_date: None,
+            tax_point_date: None,
+            tax_point_code: None,
             business_process: None,
             buyer_reference: None,
+            project: None,
+            contract: None,
+            purchase_order: None,
+            sales_order: None,
+            receiving_advice: None,
+            despatch: None,
+            tender: None,
+            invoiced_object: None,
+            buyer_accounting: None,
             payment_terms: None,
             notes: vec![],
             preceding: vec![],
@@ -356,6 +426,7 @@ impl Invoice {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::identifier::Identifier;
     use crate::tax::TaxCategory;
     use rust_decimal::Decimal;
 
@@ -382,5 +453,46 @@ mod tests {
         assert_eq!(cn.payable(), inv.payable());
         assert_eq!(cn.preceding[0].reference.as_str(), "INV-1");
         assert_eq!(cn.type_code.as_ref().map(Code::as_str), Some("381"));
+    }
+
+    #[test]
+    fn table2_refs_and_line_groups_exist() {
+        let mut inv = Invoice::blank(
+            Profile::En16931,
+            "INV-1",
+            "EUR",
+            Party::new("S", "DE"),
+            Party::new("B", "FR"),
+        );
+        inv.tax_point_date = Date::parse("2026-01-10").ok();
+        inv.tax_point_code = Some(Code::new("3"));
+        inv.purchase_order = Some(DocumentReference::new("PO-9"));
+        inv.invoiced_object = Some(Identifier::new("OBJ-1"));
+        inv.lines.push({
+            let mut line = Line::new(
+                "1",
+                "A",
+                Amount::parse("90.00").unwrap(),
+                TaxCategory::vat("S", Decimal::from(19)),
+            );
+            line.period = Some(Period {
+                start: Date::parse("2026-01-01").ok(),
+                end: Date::parse("2026-01-31").ok(),
+            });
+            line.allowances.push(LineAllowanceCharge {
+                amount: Amount::parse("10.00").unwrap(),
+                base: None,
+                percent: None,
+                reason: Some("discount".into()),
+                reason_code: None,
+            });
+            line.standard_id = Some(Identifier::schemed("01234567890128", "0160"));
+            line.origin_country = Some(Code::new("DE"));
+            line
+        });
+        assert_eq!(inv.purchase_order.as_ref().unwrap().as_str(), "PO-9");
+        assert_eq!(inv.lines[0].allowances.len(), 1);
+        assert_eq!(inv.lines[0].origin_country.as_ref().unwrap().as_str(), "DE");
+        assert!(inv.invoiced_object.is_some());
     }
 }

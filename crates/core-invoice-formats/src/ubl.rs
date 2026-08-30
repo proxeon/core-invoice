@@ -728,6 +728,13 @@ fn read_line(
         price,
         note: None,
         description: item.and_then(|n| child_text(n, "Description")),
+        period: None,
+        allowances: vec![],
+        charges: vec![],
+        standard_id: None,
+        item_id: None,
+        origin_country: None,
+        classifications: vec![],
     })
 }
 
