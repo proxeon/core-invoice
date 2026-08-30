@@ -33,31 +33,31 @@ impl TaxSystem {
 pub struct TaxCategory {
     pub system: TaxSystem,
     pub code: String,
-    pub percent: rust_decimal::Decimal,
+    pub percent: crate::numeric::Percentage,
 }
 
 impl TaxCategory {
-    pub fn vat(code: impl Into<String>, percent: rust_decimal::Decimal) -> Self {
+    pub fn vat(code: impl Into<String>, percent: impl Into<crate::numeric::Percentage>) -> Self {
         Self {
             system: TaxSystem::Vat,
             code: code.into(),
-            percent,
+            percent: percent.into(),
         }
     }
 
-    pub fn sst(code: impl Into<String>, percent: rust_decimal::Decimal) -> Self {
+    pub fn sst(code: impl Into<String>, percent: impl Into<crate::numeric::Percentage>) -> Self {
         Self {
             system: TaxSystem::Sst,
             code: code.into(),
-            percent,
+            percent: percent.into(),
         }
     }
 
-    pub fn gst(code: impl Into<String>, percent: rust_decimal::Decimal) -> Self {
+    pub fn gst(code: impl Into<String>, percent: impl Into<crate::numeric::Percentage>) -> Self {
         Self {
             system: TaxSystem::Gst,
             code: code.into(),
-            percent,
+            percent: percent.into(),
         }
     }
 }

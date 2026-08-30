@@ -43,9 +43,9 @@ pub struct Invoice {
 }
 
 impl Invoice {
-    pub fn line_net_sum(&self) -> Amount {
+    pub fn line_net_sum(&self) -> Option<Amount> {
         self.lines
             .iter()
-            .fold(Amount::ZERO, |acc, line| acc.saturating_add(line.net))
+            .try_fold(Amount::ZERO, |acc, line| acc.checked_add(line.net))
     }
 }

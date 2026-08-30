@@ -28,6 +28,14 @@ down here**, not that there are none.
 - **C ABI.** Unknown profile strings return 2 (not silent PINT). NULL profile is auto from BT-24. Error buffer truncation is byte-safe.
 - **`/spec/`** is gitignored (CEN artefacts are EUPL-1.2). See `docs/spec.md`.
 
+### Added
+
+- Semantic types: `InvoiceAmount` (refuses a third decimal), `UnitPriceAmount`,
+  `Quantity`, `Percentage` (per cent, not fraction), `Date`, `Code`,
+  `Identifier`, `DocumentReference`, `Attachment`, `Path`/`BtId`/`Group`,
+  `DocumentKind`, exclusive `PaymentMeans`. `Amount` is an alias of
+  `InvoiceAmount`.
+
 ## [0.1.0] — 2026-08-30
 
 First crates.io release. Semantic model treats tax as VAT, GST, SST, or

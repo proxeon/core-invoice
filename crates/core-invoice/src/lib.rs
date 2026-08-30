@@ -4,14 +4,32 @@
 //! APIs, no accounting UI.
 
 pub mod amount;
+pub mod attachment;
+pub mod bt;
+pub mod code;
+pub mod date;
+pub mod error;
+pub mod identifier;
 pub mod invoice;
+pub mod kind;
+pub mod numeric;
+pub mod payment;
 pub mod profile;
 pub mod report;
 pub mod tax;
 pub mod validate;
 
-pub use amount::Amount;
+pub use amount::{Amount, InvoiceAmount, UnitPriceAmount};
+pub use attachment::Attachment;
+pub use bt::{BtId, Group, Path};
+pub use code::Code;
+pub use date::Date;
+pub use error::{AmountError, AttachmentError, DateError};
+pub use identifier::{DocumentReference, Identifier};
 pub use invoice::{Invoice, Line, Party};
+pub use kind::DocumentKind;
+pub use numeric::{Percentage, Quantity};
+pub use payment::{CreditTransfer, DirectDebit, PaymentCard, PaymentMeans};
 pub use profile::Profile;
 pub use report::{Finding, Report, Severity};
 pub use tax::{TaxCategory, TaxSystem};

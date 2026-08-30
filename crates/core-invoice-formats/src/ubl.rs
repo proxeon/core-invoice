@@ -98,7 +98,8 @@ pub fn read(xml: &str) -> Result<Invoice, FormatError> {
         let code = tag(chunk, "ID").unwrap_or_else(|| "S".into());
         let percent = tag(chunk, "Percent")
             .and_then(|s| Decimal::from_str(&s).ok())
-            .unwrap_or(Decimal::ZERO);
+            .map(core_invoice::Percentage::new)
+            .unwrap_or(core_invoice::Percentage::ZERO);
         let system = tag(chunk, "TaxScheme")
             .and_then(|s| extract_inner(&s).or(Some(s)))
             .and_then(|s| TaxSystem::parse(&s))
