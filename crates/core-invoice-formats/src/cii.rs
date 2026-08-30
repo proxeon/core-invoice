@@ -5,7 +5,8 @@
 //! Subset for EN 16931 and Peppol BIS. `Profile::Pint` (international) may emit
 //! the same envelope. **PINT-MY is UBL-only.**
 
-use crate::FormatError;
+use crate::xml;
+use crate::{FormatError, Read};
 use core_invoice::kind::DocumentKind;
 use core_invoice::numeric::Percentage;
 use core_invoice::tax::{TaxCategory, TaxSystem, wire_scheme};
@@ -86,10 +87,9 @@ pub fn write_unchecked(invoice: &Invoice) -> Result<String, FormatError> {
     Ok(s)
 }
 
-pub fn read(xml: &str) -> Result<Invoice, FormatError> {
-    if xml.to_ascii_lowercase().contains("<!doctype") {
-        return Err(FormatError::Parse("DTD is refused".into()));
-    }
+pub fn read(xml: &str) -> Result<Read, FormatError> {
+    xml::refuse_dtd(xml)?;
+    xml::refuse_depth(xml)?;
     let doc = roxmltree::Document::parse(xml)
         .map_err(|e| FormatError::Parse(format!("not well-formed CII: {e}")))?;
     let root = doc.root_element();
@@ -103,13 +103,15 @@ pub fn read(xml: &str) -> Result<Invoice, FormatError> {
     let spec = ctx
         .and_then(|n| child(n, "GuidelineSpecifiedDocumentContextParameter"))
         .and_then(|n| child_text(n, "ID"));
+    // Unknown BT-24 stays unknown; CORE-SPEC-01 is Fatal. Do not silently select En16931.
     let profile = match spec.as_deref() {
         Some(id) => match Profile::for_specification_id(id) {
             ProfileLookup::Profile(p) => p,
-            _ => Profile::En16931,
+            ProfileLookup::WrongProcess | ProfileLookup::Unknown => Profile::Unknown,
         },
-        None => Profile::En16931,
+        None => Profile::Unknown,
     };
+    let mut malformed = Vec::new();
     let doc_el = child(root, "ExchangedDocument");
     let number = doc_el.and_then(|n| child_text(n, "ID")).unwrap_or_default();
     let type_code = doc_el.and_then(|n| child_text(n, "TypeCode"));
@@ -145,19 +147,25 @@ pub fn read(xml: &str) -> Result<Invoice, FormatError> {
         invoice.kind = DocumentKind::CreditNote;
     }
     invoice.lines = children(tx, "IncludedSupplyChainTradeLineItem")
-        .filter_map(|n| read_line(n, profile))
+        .filter_map(|n| read_line(n, profile, &mut malformed))
         .collect();
     if let Some(st) = settlement {
         invoice.tax_breakdown = children(st, "ApplicableTradeTax")
-            .filter_map(|n| read_tax(n, profile))
+            .filter_map(|n| read_tax(n, profile, &mut malformed))
             .collect();
         if let Some(ms) = child(st, "SpecifiedTradeSettlementHeaderMonetarySummation") {
-            invoice.totals = Some(read_totals(ms));
-            invoice.payable = child_amount(ms, "DuePayableAmount").unwrap_or(Amount::ZERO);
-            invoice.tax_total = child_amount(ms, "TaxTotalAmount").unwrap_or(Amount::ZERO);
+            invoice.totals = Some(read_totals(ms, &mut malformed));
+            invoice.payable =
+                child_amount(ms, "DuePayableAmount", &mut malformed, "CII").unwrap_or(Amount::ZERO);
+            invoice.tax_total =
+                child_amount(ms, "TaxTotalAmount", &mut malformed, "CII").unwrap_or(Amount::ZERO);
         }
     }
-    Ok(invoice)
+    Ok(Read {
+        invoice,
+        unmapped: Vec::new(),
+        malformed,
+    })
 }
 
 fn write_line(s: &mut String, line: &Line, invoice: &Invoice) {
@@ -293,7 +301,11 @@ fn read_party(node: roxmltree::Node<'_, '_>, _profile: Profile) -> Party {
     party
 }
 
-fn read_line(node: roxmltree::Node<'_, '_>, profile: Profile) -> Option<Line> {
+fn read_line(
+    node: roxmltree::Node<'_, '_>,
+    profile: Profile,
+    malformed: &mut Vec<String>,
+) -> Option<Line> {
     let id = child(node, "AssociatedDocumentLineDocument")
         .and_then(|n| child_text(n, "LineID"))
         .unwrap_or_default();
@@ -302,7 +314,7 @@ fn read_line(node: roxmltree::Node<'_, '_>, profile: Profile) -> Option<Line> {
         .unwrap_or_default();
     let net = child(node, "SpecifiedLineTradeSettlement")
         .and_then(|n| child(n, "SpecifiedTradeSettlementLineMonetarySummation"))
-        .and_then(|n| child_amount(n, "LineTotalAmount"))
+        .and_then(|n| child_amount(n, "LineTotalAmount", malformed, "CII-line"))
         .unwrap_or(Amount::ZERO);
     let tax = child(node, "SpecifiedLineTradeSettlement")
         .and_then(|n| child(n, "ApplicableTradeTax"))
@@ -324,11 +336,15 @@ fn read_line(node: roxmltree::Node<'_, '_>, profile: Profile) -> Option<Line> {
                 percent,
             }
         })
-        .unwrap_or_else(|| TaxCategory::vat("S", Percentage::ZERO));
+        .unwrap_or_else(|| TaxCategory::vat("", Percentage::ZERO));
     Some(Line::new(id, name, net, tax))
 }
 
-fn read_tax(node: roxmltree::Node<'_, '_>, profile: Profile) -> Option<TaxBreakdown> {
+fn read_tax(
+    node: roxmltree::Node<'_, '_>,
+    profile: Profile,
+    malformed: &mut Vec<String>,
+) -> Option<TaxBreakdown> {
     let code = child_text(node, "CategoryCode")?;
     let percent = child_text(node, "RateApplicablePercent")
         .and_then(|s| Decimal::from_str(&s).ok())
@@ -344,25 +360,26 @@ fn read_tax(node: roxmltree::Node<'_, '_>, profile: Profile) -> Option<TaxBreakd
         scheme: wire_scheme(profile, system, &code).to_owned(),
         category: Code::new(code),
         rate: percent,
-        taxable: child_amount(node, "BasisAmount").unwrap_or(Amount::ZERO),
-        tax: child_amount(node, "CalculatedAmount").unwrap_or(Amount::ZERO),
+        taxable: child_amount(node, "BasisAmount", malformed, "CII-tax").unwrap_or(Amount::ZERO),
+        tax: child_amount(node, "CalculatedAmount", malformed, "CII-tax").unwrap_or(Amount::ZERO),
         exemption_reason: None,
         exemption_code: None,
     })
 }
 
-fn read_totals(node: roxmltree::Node<'_, '_>) -> DocumentTotals {
+fn read_totals(node: roxmltree::Node<'_, '_>, malformed: &mut Vec<String>) -> DocumentTotals {
     DocumentTotals {
-        line_net: child_amount(node, "LineTotalAmount"),
+        line_net: child_amount(node, "LineTotalAmount", malformed, "CII-totals"),
         allowance_total: None,
         charge_total: None,
-        without_tax: child_amount(node, "TaxBasisTotalAmount"),
-        tax_total: child_amount(node, "TaxTotalAmount"),
+        without_tax: child_amount(node, "TaxBasisTotalAmount", malformed, "CII-totals"),
+        tax_total: child_amount(node, "TaxTotalAmount", malformed, "CII-totals"),
         tax_total_accounting: None,
-        with_tax: child_amount(node, "GrandTotalAmount"),
-        paid: child_amount(node, "TotalPrepaidAmount"),
-        rounding: child_amount(node, "RoundingAmount"),
-        payable: child_amount(node, "DuePayableAmount").unwrap_or(Amount::ZERO),
+        with_tax: child_amount(node, "GrandTotalAmount", malformed, "CII-totals"),
+        paid: child_amount(node, "TotalPrepaidAmount", malformed, "CII-totals"),
+        rounding: child_amount(node, "RoundingAmount", malformed, "CII-totals"),
+        payable: child_amount(node, "DuePayableAmount", malformed, "CII-totals")
+            .unwrap_or(Amount::ZERO),
     }
 }
 
@@ -405,8 +422,21 @@ fn text(node: roxmltree::Node<'_, '_>) -> Option<String> {
 fn child_text(node: roxmltree::Node<'_, '_>, name: &str) -> Option<String> {
     child(node, name).and_then(text)
 }
-fn child_amount(node: roxmltree::Node<'_, '_>, name: &str) -> Option<InvoiceAmount> {
-    child_text(node, name).and_then(|s| InvoiceAmount::parse(&s).ok())
+fn child_amount(
+    node: roxmltree::Node<'_, '_>,
+    name: &str,
+    malformed: &mut Vec<String>,
+    path: &str,
+) -> Option<InvoiceAmount> {
+    let s = child_text(node, name)?;
+    // Amount.Type: a third fraction digit is malformed for this codec, not a rounded InvoiceAmount.
+    match InvoiceAmount::parse(&s) {
+        Ok(a) => Some(a),
+        Err(_) => {
+            malformed.push(format!("{path}/{name}: {s}"));
+            None
+        }
+    }
 }
 
 fn escape(s: &str) -> String {
@@ -493,7 +523,7 @@ mod tests {
     fn round_trip_cii() {
         let inv = sample();
         let xml = write_unchecked(&inv).unwrap();
-        let back = read(&xml).unwrap();
+        let back = read(&xml).unwrap().invoice;
         assert_eq!(back.number, "INV-CII");
         assert_eq!(back.currency, "EUR");
         assert_eq!(back.lines[0].id, "1");

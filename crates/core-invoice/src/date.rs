@@ -77,5 +77,8 @@ mod tests {
         assert_eq!(d.to_string(), "2026-06-30");
         assert!(Date::parse("2026-02-30").is_err());
         assert!(Date::parse("2026-06-01T00:00:00").is_err());
+        // Zone suffix is rejected; we do not apply an offset and shift the day.
+        assert!(Date::parse("2026-01-15Z").is_err());
+        assert!(Date::parse("2026-01-15+00:00").is_err());
     }
 }

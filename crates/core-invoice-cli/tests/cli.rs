@@ -26,6 +26,16 @@ fn write_tmp(name: &str, xml: &str) -> std::path::PathBuf {
 }
 
 #[test]
+fn neither_invoice_nor_cii_root_is_2() {
+    let path = write_tmp("root", "<NotAnInvoice/>");
+    let status = bin()
+        .args(["validate", path.to_str().unwrap()])
+        .status()
+        .unwrap();
+    assert_eq!(status.code(), Some(2));
+}
+
+#[test]
 fn missing_file_is_2() {
     let status = bin()
         .args(["validate", "/no/such/invoice.xml"])

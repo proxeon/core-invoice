@@ -77,6 +77,8 @@ pub fn wire_scheme(
             TaxSystem::Gst => "GST",
             _ => "VAT",
         },
+        // Production write never stamps Unknown; keep a VAT scheme if tests serialise.
+        Profile::Unknown => "VAT",
     }
 }
 

@@ -214,8 +214,27 @@ fn br_16(invoice: &Invoice, report: &mut Report) {
     }
 }
 
-fn pint_tax(invoice: &Invoice, report: &mut Report) {
+fn br_co_04(invoice: &Invoice, report: &mut Report) {
+    // Missing BT-151 is a finding (BR-CO-04 / line tax presence), not category S.
     for (i, line) in invoice.lines.iter().enumerate() {
+        if line.tax.code.trim().is_empty() {
+            report.push(Finding::fatal(
+                "BR-CO-04",
+                Path::at_term(Group::Line, i, BtId(151)),
+                "Invoiced item VAT category code (BT-151) shall be present",
+            ));
+        }
+    }
+}
+
+fn pint_tax(invoice: &Invoice, report: &mut Report) {
+    if matches!(invoice.profile, crate::profile::Profile::Unknown) {
+        return;
+    }
+    for (i, line) in invoice.lines.iter().enumerate() {
+        if line.tax.code.trim().is_empty() {
+            continue;
+        }
         if !invoice.profile.allows(line.tax.system) {
             report.push(Finding::fatal(
                 "PINT-TAX",
@@ -256,6 +275,9 @@ fn ibr_my(invoice: &Invoice, report: &mut Report) {
         ));
     }
     for (i, line) in invoice.lines.iter().enumerate() {
+        if line.tax.code.trim().is_empty() {
+            continue;
+        }
         if !crate::tax::pint_my_category(&line.tax.code) {
             report.push(Finding::fatal(
                 "ALIGNED-IBRP-CL-01-MY",
@@ -632,6 +654,13 @@ pub static ALL: &[Rule] = &[
         text: "An Invoice shall have at least one Invoice line (BG-25).",
         source: Source::Both,
         eval: br_16,
+    },
+    Rule {
+        id: "BR-CO-04",
+        severity: Severity::Fatal,
+        text: "Each Invoice line shall have an Invoiced item VAT category code (BT-151).",
+        source: Source::Both,
+        eval: br_co_04,
     },
     Rule {
         id: "BR-CO-10",

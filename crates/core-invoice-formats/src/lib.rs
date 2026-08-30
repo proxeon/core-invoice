@@ -9,6 +9,7 @@ use core_invoice::{
 
 pub mod cii;
 pub mod ubl;
+pub mod xml;
 
 #[derive(Debug, thiserror::Error)]
 pub enum FormatError {
@@ -34,6 +35,14 @@ pub struct SemanticReject(pub Report);
 pub enum Syntax {
     Ubl,
     Cii,
+}
+
+/// Children we saw and did not map. Convert must not claim lossless if this is non-empty.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Read {
+    pub invoice: Invoice,
+    pub unmapped: Vec<String>,
+    pub malformed: Vec<String>,
 }
 
 impl Syntax {
@@ -104,6 +113,10 @@ fn convert_invoice(invoice: Invoice, to: Syntax) -> Result<String, FormatError> 
         Profile::PeppolBis3 => prove_write::<PeppolBis3Marker>(invoice, to),
         Profile::Pint => prove_write::<PintMarker>(invoice, to),
         Profile::PintMy => prove_write::<PintMyMarker>(invoice, to),
+        Profile::Unknown => {
+            let report = core_invoice::validate(&invoice);
+            Err(FormatError::Semantic(SemanticReject(report)))
+        }
     }
 }
 
@@ -115,17 +128,29 @@ fn prove_write<P: ProfileMarker>(invoice: Invoice, syntax: Syntax) -> Result<Str
 }
 
 pub fn read(xml: &str) -> Result<Invoice, FormatError> {
-    if xml.to_ascii_lowercase().contains("<!doctype") {
-        return Err(FormatError::Parse("DTD is refused".into()));
+    let traced = read_with_trace(xml)?;
+    if !traced.malformed.is_empty() {
+        return Err(FormatError::Parse(format!(
+            "malformed amounts: {}",
+            traced.malformed.join("; ")
+        )));
     }
-    let rest = xml.trim_start();
-    if rest.contains("CrossIndustryInvoice") {
-        return cii::read(xml);
-    }
-    match ubl::sniff(xml) {
-        Ok(_) => ubl::read(xml),
-        Err(_) if rest.contains("urn:oasis:names:specification:ubl") => ubl::read(xml),
-        Err(e) => Err(e),
+    Ok(traced.invoice)
+}
+
+pub fn read_with_trace(xml: &str) -> Result<Read, FormatError> {
+    xml::refuse_dtd(xml)?;
+    xml::refuse_oversize(xml)?;
+    xml::refuse_depth(xml)?;
+    // Syntax from the document element after skipping comments/PIs, not from substring search.
+    let local = xml::document_element_local(xml)
+        .ok_or_else(|| FormatError::Parse("document is not well-formed (no element)".into()))?;
+    match local {
+        "Invoice" | "CreditNote" => ubl::read(xml),
+        "CrossIndustryInvoice" => cii::read(xml),
+        other => Err(FormatError::Parse(format!(
+            "document element must be Invoice, CreditNote, or CrossIndustryInvoice, not {other}"
+        ))),
     }
 }
 
@@ -142,6 +167,10 @@ pub fn validate_xml(xml: &str, profile: Option<Profile>) -> Result<Report, Forma
 pub fn diff(left_xml: &str, right_xml: &str) -> Result<String, FormatError> {
     let left = read(left_xml)?;
     let right = read(right_xml)?;
+    Ok(diff_invoices(&left, &right))
+}
+
+fn diff_invoices(left: &Invoice, right: &Invoice) -> String {
     let mut lines = Vec::new();
     if left.number != right.number {
         lines.push(format!("number: {} → {}", left.number, right.number));
@@ -159,10 +188,112 @@ pub fn diff(left_xml: &str, right_xml: &str) -> Result<String, FormatError> {
             right.profile.slug()
         ));
     }
+    if left.issue_date != right.issue_date {
+        lines.push(format!(
+            "issue_date: {:?} → {:?}",
+            left.issue_date, right.issue_date
+        ));
+    }
+    if left.due_date != right.due_date {
+        lines.push(format!(
+            "due_date: {:?} → {:?}",
+            left.due_date, right.due_date
+        ));
+    }
+    if left.type_code != right.type_code {
+        lines.push(format!(
+            "type_code: {:?} → {:?}",
+            left.type_code, right.type_code
+        ));
+    }
+    if left.kind != right.kind {
+        lines.push(format!("kind: {:?} → {:?}", left.kind, right.kind));
+    }
+    diff_party(&mut lines, "seller", &left.seller, &right.seller);
+    diff_party(&mut lines, "buyer", &left.buyer, &right.buyer);
+    if left.notes != right.notes {
+        lines.push(format!(
+            "notes: {} → {}",
+            left.notes.len(),
+            right.notes.len()
+        ));
+    }
+    if left.payment != right.payment {
+        lines.push("payment: differ".into());
+    }
+    if left.tax_breakdown != right.tax_breakdown {
+        lines.push(format!(
+            "tax_breakdown: {} → {}",
+            left.tax_breakdown.len(),
+            right.tax_breakdown.len()
+        ));
+    }
+    if left.totals != right.totals {
+        lines.push("totals: differ".into());
+    }
+    if left.lines.len() != right.lines.len() {
+        lines.push(format!(
+            "lines: {} → {}",
+            left.lines.len(),
+            right.lines.len()
+        ));
+    }
+    for (i, (a, b)) in left.lines.iter().zip(right.lines.iter()).enumerate() {
+        if a.id != b.id {
+            lines.push(format!("lines[{i}].id: {} → {}", a.id, b.id));
+        }
+        if a.name != b.name {
+            lines.push(format!("lines[{i}].name: {} → {}", a.name, b.name));
+        }
+        if a.net != b.net {
+            lines.push(format!("lines[{i}].net: {} → {}", a.net, b.net));
+        }
+        if a.tax != b.tax {
+            lines.push(format!("lines[{i}].tax: {} → {}", a.tax.code, b.tax.code));
+        }
+        if a.quantity != b.quantity {
+            lines.push(format!(
+                "lines[{i}].quantity: {:?} → {:?}",
+                a.quantity, b.quantity
+            ));
+        }
+        if a.price != b.price {
+            lines.push(format!("lines[{i}].price: differ"));
+        }
+    }
     if lines.is_empty() {
-        Ok("no semantic difference".into())
+        "no semantic difference".into()
     } else {
-        Ok(lines.join("\n"))
+        lines.join("\n")
+    }
+}
+
+fn diff_party(
+    lines: &mut Vec<String>,
+    label: &str,
+    left: &core_invoice::Party,
+    right: &core_invoice::Party,
+) {
+    if left.name != right.name {
+        lines.push(format!("{label}.name: {} → {}", left.name, right.name));
+    }
+    if left.country != right.country {
+        lines.push(format!(
+            "{label}.country: {} → {}",
+            left.country, right.country
+        ));
+    }
+    if left.electronic_address != right.electronic_address {
+        lines.push(format!("{label}.endpoint: differ"));
+    }
+    if left.vat_identifier != right.vat_identifier {
+        lines.push(format!("{label}.vat: differ"));
+    }
+    if left.tax_registration != right.tax_registration {
+        lines.push(format!("{label}.tax_registration: differ"));
+    }
+    if left.legal_registration != right.legal_registration {
+        lines.push(format!("{label}.legal_registration: differ"));
     }
 }
 
@@ -187,5 +318,118 @@ mod tests {
         let ubl = r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"><cbc:CustomizationID>urn:peppol:pint:billing-1@my-1</cbc:CustomizationID><cbc:ID>1</cbc:ID><cbc:IssueDate>2026-01-15</cbc:IssueDate><cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode><cbc:DocumentCurrencyCode>MYR</cbc:DocumentCurrencyCode><cac:LegalMonetaryTotal><cbc:PayableAmount currencyID="MYR">0</cbc:PayableAmount></cac:LegalMonetaryTotal></Invoice>"#;
         let err = convert(ubl, Syntax::Cii).unwrap_err();
         assert!(matches!(err, FormatError::CiiNotForProfile), "{err:?}");
+    }
+
+    #[test]
+    fn comment_cross_industry_does_not_dispatch_as_cii() {
+        let xml = r#"<?xml version="1.0"?><!-- CrossIndustryInvoice --><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"><cbc:ID>1</cbc:ID></Invoice>"#;
+        let inv = read(xml).unwrap();
+        assert_eq!(inv.kind, core_invoice::DocumentKind::Invoice);
+    }
+
+    #[test]
+    fn neither_root_is_parse_error() {
+        let xml = r#"<NotAnInvoice/>"#;
+        let err = read(xml).unwrap_err();
+        assert!(err.to_string().contains("document element"), "{err}");
+    }
+
+    #[test]
+    fn missing_line_tax_is_not_s() {
+        let xml = r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"><cbc:CustomizationID>urn:cen.eu:en16931:2017</cbc:CustomizationID><cbc:ID>1</cbc:ID><cbc:IssueDate>2026-01-15</cbc:IssueDate><cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode><cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode><cac:InvoiceLine><cbc:ID>1</cbc:ID><cbc:LineExtensionAmount currencyID="EUR">10.00</cbc:LineExtensionAmount><cac:Item><cbc:Name>A</cbc:Name></cac:Item></cac:InvoiceLine></Invoice>"#;
+        let inv = read(xml).unwrap();
+        assert_ne!(inv.lines[0].tax.code, "S");
+        assert!(inv.lines[0].tax.code.is_empty());
+        let report = core_invoice::validate(&inv);
+        assert!(
+            report.findings.iter().any(|f| f.id == "BR-CO-04"),
+            "{report}"
+        );
+    }
+
+    #[test]
+    fn unknown_bt24_is_core_spec_01_not_en16931() {
+        let xml = r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"><cbc:CustomizationID>urn:example:painting</cbc:CustomizationID><cbc:ID>1</cbc:ID></Invoice>"#;
+        let inv = read(xml).unwrap();
+        assert_eq!(inv.profile, Profile::Unknown);
+        assert_eq!(
+            inv.specification_id.as_deref(),
+            Some("urn:example:painting")
+        );
+        let report = core_invoice::validate(&inv);
+        assert!(
+            report.findings.iter().any(|f| f.id == "CORE-SPEC-01"),
+            "{report}"
+        );
+        assert!(!report.findings.iter().any(|f| f.id.starts_with("BR-S-")));
+    }
+
+    #[test]
+    fn third_decimal_is_malformed_not_zero() {
+        let xml = r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"><cbc:ID>1</cbc:ID><cac:InvoiceLine><cbc:ID>1</cbc:ID><cbc:LineExtensionAmount currencyID="EUR">0.001</cbc:LineExtensionAmount></cac:InvoiceLine></Invoice>"#;
+        let traced = read_with_trace(xml).unwrap();
+        assert!(
+            traced.malformed.iter().any(|m| m.contains("0.001")),
+            "{:?}",
+            traced.malformed
+        );
+        assert!(read(xml).is_err());
+    }
+
+    #[test]
+    fn unit_price_keeps_four_decimals() {
+        let xml = r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"><cbc:ID>1</cbc:ID><cac:InvoiceLine><cbc:ID>1</cbc:ID><cac:Price><cbc:PriceAmount currencyID="EUR">10000.1234</cbc:PriceAmount></cac:Price></cac:InvoiceLine></Invoice>"#;
+        let inv = read(xml).unwrap();
+        assert_eq!(
+            inv.lines[0].price.as_ref().unwrap().net.to_string(),
+            "10000.1234"
+        );
+    }
+
+    #[test]
+    fn unknown_direct_child_is_unmapped() {
+        let xml = r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"><cbc:ID>1</cbc:ID><cbc:Foo>bar</cbc:Foo></Invoice>"#;
+        let traced = read_with_trace(xml).unwrap();
+        assert!(
+            traced.unmapped.iter().any(|u| u.contains("Foo")),
+            "{:?}",
+            traced.unmapped
+        );
+    }
+
+    #[test]
+    fn diff_sees_issue_date() {
+        let a = r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"><cbc:ID>1</cbc:ID><cbc:IssueDate>2026-01-15</cbc:IssueDate><cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode></Invoice>"#;
+        let b = r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"><cbc:ID>1</cbc:ID><cbc:IssueDate>2026-01-16</cbc:IssueDate><cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode></Invoice>"#;
+        let out = diff(a, b).unwrap();
+        assert!(out.contains("issue_date"), "{out}");
+        assert_ne!(out, "no semantic difference");
+    }
+
+    #[test]
+    fn xs_boolean_accepts_one_and_zero() {
+        assert_eq!(xml::parse_xs_boolean("1"), Some(true));
+        assert_eq!(xml::parse_xs_boolean("0"), Some(false));
+        assert_eq!(xml::parse_xs_boolean(" true "), Some(true));
+        assert_eq!(xml::parse_xs_boolean("false"), Some(false));
+    }
+
+    #[test]
+    fn cii_dtd_is_refused() {
+        let xml = r#"<!DOCTYPE CrossIndustryInvoice [<!ENTITY x "a">]><rsm:CrossIndustryInvoice xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100"/>"#;
+        assert!(read(xml).is_err());
+    }
+
+    #[test]
+    fn ubl_to_cii_to_ubl_reports_dropped_quantity() {
+        let ubl = r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"><cbc:CustomizationID>urn:cen.eu:en16931:2017</cbc:CustomizationID><cbc:ID>1</cbc:ID><cbc:IssueDate>2026-01-15</cbc:IssueDate><cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode><cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode><cac:InvoiceLine><cbc:ID>1</cbc:ID><cbc:InvoicedQuantity unitCode="C62">2</cbc:InvoicedQuantity><cbc:LineExtensionAmount currencyID="EUR">10.00</cbc:LineExtensionAmount><cac:Item><cbc:Name>A</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>S</cbc:ID><cbc:Percent>19</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item></cac:InvoiceLine></Invoice>"#;
+        let inv = read(ubl).unwrap();
+        assert!(inv.lines[0].quantity.is_some());
+        let cii = write_unchecked(&inv, Syntax::Cii).unwrap();
+        let back = read(&cii).unwrap();
+        assert!(back.lines[0].quantity.is_none());
+        let ubl2 = write_unchecked(&back, Syntax::Ubl).unwrap();
+        let out = diff(ubl, &ubl2).unwrap();
+        assert!(out.contains("quantity"), "{out}");
     }
 }

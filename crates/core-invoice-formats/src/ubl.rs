@@ -1,6 +1,7 @@
 //! UBL 2.1 Invoice and CreditNote. Tree walk, no first-tag-wins scrape.
 
-use crate::FormatError;
+use crate::xml::{self, parse_xs_boolean};
+use crate::{FormatError, Read};
 use core_invoice::kind::DocumentKind;
 use core_invoice::numeric::{Percentage, Quantity};
 use core_invoice::proof::{ProfileMarker, Validated};
@@ -12,18 +13,14 @@ use core_invoice::{
 use rust_decimal::Decimal;
 use std::str::FromStr;
 
-const MAX_DEPTH: usize = 64;
 const NS_INV: &str = "urn:oasis:names:specification:ubl:schema:xsd:Invoice-2";
 const NS_CN: &str = "urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2";
 const NS_CAC: &str = "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2";
 const NS_CBC: &str = "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2";
 
 pub fn sniff(xml: &str) -> Result<DocumentKind, FormatError> {
-    if has_dtd(xml) {
-        return Err(FormatError::Parse("DTD is refused".into()));
-    }
-    let rest = skip_prolog(xml);
-    let name = first_element_local(rest)
+    xml::refuse_dtd(xml)?;
+    let name = xml::document_element_local(xml)
         .ok_or_else(|| FormatError::Parse("document is not well-formed UBL (no element)".into()))?;
     match name {
         "Invoice" => Ok(DocumentKind::Invoice),
@@ -135,13 +132,9 @@ pub fn write_unchecked(invoice: &Invoice) -> String {
     s
 }
 
-pub fn read(xml: &str) -> Result<Invoice, FormatError> {
-    if has_dtd(xml) {
-        return Err(FormatError::Parse("DTD is refused".into()));
-    }
-    if exceeds_depth(xml, MAX_DEPTH) {
-        return Err(FormatError::Parse(format!("XML depth exceeds {MAX_DEPTH}")));
-    }
+pub fn read(xml: &str) -> Result<Read, FormatError> {
+    xml::refuse_dtd(xml)?;
+    xml::refuse_depth(xml)?;
     let doc = roxmltree::Document::parse(xml)
         .map_err(|e| FormatError::Parse(format!("not well-formed: {e}")))?;
     let root = doc.root_element();
@@ -155,13 +148,15 @@ pub fn read(xml: &str) -> Result<Invoice, FormatError> {
         }
     };
     let customization = child_text(root, "CustomizationID");
+    // Unknown BT-24 stays unknown; CORE-SPEC-01 is Fatal. Do not silently select En16931.
     let profile = match customization.as_deref() {
         Some(id) => match Profile::for_specification_id(id) {
             ProfileLookup::Profile(p) => p,
-            ProfileLookup::WrongProcess | ProfileLookup::Unknown => Profile::En16931,
+            ProfileLookup::WrongProcess | ProfileLookup::Unknown => Profile::Unknown,
         },
-        None => Profile::En16931,
+        None => Profile::Unknown,
     };
+    let mut malformed = Vec::new();
     let number = child_text(root, "ID").unwrap_or_default();
     let currency = child_text(root, "DocumentCurrencyCode").unwrap_or_default();
     let seller = child(root, "AccountingSupplierParty")
@@ -191,21 +186,22 @@ pub fn read(xml: &str) -> Result<Invoice, FormatError> {
         child_text(root, "BuyerReference").map(core_invoice::DocumentReference::new);
     invoice.payment = child(root, "PaymentMeans").map(read_payment);
     invoice.document_allowances = children(root, "AllowanceCharge")
-        .filter(|n| child_text(*n, "ChargeIndicator").as_deref() == Some("false"))
-        .filter_map(|n| read_allowance(n, profile))
+        .filter(|n| charge_indicator(*n) == Some(false))
+        .filter_map(|n| read_allowance(n, profile, &mut malformed))
         .collect();
     invoice.document_charges = children(root, "AllowanceCharge")
-        .filter(|n| child_text(*n, "ChargeIndicator").as_deref() == Some("true"))
-        .filter_map(|n| read_allowance(n, profile))
+        .filter(|n| charge_indicator(*n) == Some(true))
+        .filter_map(|n| read_allowance(n, profile, &mut malformed))
         .collect();
     if let Some(tt) = child(root, "TaxTotal") {
-        invoice.tax_total = child_amount(tt, "TaxAmount").unwrap_or(Amount::ZERO);
+        invoice.tax_total =
+            child_amount(tt, "TaxAmount", &mut malformed, "TaxTotal").unwrap_or(Amount::ZERO);
         invoice.tax_breakdown = children(tt, "TaxSubtotal")
-            .filter_map(|n| read_subtotal(n, profile))
+            .filter_map(|n| read_subtotal(n, profile, &mut malformed))
             .collect();
     }
     if let Some(lmt) = child(root, "LegalMonetaryTotal") {
-        let mut totals = read_totals(lmt);
+        let mut totals = read_totals(lmt, &mut malformed);
         if totals.tax_total.is_none() && !invoice.tax_total.is_zero() {
             totals.tax_total = Some(invoice.tax_total);
         }
@@ -218,9 +214,67 @@ pub fn read(xml: &str) -> Result<Invoice, FormatError> {
         "InvoiceLine"
     };
     invoice.lines = children(root, line_tag)
-        .filter_map(|n| read_line(n, profile, kind))
+        .filter_map(|n| read_line(n, profile, kind, &mut malformed))
         .collect();
-    Ok(invoice)
+    let root_name = if kind == DocumentKind::CreditNote {
+        "CreditNote"
+    } else {
+        "Invoice"
+    };
+    let mut unmapped = unmapped_children(root, root_name, MAPPED_INVOICE_CHILDREN);
+    for line in children(root, line_tag) {
+        unmapped.extend(unmapped_children(line, line_tag, MAPPED_LINE_CHILDREN));
+    }
+    Ok(Read {
+        invoice,
+        unmapped,
+        malformed,
+    })
+}
+
+const MAPPED_INVOICE_CHILDREN: &[&str] = &[
+    "CustomizationID",
+    "ProfileID",
+    "ID",
+    "IssueDate",
+    "DueDate",
+    "InvoiceTypeCode",
+    "CreditNoteTypeCode",
+    "Note",
+    "DocumentCurrencyCode",
+    "TaxCurrencyCode",
+    "BuyerReference",
+    "AccountingSupplierParty",
+    "AccountingCustomerParty",
+    "PaymentMeans",
+    "AllowanceCharge",
+    "TaxTotal",
+    "LegalMonetaryTotal",
+    "InvoiceLine",
+    "CreditNoteLine",
+];
+
+const MAPPED_LINE_CHILDREN: &[&str] = &[
+    "ID",
+    "InvoicedQuantity",
+    "CreditedQuantity",
+    "LineExtensionAmount",
+    "Item",
+    "Price",
+    "Note",
+];
+
+fn unmapped_children(node: roxmltree::Node<'_, '_>, parent: &str, mapped: &[&str]) -> Vec<String> {
+    node.children()
+        .filter(|n| n.is_element())
+        .map(local)
+        .filter(|name| !mapped.contains(name))
+        .map(|name| format!("{parent}/{name}"))
+        .collect()
+}
+
+fn charge_indicator(node: roxmltree::Node<'_, '_>) -> Option<bool> {
+    child_text(node, "ChargeIndicator").and_then(|s| parse_xs_boolean(&s))
 }
 
 fn write_party(s: &mut String, tag: &str, party: &Party, profile: Profile) {
@@ -454,19 +508,21 @@ fn write_line(
         leaf(s, 3, "Description", d, None);
     }
     leaf(s, 3, "Name", &line.name, None);
-    open(s, 3, "ClassifiedTaxCategory");
-    leaf(s, 4, "ID", &line.tax.code, None);
-    leaf(s, 4, "Percent", &line.tax.percent.to_string(), None);
-    open(s, 4, "TaxScheme");
-    leaf(
-        s,
-        5,
-        "ID",
-        wire_scheme(invoice.profile, line.tax.system, &line.tax.code),
-        None,
-    );
-    close(s, 4, "TaxScheme");
-    close(s, 3, "ClassifiedTaxCategory");
+    if !line.tax.code.trim().is_empty() {
+        open(s, 3, "ClassifiedTaxCategory");
+        leaf(s, 4, "ID", &line.tax.code, None);
+        leaf(s, 4, "Percent", &line.tax.percent.to_string(), None);
+        open(s, 4, "TaxScheme");
+        leaf(
+            s,
+            5,
+            "ID",
+            wire_scheme(invoice.profile, line.tax.system, &line.tax.code),
+            None,
+        );
+        close(s, 4, "TaxScheme");
+        close(s, 3, "ClassifiedTaxCategory");
+    }
     close(s, 2, "Item");
     if let Some(price) = line.price.as_ref() {
         open(s, 2, "Price");
@@ -557,8 +613,9 @@ fn read_payment(node: roxmltree::Node<'_, '_>) -> PaymentInstructions {
 fn read_allowance(
     node: roxmltree::Node<'_, '_>,
     profile: Profile,
+    malformed: &mut Vec<String>,
 ) -> Option<core_invoice::AllowanceCharge> {
-    let amount = child_amount(node, "Amount")?;
+    let amount = child_amount(node, "Amount", malformed, "AllowanceCharge")?;
     let tax = child(node, "TaxCategory").map(|n| read_tax_cat(n, profile));
     Some(core_invoice::AllowanceCharge {
         amount,
@@ -570,7 +627,11 @@ fn read_allowance(
     })
 }
 
-fn read_subtotal(node: roxmltree::Node<'_, '_>, profile: Profile) -> Option<TaxBreakdown> {
+fn read_subtotal(
+    node: roxmltree::Node<'_, '_>,
+    profile: Profile,
+    malformed: &mut Vec<String>,
+) -> Option<TaxBreakdown> {
     let cat = child(node, "TaxCategory")?;
     let tax = read_tax_cat(cat, profile);
     Some(TaxBreakdown {
@@ -578,37 +639,56 @@ fn read_subtotal(node: roxmltree::Node<'_, '_>, profile: Profile) -> Option<TaxB
         scheme: wire_scheme(profile, tax.system, &tax.code).to_owned(),
         category: Code::new(tax.code),
         rate: Some(tax.percent),
-        taxable: child_amount(node, "TaxableAmount").unwrap_or(Amount::ZERO),
-        tax: child_amount(node, "TaxAmount").unwrap_or(Amount::ZERO),
+        taxable: child_amount(node, "TaxableAmount", malformed, "TaxSubtotal")
+            .unwrap_or(Amount::ZERO),
+        tax: child_amount(node, "TaxAmount", malformed, "TaxSubtotal").unwrap_or(Amount::ZERO),
         exemption_reason: child_text(cat, "TaxExemptionReason"),
         exemption_code: child_text(cat, "TaxExemptionReasonCode").map(Code::new),
     })
 }
 
-fn read_totals(node: roxmltree::Node<'_, '_>) -> DocumentTotals {
+fn read_totals(node: roxmltree::Node<'_, '_>, malformed: &mut Vec<String>) -> DocumentTotals {
     DocumentTotals {
-        line_net: child_amount(node, "LineExtensionAmount"),
-        allowance_total: child_amount(node, "AllowanceTotalAmount"),
-        charge_total: child_amount(node, "ChargeTotalAmount"),
-        without_tax: child_amount(node, "TaxExclusiveAmount"),
+        line_net: child_amount(node, "LineExtensionAmount", malformed, "LegalMonetaryTotal"),
+        allowance_total: child_amount(
+            node,
+            "AllowanceTotalAmount",
+            malformed,
+            "LegalMonetaryTotal",
+        ),
+        charge_total: child_amount(node, "ChargeTotalAmount", malformed, "LegalMonetaryTotal"),
+        without_tax: child_amount(node, "TaxExclusiveAmount", malformed, "LegalMonetaryTotal"),
         tax_total: None,
         tax_total_accounting: None,
-        with_tax: child_amount(node, "TaxInclusiveAmount"),
-        paid: child_amount(node, "PrepaidAmount"),
-        rounding: child_amount(node, "PayableRoundingAmount"),
-        payable: child_amount(node, "PayableAmount").unwrap_or(Amount::ZERO),
+        with_tax: child_amount(node, "TaxInclusiveAmount", malformed, "LegalMonetaryTotal"),
+        paid: child_amount(node, "PrepaidAmount", malformed, "LegalMonetaryTotal"),
+        rounding: child_amount(
+            node,
+            "PayableRoundingAmount",
+            malformed,
+            "LegalMonetaryTotal",
+        ),
+        payable: child_amount(node, "PayableAmount", malformed, "LegalMonetaryTotal")
+            .unwrap_or(Amount::ZERO),
     }
 }
 
-fn read_line(node: roxmltree::Node<'_, '_>, profile: Profile, kind: DocumentKind) -> Option<Line> {
+fn read_line(
+    node: roxmltree::Node<'_, '_>,
+    profile: Profile,
+    kind: DocumentKind,
+    malformed: &mut Vec<String>,
+) -> Option<Line> {
     let id = child_text(node, "ID").unwrap_or_default();
     let item = child(node, "Item");
     let name = item.and_then(|n| child_text(n, "Name")).unwrap_or_default();
-    let net = child_amount(node, "LineExtensionAmount").unwrap_or(Amount::ZERO);
+    let net =
+        child_amount(node, "LineExtensionAmount", malformed, "InvoiceLine").unwrap_or(Amount::ZERO);
+    // Missing BT-151 is a finding (BR-CO-04 / line tax presence), not category S.
     let tax = item
         .and_then(|n| child(n, "ClassifiedTaxCategory"))
         .map(|n| read_tax_cat(n, profile))
-        .unwrap_or_else(|| TaxCategory::vat("S", Percentage::ZERO));
+        .unwrap_or_else(|| TaxCategory::vat("", Percentage::ZERO));
     let qty_tag = if kind == DocumentKind::CreditNote {
         "CreditedQuantity"
     } else {
@@ -708,69 +788,21 @@ fn child_text(node: roxmltree::Node<'_, '_>, name: &str) -> Option<String> {
     child(node, name).and_then(text)
 }
 
-fn child_amount(node: roxmltree::Node<'_, '_>, name: &str) -> Option<InvoiceAmount> {
-    child_text(node, name).and_then(|s| InvoiceAmount::parse(&s).ok())
-}
-
-fn has_dtd(xml: &str) -> bool {
-    let lower = xml.to_ascii_lowercase();
-    lower.contains("<!doctype")
-}
-
-fn skip_prolog(xml: &str) -> &str {
-    let mut rest = xml.trim_start();
-    loop {
-        rest = rest.trim_start();
-        if rest.starts_with("<?") {
-            rest = rest.split_once("?>").map(|(_, r)| r).unwrap_or("");
-            continue;
+fn child_amount(
+    node: roxmltree::Node<'_, '_>,
+    name: &str,
+    malformed: &mut Vec<String>,
+    path: &str,
+) -> Option<InvoiceAmount> {
+    let s = child_text(node, name)?;
+    // Amount.Type: a third fraction digit is malformed for this codec, not a rounded InvoiceAmount.
+    match InvoiceAmount::parse(&s) {
+        Ok(a) => Some(a),
+        Err(_) => {
+            malformed.push(format!("{path}/{name}: {s}"));
+            None
         }
-        if rest.starts_with("<!--") {
-            rest = rest.split_once("-->").map(|(_, r)| r).unwrap_or("");
-            continue;
-        }
-        if rest.to_ascii_lowercase().starts_with("<!doctype")
-            && let Some(i) = rest.find('>')
-        {
-            rest = &rest[i + 1..];
-            continue;
-        }
-        break;
     }
-    rest.trim_start()
-}
-
-fn first_element_local(xml: &str) -> Option<&str> {
-    let rest = xml.trim_start().strip_prefix('<')?;
-    let rest = rest.trim_start_matches('/');
-    let end = rest
-        .find(|c: char| c.is_whitespace() || c == '>' || c == '/')
-        .unwrap_or(rest.len());
-    let qname = &rest[..end];
-    Some(qname.rsplit_once(':').map(|(_, l)| l).unwrap_or(qname))
-}
-
-fn exceeds_depth(xml: &str, max: usize) -> bool {
-    let mut depth = 0usize;
-    let bytes = xml.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'<' {
-            if i + 1 < bytes.len() && bytes[i + 1] == b'/' {
-                depth = depth.saturating_sub(1);
-            } else if i + 1 < bytes.len() && (bytes[i + 1] == b'!' || bytes[i + 1] == b'?') {
-            } else {
-                depth += 1;
-                if depth > max {
-                    return true;
-                }
-            }
-        } else if bytes[i] == b'/' && i + 1 < bytes.len() && bytes[i + 1] == b'>' {
-            depth = depth.saturating_sub(1);
-        }
-        i += 1;
-    }
-    false
 }
 
 fn escape(s: &str) -> String {
@@ -816,9 +848,12 @@ fn amount(s: &mut String, indent: usize, tag: &str, value: InvoiceAmount, cur: &
     s.push_str(&"  ".repeat(indent));
     s.push_str("<cbc:");
     s.push_str(tag);
-    s.push_str(" currencyID=\"");
-    s.push_str(&escape(cur));
-    s.push_str("\">");
+    if !cur.is_empty() {
+        s.push_str(" currencyID=\"");
+        s.push_str(&escape(cur));
+        s.push('"');
+    }
+    s.push('>');
     s.push_str(&value.to_string());
     s.push_str("</cbc:");
     s.push_str(tag);
@@ -829,9 +864,12 @@ fn amount_unit(s: &mut String, indent: usize, tag: &str, value: UnitPriceAmount,
     s.push_str(&"  ".repeat(indent));
     s.push_str("<cbc:");
     s.push_str(tag);
-    s.push_str(" currencyID=\"");
-    s.push_str(&escape(cur));
-    s.push_str("\">");
+    if !cur.is_empty() {
+        s.push_str(" currencyID=\"");
+        s.push_str(&escape(cur));
+        s.push('"');
+    }
+    s.push('>');
     s.push_str(&value.to_string());
     s.push_str("</cbc:");
     s.push_str(tag);
@@ -883,7 +921,7 @@ mod tests {
         assert!(xml.contains("TaxSubtotal"));
         assert!(xml.contains("LineExtensionAmount"));
         assert!(!xml.contains(">SST<"));
-        let back = read(&xml).unwrap();
+        let back = read(&xml).unwrap().invoice;
         assert_eq!(back.number, inv.number);
         assert_eq!(back.currency, "EUR");
         assert_eq!(back.kind, DocumentKind::Invoice);
@@ -899,8 +937,21 @@ mod tests {
     #[test]
     fn missing_currency_is_not_invented_eur() {
         let xml = r#"<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"><cbc:ID>1</cbc:ID></Invoice>"#;
-        let inv = read(xml).unwrap();
+        let inv = read(xml).unwrap().invoice;
         assert!(inv.currency.is_empty());
+        let xml = write_unchecked(&inv);
+        assert!(!xml.contains("currencyID=\"EUR\""));
+        assert!(!xml.contains("DocumentCurrencyCode"));
+    }
+
+    #[test]
+    fn missing_country_is_not_invented_xx() {
+        let xml = r#"<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"><cbc:ID>1</cbc:ID><cac:AccountingSupplierParty><cac:Party><cac:PartyName><cbc:Name>A</cbc:Name></cac:PartyName></cac:Party></cac:AccountingSupplierParty></Invoice>"#;
+        let inv = read(xml).unwrap().invoice;
+        assert!(inv.seller.country.is_empty());
+        assert_ne!(inv.seller.country, "XX");
+        let report = core_invoice::validate(&inv);
+        assert!(report.findings.iter().any(|f| f.id == "BR-09"), "{report}");
     }
 
     #[test]
@@ -918,7 +969,7 @@ mod tests {
         assert!(xml.contains("<CreditNote "));
         assert!(xml.contains("CreditNoteTypeCode"));
         assert!(xml.contains("CreditNoteLine"));
-        let back = read(&xml).unwrap();
+        let back = read(&xml).unwrap().invoice;
         assert_eq!(back.kind, DocumentKind::CreditNote);
     }
 
@@ -954,7 +1005,7 @@ mod tests {
         assert!(!xml.contains(">SST<"), "{xml}");
         assert!(xml.contains("schemeID=\"GST\""));
         assert!(xml.contains("schemeID=\"0230\""));
-        let back = read(&xml).unwrap();
+        let back = read(&xml).unwrap().invoice;
         assert_eq!(
             back.seller
                 .tax_registration

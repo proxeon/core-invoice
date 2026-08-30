@@ -153,7 +153,7 @@ fn families_ready(inv: &Invoice) -> bool {
 }
 
 fn vat_families_apply(inv: &Invoice) -> bool {
-    families_ready(inv) && !matches!(inv.profile, Profile::PintMy)
+    families_ready(inv) && !matches!(inv.profile, Profile::PintMy | Profile::Unknown)
 }
 
 fn my_families_apply(inv: &Invoice) -> bool {

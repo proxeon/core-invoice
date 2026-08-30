@@ -287,6 +287,9 @@ impl Invoice {
     /// EN 16931 has no required ProfileID: BT-23 is left as-is (the UBL writer omits it).
     pub fn stamp_profile(&mut self, profile: Profile) {
         self.profile = profile;
+        if profile == Profile::Unknown {
+            return;
+        }
         self.specification_id = Some(profile.specification_id().into());
         if let Some(bt23) = profile.process_id() {
             self.business_process = Some(bt23.into());

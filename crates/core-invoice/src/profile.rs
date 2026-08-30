@@ -33,6 +33,8 @@ pub enum Profile {
     Pint,
     /// PINT-MY specialisation (SST, TIN/BRN schemes).
     PintMy,
+    /// Parsed BT-24 did not match a shipped billing profile. Do not invent En16931.
+    Unknown,
 }
 
 impl Profile {
@@ -42,6 +44,7 @@ impl Profile {
             Self::PeppolBis3 => "peppol",
             Self::Pint => "pint",
             Self::PintMy => "pint-my",
+            Self::Unknown => "unknown",
         }
     }
 
@@ -63,6 +66,8 @@ impl Profile {
             }
             Self::Pint => "urn:peppol:pint:billing-1",
             Self::PintMy => "urn:peppol:pint:billing-1@my-1",
+            // Unknown BT-24 stays unknown; CORE-SPEC-01 is Fatal. Do not silently select En16931.
+            Self::Unknown => "",
         }
     }
 
@@ -71,7 +76,7 @@ impl Profile {
         match self {
             Self::PeppolBis3 => Some("urn:fdc:peppol.eu:2017:poacc:billing:01:1.0"),
             Self::Pint | Self::PintMy => Some("urn:peppol:bis:billing"),
-            Self::En16931 => None,
+            Self::En16931 | Self::Unknown => None,
         }
     }
 
@@ -85,6 +90,7 @@ impl Profile {
                 TaxSystem::Sst,
                 TaxSystem::Consumption,
             ],
+            Self::Unknown => &[],
         }
     }
 

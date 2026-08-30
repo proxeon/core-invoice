@@ -20,6 +20,7 @@ down here**, not that there are none.
 ### Changed
 
 - **Honesty (0.1.x skeleton).** Do not treat `validate().ok()` as EN 16931 / Peppol / PINT compliance.
+- **Parse.** Dispatch is the document element (not `contains("CrossIndustryInvoice")`). Unknown BT-24 is `Profile::Unknown` (`CORE-SPEC-01`), not En16931. Missing line tax is empty + `BR-CO-04`, not category `S`. A third money decimal is a parse error (CLI exit 2), not `0.00`. `Read { unmapped, malformed }` exists. `diff` walks the model (dates, parties, lines qty/price, totals). One DTD refuse; CII depth 64; 10 MiB input cap.
 - **Convert.** CLI `convert` proves, then `write_validated`. Fatal → exit 1, findings on stdout, empty XML. `write` is renamed `write_unchecked` (tests only). `write_validated` overwrites BT-24 / BT-23 from the proved profile. Self-billing BT-24 cannot be re-stamped as billing (`CORE-PROCESS-01`).
 - **CII (historical, crates.io 0.1.0 / 004 P0).** `convert --to cii` used to wrap UBL in `CrossIndustryInvoice` and was then refused as `CiiNotImplemented`. That wrapper is gone.
 - **CII (current).** Three-part D16B **subset** for EN 16931 and Peppol BIS (lines before header, format 102). Qty, price, payment, allowances, and delivery are not mapped yet. **PINT-MY is UBL-only:** `FormatError::CiiNotForProfile`, CLI exit 2.

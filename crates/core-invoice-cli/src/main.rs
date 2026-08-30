@@ -103,11 +103,24 @@ fn main() -> ExitCode {
     }
 }
 
+fn read_xml(path: &PathBuf) -> Result<String, String> {
+    // Hostile or mistaken multi-GB “invoice” is size, not a valid document.
+    if let Ok(meta) = fs::metadata(path)
+        && meta.len() > core_invoice_formats::xml::MAX_INPUT_BYTES as u64
+    {
+        return Err(format!(
+            "{path:?}: input exceeds {} bytes",
+            core_invoice_formats::xml::MAX_INPUT_BYTES
+        ));
+    }
+    fs::read_to_string(path).map_err(|e| format!("{path:?}: {e}"))
+}
+
 fn run() -> Result<ExitCode, String> {
     let cli = Cli::parse();
     match cli.command {
         Command::Validate { path, profile } => {
-            let xml = fs::read_to_string(&path).map_err(|e| format!("{path:?}: {e}"))?;
+            let xml = read_xml(&path)?;
             let report = match validate_xml(&xml, profile.forced()) {
                 Ok(report) => report,
                 Err(e) => return Err(e.to_string()),
@@ -121,7 +134,7 @@ fn run() -> Result<ExitCode, String> {
             }
         }
         Command::Convert { path, to, profile } => {
-            let xml = fs::read_to_string(&path).map_err(|e| format!("{path:?}: {e}"))?;
+            let xml = read_xml(&path)?;
             match convert_with_profile(&xml, to.into(), profile.forced()) {
                 Ok(out) => {
                     print!("{out}");
@@ -138,8 +151,8 @@ fn run() -> Result<ExitCode, String> {
             }
         }
         Command::Diff { left, right } => {
-            let a = fs::read_to_string(&left).map_err(|e| format!("{left:?}: {e}"))?;
-            let b = fs::read_to_string(&right).map_err(|e| format!("{right:?}: {e}"))?;
+            let a = read_xml(&left)?;
+            let b = read_xml(&right)?;
             let out = diff(&a, &b).map_err(|e| e.to_string())?;
             println!("{out}");
             if out == "no semantic difference" {
@@ -182,7 +195,7 @@ fn run() -> Result<ExitCode, String> {
             Ok(ExitCode::SUCCESS)
         }
         Command::Inspect { path } => {
-            let xml = fs::read_to_string(&path).map_err(|e| format!("{path:?}: {e}"))?;
+            let xml = read_xml(&path)?;
             let inv = core_invoice_formats::read(&xml).map_err(|e| e.to_string())?;
             println!("number={}", inv.number);
             println!("profile={}", inv.profile.slug());
