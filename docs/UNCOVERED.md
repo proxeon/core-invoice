@@ -46,6 +46,6 @@ CLASS: mapped as `Line.classifications` with `listID` (`CG` is CLASS in PINT-MY)
 
 ## P14 / P18
 
-- ConnectingEurope XSLT SVRL job: `task svrl` / `xtask/svrl_oracle.py` (Saxon). Mapping table `docs/svrl-id-map.md`.
+- ConnectingEurope XSLT SVRL job: `task svrl` / `xtask/svrl_oracle.py` (Saxon). Parses `failed-assert/@id` and diffs Fatal `Finding.id`. Mapping table `docs/svrl-id-map.md`. Skip without Saxon unless `CORE_INVOICE_REQUIRE_SPEC=1`. Peppol BIS pin is `.sch` only.
 - Mustang: only if `MUSTANG_JAR` is set; VAT CII; never default CI.
 - nix flake: Later (P18.03 / P19).

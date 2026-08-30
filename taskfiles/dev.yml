@@ -66,4 +66,5 @@ tasks:
   svrl:
     desc: Optional ConnectingEurope XSLT SVRL oracle (needs Saxon + refers/)
     cmds:
+      - python3 xtask/svrl_oracle.py --self-test
       - python3 xtask/svrl_oracle.py
