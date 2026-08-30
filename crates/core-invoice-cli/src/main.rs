@@ -120,38 +120,15 @@ fn run() -> Result<ExitCode, String> {
             println!("{}", diff(&a, &b).map_err(|e| e.to_string())?);
             Ok(ExitCode::SUCCESS)
         }
-        Command::Explain { id } => match explain(&id) {
-            Ok(text) => {
+        Command::Explain { id } => match core_invoice::explain(&id) {
+            Some(text) => {
                 println!("{text}");
                 Ok(ExitCode::SUCCESS)
             }
-            Err(text) => {
-                eprintln!("{text}");
+            None => {
+                eprintln!("no explanation registered for {id}");
                 Ok(ExitCode::from(2))
             }
         },
-    }
-}
-
-fn explain(id: &str) -> Result<String, String> {
-    match id.to_ascii_uppercase().as_str() {
-        "BR-02" => Ok("Invoice number (BT-1) shall be present.".into()),
-        "BR-05" => Ok("Invoice currency code (BT-5) shall be present.".into()),
-        "BR-06" => Ok("Seller name (BT-27) shall be present.".into()),
-        "BR-07" => Ok("Buyer name (BT-44) shall be present.".into()),
-        "BR-16" => Ok("An invoice shall have at least one invoice line (BG-25).".into()),
-        "BR-CO-16" => Ok(
-            "Amount due for payment (BT-115) = invoice total with tax (BT-112) − paid (BT-113) + rounding (BT-114). Not evaluated until document totals exist."
-                .into(),
-        ),
-        "PINT-TAX" => Ok(
-            "Tax system on a line must be allowed by the profile. EN 16931 / Peppol BIS 3.0: VAT only. PINT / PINT-MY: VAT, GST, SST, consumption."
-                .into(),
-        ),
-        "PINT-MY-ID" => Ok(
-            "PINT-MY seller identification scheme must be TIN, BRN, NRIC or PASSPORT. Replaced by IBR-02/03/04-MY once party identifiers are split."
-                .into(),
-        ),
-        other => Err(format!("no explanation registered for {other}")),
     }
 }

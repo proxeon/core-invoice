@@ -35,6 +35,8 @@ down here**, not that there are none.
   `Identifier`, `DocumentReference`, `Attachment`, `Path`/`BtId`/`Group`,
   `DocumentKind`, exclusive `PaymentMeans`. `Amount` is an alias of
   `InvoiceAmount`.
+- Rule registry: `validate` and `explain` share one table. Findings include a
+  BT path (`BG-25[0]/BT-151`). `catalogue()` lists shipped ids.
 
 ## [0.1.0] — 2026-08-30
 

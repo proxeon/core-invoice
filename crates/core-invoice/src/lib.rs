@@ -16,6 +16,7 @@ pub mod numeric;
 pub mod payment;
 pub mod profile;
 pub mod report;
+pub mod rules;
 pub mod tax;
 pub mod validate;
 
@@ -31,7 +32,8 @@ pub use kind::DocumentKind;
 pub use numeric::{Percentage, Quantity};
 pub use payment::{CreditTransfer, DirectDebit, PaymentCard, PaymentMeans};
 pub use profile::Profile;
-pub use report::{Finding, Report, Severity};
+pub use report::{Finding, Report, Severity, Source};
+pub use rules::{catalogue, explain};
 pub use tax::{TaxCategory, TaxSystem};
 pub use validate::validate;
 
@@ -75,6 +77,13 @@ mod tests {
         assert!(!report.ok());
         assert!(
             report.findings.iter().any(|f| f.id == "PINT-TAX"),
+            "{report}"
+        );
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|f| f.path.to_string().starts_with("BG-25")),
             "{report}"
         );
     }
