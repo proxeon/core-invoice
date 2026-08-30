@@ -9,18 +9,9 @@ Every `catalogue()` id is either exercised by a `#[test]` or listed here with a 
 
 ## Peppol extra_rules not modelled (syntax-only or Option-at-most-one)
 
-From `refers/peppol-bis-invoice-3` v3.0.20:
+R006/R008/R043/R044/R051/R053/R080/R100/CL007 are **registered constant-pass** so `explain` works; they do not walk XML. Remaining:
 
-- PEPPOL-EN16931-R006 — CII-only “one invoiced object”; UBL is `Invoice.invoiced_object: Option`.
-- PEPPOL-EN16931-R008 — empty XML elements (syntax walk, not model).
-- PEPPOL-EN16931-R043 — ChargeIndicator true/false; model uses two vecs, writer emits the boolean.
-- PEPPOL-EN16931-R044 — price-level charge forbidden; `Price` has discount only.
-- PEPPOL-EN16931-R051 — `@currencyID` on every amount vs BT-5 except BT-111; wire-only.
-- PEPPOL-EN16931-R053 — one TaxTotal with subtotals; model has one `tax_breakdown` vec.
-- PEPPOL-EN16931-R080 — one project reference; `Invoice.project` is `Option`.
-- PEPPOL-EN16931-R100 — at most one line DocumentReference; `Line.invoiced_object` is `Option`.
-- PEPPOL-EN16931-CL007 — `@currencyID` ISO 4217; CORE BR-CL-04 covers BT-5.
-- PEPPOL-COMMON-R041–R053 — ICD checksums besides GLN (R040 shipped). Owner: P8/P10.
+- PEPPOL-COMMON-R041–R053 — ICD checksums besides GLN (R040 shipped). Owner: P11.09.
 
 ## VAT family rows still only for S-03/04/06/07
 

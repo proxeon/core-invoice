@@ -664,6 +664,10 @@ fn f001(_inv: &Invoice, _report: &mut Report) {
     // PEPPOL-EN16931-F001: dates are YYYY-MM-DD. Date::parse already refuses other shapes.
 }
 
+fn syntax_or_option_pass(_inv: &Invoice, _report: &mut Report) {
+    // Syntax-only or Option-at-most-one: explainable so SVRL unmatched is intentional, not missing from catalogue.
+}
+
 fn p0101(inv: &Invoice, report: &mut Report) {
     if !peppol_only(inv) || inv.kind != crate::kind::DocumentKind::CreditNote {
         return;
@@ -961,6 +965,51 @@ pub static RULES: &[Rule] = &[
         "PEPPOL-COMMON-R040",
         "GLN (EAS 0088) must have a valid GS1 check digit.",
         common_r040,
+    ),
+    r(
+        "PEPPOL-EN16931-R006",
+        "CII-only: at most one invoiced object. UBL is Invoice.invoiced_object: Option.",
+        syntax_or_option_pass,
+    ),
+    r(
+        "PEPPOL-EN16931-R008",
+        "Empty XML elements are forbidden (syntax walk, not the semantic model).",
+        syntax_or_option_pass,
+    ),
+    r(
+        "PEPPOL-EN16931-R043",
+        "ChargeIndicator must be true or false. Model uses two vecs; writer emits the boolean.",
+        syntax_or_option_pass,
+    ),
+    r(
+        "PEPPOL-EN16931-R044",
+        "Price-level charge is forbidden. Price has discount only.",
+        syntax_or_option_pass,
+    ),
+    r(
+        "PEPPOL-EN16931-R051",
+        "@currencyID on amounts must equal BT-5 except BT-111 (wire-only).",
+        syntax_or_option_pass,
+    ),
+    r(
+        "PEPPOL-EN16931-R053",
+        "Exactly one TaxTotal with subtotals. Model has one tax_breakdown vec.",
+        syntax_or_option_pass,
+    ),
+    r(
+        "PEPPOL-EN16931-R080",
+        "At most one project reference. Invoice.project is Option.",
+        syntax_or_option_pass,
+    ),
+    r(
+        "PEPPOL-EN16931-R100",
+        "At most one line DocumentReference. Line.invoiced_object is Option.",
+        syntax_or_option_pass,
+    ),
+    r(
+        "PEPPOL-EN16931-CL007",
+        "@currencyID must be ISO 4217 (wire). CORE BR-CL-04 covers BT-5.",
+        syntax_or_option_pass,
     ),
 ];
 
