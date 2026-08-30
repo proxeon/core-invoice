@@ -6,6 +6,10 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords.workspace = true
+categories.workspace = true
 description = "Pass/fail UBL corpus for core-invoice (PINT, PINT-MY, EN 16931)"
 
 [dependencies]

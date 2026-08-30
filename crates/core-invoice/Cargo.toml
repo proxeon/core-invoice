@@ -6,6 +6,10 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords.workspace = true
+categories.workspace = true
 description = "EN 16931 + Peppol PINT semantic model (VAT, GST, SST, consumption tax)"
 
 [dependencies]
