@@ -17,9 +17,13 @@ down here**, not that there are none.
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-08-31
+
+Honest meaning engine for embedders to **build against**. Still **not** a legal validator: `validate().ok()` is not ConnectingEurope / OpenPEPPOL / IRBM Valid. Do not publish this tree as 0.1.1.
+
 ### Changed
 
-- **Honesty (0.1.x skeleton).** Do not treat `validate().ok()` as EN 16931 / Peppol / PINT compliance.
+- **Honesty (0.2.x development engine).** Do not treat `validate().ok()` as EN 16931 / Peppol / PINT compliance.
 - **Parse.** Dispatch is the document element (not `contains("CrossIndustryInvoice")`). Unknown BT-24 is `Profile::Unknown` (`CORE-SPEC-01`), not En16931. Missing line tax is empty + `BR-CO-04`, not category `S`. A third money decimal is a parse error (CLI exit 2), not `0.00`. `Read { unmapped, malformed }` exists. `diff` walks the model (dates, parties, lines qty/price, totals). One DTD refuse; CII depth 64; 10 MiB input cap.
 - **Breaking (0.1.x).** `Party.tax_id` / `id_scheme` removed. Country (BT-40 / BT-55) is `PostalAddress.country`; `Party::country()` reads it.
 - **Tax.** PINT-MY `SE` is rated service tax, not a zero-tax family. `TaxCategory.percent` is `Option` (TTX and EN `O` are absent, not 0 %). TTX omits `cbc:Percent` and uses TaxScheme `AAL`. `VAT/CGST` is not VAT. PintMy tax systems are SST-only in memory. MY `-08` uses the same content as reconcile (lines + charges − allowances, exact).
@@ -116,5 +120,6 @@ PINT-MY as profiles.
 - **`core-invoice-sys`** — C ABI `core_invoice_validate_ubl` and
   `include/core_invoice.h`.
 
-[Unreleased]: https://github.com/proxeon/core-invoice/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/proxeon/core-invoice/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/proxeon/core-invoice/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/proxeon/core-invoice/releases/tag/v0.1.0

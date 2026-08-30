@@ -1,6 +1,6 @@
 # core-invoice
 
-**0.1.x is a skeleton. Do not validate legal invoices with it yet.**
+**0.2.x is a development engine. Do not validate legal invoices with it yet.**
 
 `validate --profile pint-my` is PINT-MY Schematron-shaped (Peppol PINT-MY 1.3.0). It is **not** IRBM Valid / MyInvois submit. This crate never talks to LHDN.
 
