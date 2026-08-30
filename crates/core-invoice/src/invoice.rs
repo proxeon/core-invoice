@@ -261,8 +261,6 @@ pub struct Invoice {
     pub totals: Option<DocumentTotals>,
     pub supporting_documents: Vec<SupportingDocument>,
     pub lines: Vec<Line>,
-    pub tax_total: Amount,
-    pub payable: Amount,
 }
 
 impl Invoice {
@@ -301,9 +299,23 @@ impl Invoice {
             totals: None,
             supporting_documents: vec![],
             lines: vec![],
-            tax_total: Amount::ZERO,
-            payable: Amount::ZERO,
         }
+    }
+
+    /// BT-115 from DocumentTotals. Ghosts on Invoice are not a second identity.
+    pub fn payable(&self) -> Amount {
+        self.totals
+            .as_ref()
+            .map(|t| t.payable)
+            .unwrap_or(Amount::ZERO)
+    }
+
+    /// BT-110 from DocumentTotals. Absent totals is not 0.00 for BR-CO-16.
+    pub fn tax_total(&self) -> Amount {
+        self.totals
+            .as_ref()
+            .and_then(|t| t.tax_total)
+            .unwrap_or(Amount::ZERO)
     }
 
     /// BT-24 and BT-23 come from the proved profile, not leftover fields on Invoice.
@@ -364,11 +376,10 @@ mod tests {
             Amount::parse("100.00").unwrap(),
             TaxCategory::vat("S", Decimal::from(19)),
         )];
-        inv.tax_total = Amount::parse("19.00").unwrap();
-        inv.payable = Amount::parse("119.00").unwrap();
+        let _ = crate::reconcile::reconcile(&mut inv);
         let cn = inv.to_credit_note("CN-1", Date::parse("2026-01-16").unwrap());
         assert_eq!(cn.kind, DocumentKind::CreditNote);
-        assert_eq!(cn.payable, inv.payable);
+        assert_eq!(cn.payable(), inv.payable());
         assert_eq!(cn.preceding[0].reference.as_str(), "INV-1");
         assert_eq!(cn.type_code.as_ref().map(Code::as_str), Some("381"));
     }

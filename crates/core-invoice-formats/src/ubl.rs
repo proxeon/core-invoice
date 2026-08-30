@@ -193,19 +193,19 @@ pub fn read(xml: &str) -> Result<Read, FormatError> {
         .filter(|n| charge_indicator(*n) == Some(true))
         .filter_map(|n| read_allowance(n, profile, &mut malformed))
         .collect();
+    let mut tax_amount = None;
     if let Some(tt) = child(root, "TaxTotal") {
-        invoice.tax_total =
-            child_amount(tt, "TaxAmount", &mut malformed, "TaxTotal").unwrap_or(Amount::ZERO);
+        tax_amount = child_amount(tt, "TaxAmount", &mut malformed, "TaxTotal");
         invoice.tax_breakdown = children(tt, "TaxSubtotal")
             .filter_map(|n| read_subtotal(n, profile, &mut malformed))
             .collect();
     }
     if let Some(lmt) = child(root, "LegalMonetaryTotal") {
+        // Absent BT-107 is None, not 0.00. Missing LegalMonetaryTotal is BR-CO-18, not payable 0.
         let mut totals = read_totals(lmt, &mut malformed);
-        if totals.tax_total.is_none() && !invoice.tax_total.is_zero() {
-            totals.tax_total = Some(invoice.tax_total);
+        if totals.tax_total.is_none() {
+            totals.tax_total = tax_amount;
         }
-        invoice.payable = totals.payable;
         invoice.totals = Some(totals);
     }
     let line_tag = if kind == DocumentKind::CreditNote {
@@ -426,11 +426,7 @@ fn write_allowance(
 
 fn write_tax_total(s: &mut String, invoice: &Invoice, cur: &str) {
     open(s, 1, "TaxTotal");
-    let tax = invoice
-        .totals
-        .as_ref()
-        .and_then(|t| t.tax_total)
-        .unwrap_or(invoice.tax_total);
+    let tax = invoice.tax_total();
     amount(s, 2, "TaxAmount", tax, cur);
     for row in &invoice.tax_breakdown {
         open(s, 2, "TaxSubtotal");
@@ -485,7 +481,7 @@ fn write_totals(s: &mut String, invoice: &Invoice, cur: &str) {
         }
         amount(s, 2, "PayableAmount", t.payable, cur);
     } else {
-        amount(s, 2, "PayableAmount", invoice.payable, cur);
+        amount(s, 2, "PayableAmount", invoice.payable(), cur);
     }
     close(s, 1, "LegalMonetaryTotal");
 }

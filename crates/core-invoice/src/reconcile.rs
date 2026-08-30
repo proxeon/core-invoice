@@ -119,9 +119,8 @@ impl Reconciler {
     pub fn apply(&self, inv: &mut Invoice) -> Result<(), ReconcileError> {
         let r = self.compute(inv)?;
         inv.tax_breakdown = r.tax_breakdown;
-        inv.totals = Some(r.totals.clone());
-        inv.payable = r.totals.payable;
-        inv.tax_total = r.totals.tax_total.unwrap_or(InvoiceAmount::ZERO);
+        // BT-110 / BT-115 live on DocumentTotals. Ghosts on Invoice are not a second identity.
+        inv.totals = Some(r.totals);
         Ok(())
     }
 
@@ -583,7 +582,7 @@ mod tests {
         reconcile(&mut inv).unwrap();
         let cn = inv.to_credit_note("CN-1", Date::parse("2026-01-16").unwrap());
         assert_eq!(cn.kind, DocumentKind::CreditNote);
-        assert_eq!(cn.payable, inv.payable);
+        assert_eq!(cn.payable(), inv.payable());
     }
 
     #[test]

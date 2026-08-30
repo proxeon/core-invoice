@@ -438,7 +438,8 @@ fn check_b_not_with_s(inv: &Invoice, report: &mut Report) {
 }
 
 fn br_co_18(inv: &Invoice, report: &mut Report) {
-    if inv.tax_breakdown.is_empty() && inv.totals.is_some() {
+    // BR-CO-18: at least one BG-23. Not gated on the caller having run reconcile.
+    if inv.tax_breakdown.is_empty() && !inv.lines.is_empty() {
         report.push(Finding::fatal(
             "BR-CO-18",
             Path::group(Group::TaxBreakdown),

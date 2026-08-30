@@ -85,8 +85,7 @@ mod tests {
         )];
         inv.issue_date = Date::parse("2026-01-15").ok();
         inv.type_code = Some(Code::new("380"));
-        inv.tax_total = Amount::parse("10.00").unwrap();
-        inv.payable = Amount::parse("110.00").unwrap();
+        let _ = reconcile(&mut inv);
         inv
     }
 
@@ -114,13 +113,52 @@ mod tests {
     }
 
     #[test]
-    fn payable_mismatch_does_not_claim_br_co_16() {
-        let mut inv = sst_invoice(Profile::Pint);
-        inv.payable = Amount::parse("999.00").unwrap();
+    fn br_co_18_without_reconcile() {
+        let mut inv = Invoice::blank(
+            Profile::En16931,
+            "INV-1",
+            "EUR",
+            {
+                let mut p = Party::new("Seller GmbH", "DE");
+                p.vat_identifier = Some(Identifier::new("DE123456789"));
+                p
+            },
+            Party::new("Buyer SARL", "FR"),
+        );
+        inv.issue_date = Date::parse("2026-01-15").ok();
+        inv.type_code = Some(Code::new("380"));
+        inv.lines = vec![Line::new(
+            "1",
+            "A",
+            Amount::parse("100.00").unwrap(),
+            TaxCategory::vat("S", Decimal::from(19)),
+        )];
         let report = validate(&inv);
         assert!(
-            report.findings.iter().all(|f| f.id != "BR-CO-16"),
-            "collapsed net+tax identity must not use the CEN id BR-CO-16: {report}"
+            report.findings.iter().any(|f| f.id == "BR-CO-18"),
+            "{report}"
+        );
+    }
+
+    #[test]
+    fn br_53_bt6_without_bt111() {
+        let mut inv = sst_invoice(Profile::PintMy);
+        inv.tax_currency = Some(Code::new("USD"));
+        let report = validate(&inv);
+        assert!(report.findings.iter().any(|f| f.id == "BR-53"), "{report}");
+        inv.totals.as_mut().unwrap().tax_total_accounting = Some(Amount::parse("10.00").unwrap());
+        let report = validate(&inv);
+        assert!(report.findings.iter().all(|f| f.id != "BR-53"), "{report}");
+    }
+
+    #[test]
+    fn stuffed_payable_emits_br_co_16_when_totals_exist() {
+        let mut inv = sst_invoice(Profile::Pint);
+        inv.totals.as_mut().unwrap().payable = Amount::parse("999.00").unwrap();
+        let report = validate(&inv);
+        assert!(
+            report.findings.iter().any(|f| f.id == "BR-CO-16"),
+            "{report}"
         );
     }
 

@@ -175,8 +175,8 @@ fn diff_invoices(left: &Invoice, right: &Invoice) -> String {
     if left.number != right.number {
         lines.push(format!("number: {} → {}", left.number, right.number));
     }
-    if left.payable != right.payable {
-        lines.push(format!("payable: {} → {}", left.payable, right.payable));
+    if left.payable() != right.payable() {
+        lines.push(format!("payable: {} → {}", left.payable(), right.payable()));
     }
     if left.currency != right.currency {
         lines.push(format!("currency: {} → {}", left.currency, right.currency));

@@ -184,6 +184,26 @@ fn br_05(invoice: &Invoice, report: &mut Report) {
     }
 }
 
+fn br_53(invoice: &Invoice, report: &mut Report) {
+    // BR-53: BT-111 is supplied, never derived. BT-6 without BT-111 is Fatal.
+    let has_bt6 = invoice
+        .tax_currency
+        .as_ref()
+        .is_some_and(|c| !c.as_str().trim().is_empty());
+    let has_bt111 = invoice
+        .totals
+        .as_ref()
+        .and_then(|t| t.tax_total_accounting)
+        .is_some();
+    if has_bt6 != has_bt111 {
+        report.push(Finding::fatal(
+            "BR-53",
+            Path::term(BtId(111)),
+            "VAT accounting currency amount (BT-111) shall be present if and only if VAT accounting currency code (BT-6) is present",
+        ));
+    }
+}
+
 fn br_06(invoice: &Invoice, report: &mut Report) {
     if invoice.seller.name.trim().is_empty() {
         report.push(Finding::fatal(
@@ -633,6 +653,13 @@ pub static ALL: &[Rule] = &[
         text: "Invoice currency code (BT-5) shall be present.",
         source: Source::Both,
         eval: br_05,
+    },
+    Rule {
+        id: "BR-53",
+        severity: Severity::Fatal,
+        text: "If BT-6 (VAT accounting currency) is present, BT-111 shall be present, and conversely. BT-111 is never derived.",
+        source: Source::Both,
+        eval: br_53,
     },
     Rule {
         id: "BR-06",

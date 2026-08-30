@@ -155,10 +155,6 @@ pub fn read(xml: &str) -> Result<Read, FormatError> {
             .collect();
         if let Some(ms) = child(st, "SpecifiedTradeSettlementHeaderMonetarySummation") {
             invoice.totals = Some(read_totals(ms, &mut malformed));
-            invoice.payable =
-                child_amount(ms, "DuePayableAmount", &mut malformed, "CII").unwrap_or(Amount::ZERO);
-            invoice.tax_total =
-                child_amount(ms, "TaxTotalAmount", &mut malformed, "CII").unwrap_or(Amount::ZERO);
         }
     }
     Ok(Read {
@@ -268,7 +264,7 @@ fn write_totals(s: &mut String, invoice: &Invoice) {
         }
         amount_ram(s, 4, "DuePayableAmount", t.payable, cur);
     } else {
-        amount_ram(s, 4, "DuePayableAmount", invoice.payable, cur);
+        amount_ram(s, 4, "DuePayableAmount", invoice.payable(), cur);
     }
     s.push_str("      </ram:SpecifiedTradeSettlementHeaderMonetarySummation>\n");
 }
