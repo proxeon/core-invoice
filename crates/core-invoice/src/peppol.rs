@@ -155,7 +155,10 @@ fn r061(inv: &Invoice, report: &mut Report) {
     let Some(pay) = inv.payment.as_ref() else {
         return;
     };
-    let is_dd = pay.means_code.as_ref().is_some_and(|c| c.as_str() == "49")
+    // PEPPOL-EN16931-R061: codes 49 and 59 (SEPA DD). Extra_rule, not CORE.
+    let code = pay.means_code.as_ref().map(|c| c.as_str()).unwrap_or("");
+    let is_dd = code == "49"
+        || code == "59"
         || matches!(
             pay.means,
             Some(crate::payment::PaymentMeans::DirectDebit(_))
@@ -1329,6 +1332,25 @@ mod tests {
                 .findings
                 .iter()
                 .any(|f| f.id == "PEPPOL-EN16931-R046"),
+            "{report}"
+        );
+    }
+
+    #[test]
+    fn r061_fires_for_means_code_59_without_mandate() {
+        let mut inv = peppol();
+        inv.payment = Some(crate::invoice::PaymentInstructions {
+            means_code: Some(Code::new("59")),
+            means_text: None,
+            remittance: None,
+            means: None,
+        });
+        let report = validate(&inv);
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|f| f.id == "PEPPOL-EN16931-R061"),
             "{report}"
         );
     }

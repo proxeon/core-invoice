@@ -184,9 +184,9 @@ fn br_22(invoice: &Invoice, report: &mut Report) {
 }
 
 fn br_23(invoice: &Invoice, report: &mut Report) {
-    // BR-23: unitCode on invoiced/credited quantity (UBL Schematron).
+    // BR-23: exists(@unitCode) independent of quantity. Missing qty still fires BR-22 and BR-23.
     for (i, line) in invoice.lines.iter().enumerate() {
-        if line.quantity.is_some() && line.unit.is_none() {
+        if line.unit.is_none() {
             report.push(Finding::fatal(
                 "BR-23",
                 Path::at_term(Group::Line, i, BtId(130)),
@@ -194,6 +194,10 @@ fn br_23(invoice: &Invoice, report: &mut Report) {
             ));
         }
     }
+}
+
+fn br_24(_invoice: &Invoice, _report: &mut Report) {
+    // BR-24: Line.net is not Option (BT-131); type-retired. explain still works.
 }
 
 fn br_26(invoice: &Invoice, report: &mut Report) {
@@ -466,6 +470,23 @@ fn ibr_04_my(invoice: &Invoice, report: &mut Report) {
             "IBR-04-MY",
             Path::term(BtId(32)),
             "Seller TIN (tax registration) shall be present",
+        ));
+    }
+}
+
+fn ibr_cl_05_my(invoice: &Invoice, report: &mut Report) {
+    // IBR-CL-05-MY: BT-6 ⇒ MYR. Not BT-5. Not IRBM.
+    if !pint_my_only(invoice) {
+        return;
+    }
+    let Some(ccy) = invoice.tax_currency.as_ref() else {
+        return;
+    };
+    if !ccy.as_str().eq_ignore_ascii_case("MYR") {
+        report.push(Finding::fatal(
+            "IBR-CL-05-MY",
+            Path::term(BtId(6)),
+            "If tax currency (BT-6 / IBT-006) is present it shall be MYR",
         ));
     }
 }
@@ -860,6 +881,13 @@ pub static ALL: &[Rule] = &[
         eval: br_23,
     },
     Rule {
+        id: "BR-24",
+        severity: Severity::Fatal,
+        text: "Each Invoice line shall have an Invoice line net amount (BT-131).",
+        source: Source::Both,
+        eval: br_24,
+    },
+    Rule {
         id: "BR-26",
         severity: Severity::Fatal,
         text: "Each Invoice line shall contain the Item net price (BT-146).",
@@ -1048,6 +1076,13 @@ pub static ALL: &[Rule] = &[
         text: "Seller TIN (IBT-032) shall be present.",
         source: Source::Crate,
         eval: ibr_04_my,
+    },
+    Rule {
+        id: "IBR-CL-05-MY",
+        severity: Severity::Fatal,
+        text: "If tax accounting currency (IBT-006 / BT-6) is present, it shall be MYR. Invoice currency (BT-5) is not forced to MYR.",
+        source: Source::Crate,
+        eval: ibr_cl_05_my,
     },
     Rule {
         id: "ALIGNED-IBRP-CL-01-MY",
@@ -1268,6 +1303,66 @@ mod tests {
             let ok = tests.contains(id) || uncovered.contains(id) || id.starts_with("BR-DEC-");
             assert!(ok, "{id} is neither in tests nor UNCOVERED.md");
         }
+    }
+
+    #[test]
+    fn br_23_fires_without_quantity() {
+        let mut inv = crate::invoice::Invoice::blank(
+            crate::profile::Profile::En16931,
+            "1",
+            "EUR",
+            crate::invoice::Party::new("S", "DE"),
+            crate::invoice::Party::new("B", "FR"),
+        );
+        inv.lines = vec![crate::invoice::Line::new(
+            "1",
+            "A",
+            crate::amount::InvoiceAmount::parse("1.00").unwrap(),
+            crate::tax::TaxCategory::vat("S", rust_decimal::Decimal::from(19)),
+        )];
+        let report = crate::validate::validate(&inv);
+        assert!(report.findings.iter().any(|f| f.id == "BR-22"), "{report}");
+        assert!(report.findings.iter().any(|f| f.id == "BR-23"), "{report}");
+    }
+
+    #[test]
+    fn br_24_is_explainable() {
+        assert!(crate::explain("BR-24").unwrap().contains("BT-131"));
+    }
+
+    #[test]
+    fn ibr_cl_05_my_bt6_must_be_myr() {
+        let mut inv = crate::invoice::Invoice::blank(
+            crate::profile::Profile::PintMy,
+            "MY-1",
+            "MYR",
+            {
+                let mut p = crate::invoice::Party::new("S", "MY");
+                p.legal_registration = Some(crate::identifier::Identifier::new("2023010000001"));
+                p.tax_registration = Some(crate::identifier::Identifier::new("C12345678901"));
+                p
+            },
+            {
+                let mut b = crate::invoice::Party::new("B", "MY");
+                b.legal_registration = Some(crate::identifier::Identifier::new("1999010000001"));
+                b
+            },
+        );
+        inv.issue_date = crate::date::Date::parse("2026-01-15").ok();
+        inv.type_code = Some(Code::new("380"));
+        inv.tax_currency = Some(Code::new("USD"));
+        let report = crate::validate::validate(&inv);
+        assert!(
+            report.findings.iter().any(|f| f.id == "IBR-CL-05-MY"),
+            "{report}"
+        );
+        inv.tax_currency = Some(Code::new("MYR"));
+        assert!(
+            crate::validate::validate(&inv)
+                .findings
+                .iter()
+                .all(|f| f.id != "IBR-CL-05-MY")
+        );
     }
 
     #[test]

@@ -20,6 +20,15 @@ down here**, not that there are none.
 ### Added
 
 - Line BT-132 (`order_line`), BT-133 (`accounting_reference`), BT-156 (`buyer_id`), BG-32 (`attributes` BT-160/161). UBL read/write. CII still named-dropped.
+- `IBR-CL-05-MY` (BT-6 ⇒ MYR). `explain BR-24` (type-retired BT-131).
+
+### Changed
+
+- BR-23 fires when unit is absent even if quantity is absent (artefact `@unitCode` independent of qty).
+- Peppol R061 also applies to means code 59, not only 49 / DirectDebit.
+- CLI `inspect` uses the document element, not a `CrossIndustryInvoice` substring.
+- CLI `rules --profile en16931` lists CORE only (not Peppol extras).
+- UBL reads Payee / TaxRepresentative / Delivery; TaxRepresentativeParty has no extra `cac:Party`.
 
 ## [0.2.0] — 2026-08-31
 

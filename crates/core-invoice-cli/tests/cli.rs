@@ -267,6 +267,20 @@ fn inspect_has_no_verdict() {
 }
 
 #[test]
+fn inspect_uses_document_element_not_substring() {
+    let xml = peppol_xml().replacen("<Invoice", "<!-- CrossIndustryInvoice --><Invoice", 1);
+    let path = write_tmp("insp-comment", &xml);
+    let out = bin()
+        .args(["inspect", path.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(0));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("syntax=ubl"), "{stdout}");
+    assert!(!stdout.contains("syntax=cii"), "{stdout}");
+}
+
+#[test]
 fn validate_batch_worst_exit_is_1() {
     let ok = write_tmp("batch-ok", &peppol_xml());
     let mut inv = core_invoice_fixtures::peppol_vat();
@@ -315,6 +329,18 @@ fn rules_peppol_lists_r010() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("PEPPOL-EN16931-R010"));
     assert!(stdout.contains("source"));
+}
+
+#[test]
+fn rules_en16931_does_not_list_peppol_r010() {
+    let out = bin()
+        .args(["rules", "--profile", "en16931", "--format", "json"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(0));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("BR-CO-16"));
+    assert!(!stdout.contains("PEPPOL-EN16931-R010"), "{stdout}");
 }
 
 #[test]

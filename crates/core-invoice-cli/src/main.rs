@@ -305,7 +305,8 @@ fn run() -> Result<ExitCode, String> {
                     .chain(Profile::PintMy.extra_rules())
                     .copied()
                     .collect(),
-                _ => core_invoice::catalogue().to_vec(),
+                Some(_) => core_invoice::core_rules().to_vec(),
+                None => core_invoice::catalogue().to_vec(),
             };
             match format {
                 RulesFormat::Text => {
@@ -335,10 +336,9 @@ fn run() -> Result<ExitCode, String> {
             let inv = &traced.invoice;
             println!(
                 "syntax={}",
-                if xml.contains("CrossIndustryInvoice") {
-                    "cii"
-                } else {
-                    "ubl"
+                match core_invoice_formats::xml::document_element_local(&xml) {
+                    Some("CrossIndustryInvoice") => "cii",
+                    _ => "ubl",
                 }
             );
             println!("number={}", inv.number);
