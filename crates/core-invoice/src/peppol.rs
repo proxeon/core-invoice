@@ -63,6 +63,189 @@ fn r004(inv: &Invoice, report: &mut Report) {
     }
 }
 
+fn r010(inv: &Invoice, report: &mut Report) {
+    if !peppol_only(inv) {
+        return;
+    }
+    // PEPPOL-EN16931-R010: Buyer EndpointID. Extra_rule, not CORE. (R020 is seller.)
+    if inv
+        .buyer
+        .electronic_address
+        .as_ref()
+        .map(|i| i.value.trim())
+        .unwrap_or("")
+        .is_empty()
+    {
+        report.push(Finding::fatal(
+            "PEPPOL-EN16931-R010",
+            Path::term(BtId(49)),
+            "Buyer electronic address MUST be provided",
+        ));
+    }
+}
+
+fn r020(inv: &Invoice, report: &mut Report) {
+    if !peppol_only(inv) {
+        return;
+    }
+    // PEPPOL-EN16931-R020: Seller EndpointID. Extra_rule, not CORE.
+    if inv
+        .seller
+        .electronic_address
+        .as_ref()
+        .map(|i| i.value.trim())
+        .unwrap_or("")
+        .is_empty()
+    {
+        report.push(Finding::fatal(
+            "PEPPOL-EN16931-R020",
+            Path::term(BtId(34)),
+            "Seller electronic address MUST be provided",
+        ));
+    }
+}
+
+fn r005(inv: &Invoice, report: &mut Report) {
+    if !peppol_only(inv) {
+        return;
+    }
+    let Some(tc) = inv.tax_currency.as_ref() else {
+        return;
+    };
+    if tc.as_str().eq_ignore_ascii_case(&inv.currency) {
+        report.push(Finding::fatal(
+            "PEPPOL-EN16931-R005",
+            Path::term(BtId(6)),
+            "VAT accounting currency code MUST be different from invoice currency code when provided",
+        ));
+    }
+}
+
+fn r055(inv: &Invoice, report: &mut Report) {
+    if !peppol_only(inv) {
+        return;
+    }
+    let Some(totals) = inv.totals.as_ref() else {
+        return;
+    };
+    let Some(acct) = totals.tax_total_accounting else {
+        return;
+    };
+    let doc = totals
+        .tax_total
+        .unwrap_or(crate::amount::InvoiceAmount::ZERO);
+    let doc_neg = doc.raw().is_sign_negative();
+    let acct_neg = acct.raw().is_sign_negative();
+    if doc.is_zero() || acct.is_zero() {
+        return;
+    }
+    if doc_neg != acct_neg {
+        report.push(Finding::fatal(
+            "PEPPOL-EN16931-R055",
+            Path::term(BtId(111)),
+            "Invoice total VAT amount and Invoice total VAT amount in accounting currency MUST have the same operational sign",
+        ));
+    }
+}
+
+fn r061(inv: &Invoice, report: &mut Report) {
+    if !peppol_only(inv) {
+        return;
+    }
+    let Some(pay) = inv.payment.as_ref() else {
+        return;
+    };
+    let is_dd = pay.means_code.as_ref().is_some_and(|c| c.as_str() == "49")
+        || matches!(
+            pay.means,
+            Some(crate::payment::PaymentMeans::DirectDebit(_))
+        );
+    if !is_dd {
+        return;
+    }
+    let mandate_ok = match &pay.means {
+        Some(crate::payment::PaymentMeans::DirectDebit(d)) => {
+            d.mandate.as_deref().is_some_and(|m| !m.trim().is_empty())
+        }
+        _ => false,
+    };
+    if !mandate_ok {
+        report.push(Finding::fatal(
+            "PEPPOL-EN16931-R061",
+            Path::term(BtId(89)),
+            "Mandate reference MUST be provided for direct debit",
+        ));
+    }
+}
+
+fn p0100(inv: &Invoice, report: &mut Report) {
+    if !peppol_only(inv) || inv.kind != crate::kind::DocumentKind::Invoice {
+        return;
+    }
+    let Some(code) = inv.type_code.as_ref() else {
+        return;
+    };
+    const ALLOWED: &[&str] = &[
+        "71", "80", "82", "84", "102", "218", "219", "326", "331", "380", "382", "383", "384",
+        "386", "388", "393", "395", "553", "575", "623", "780", "817", "870", "875", "876", "877",
+    ];
+    if !ALLOWED.contains(&code.as_str()) {
+        report.push(Finding::fatal(
+            "PEPPOL-EN16931-P0100",
+            Path::term(BtId(3)),
+            format!(
+                "Invoice type code {} is not allowed for Peppol billing profile 01",
+                code.as_str()
+            ),
+        ));
+    }
+}
+
+fn vatex_pair(inv: &Invoice, report: &mut Report, vatex: &str, cat: &str, id: &'static str) {
+    if !peppol_only(inv) {
+        return;
+    }
+    for (i, row) in inv.tax_breakdown.iter().enumerate() {
+        let Some(code) = row.exemption_code.as_ref() else {
+            continue;
+        };
+        if code.as_str().eq_ignore_ascii_case(vatex)
+            && !row.category.as_str().eq_ignore_ascii_case(cat)
+        {
+            report.push(Finding::fatal(
+                id,
+                Path::at_term(Group::TaxBreakdown, i, BtId(121)),
+                format!("Tax Category {cat} MUST be used when exemption reason code is {vatex}"),
+            ));
+        }
+    }
+}
+
+fn p0104(i: &Invoice, r: &mut Report) {
+    vatex_pair(i, r, "VATEX-EU-G", "G", "PEPPOL-EN16931-P0104");
+}
+fn p0105(i: &Invoice, r: &mut Report) {
+    vatex_pair(i, r, "VATEX-EU-O", "O", "PEPPOL-EN16931-P0105");
+}
+fn p0106(i: &Invoice, r: &mut Report) {
+    vatex_pair(i, r, "VATEX-EU-IC", "K", "PEPPOL-EN16931-P0106");
+}
+fn p0107(i: &Invoice, r: &mut Report) {
+    vatex_pair(i, r, "VATEX-EU-AE", "AE", "PEPPOL-EN16931-P0107");
+}
+fn p0108(i: &Invoice, r: &mut Report) {
+    vatex_pair(i, r, "VATEX-EU-D", "E", "PEPPOL-EN16931-P0108");
+}
+fn p0109(i: &Invoice, r: &mut Report) {
+    vatex_pair(i, r, "VATEX-EU-F", "E", "PEPPOL-EN16931-P0109");
+}
+fn p0110(i: &Invoice, r: &mut Report) {
+    vatex_pair(i, r, "VATEX-EU-I", "E", "PEPPOL-EN16931-P0110");
+}
+fn p0111(i: &Invoice, r: &mut Report) {
+    vatex_pair(i, r, "VATEX-EU-J", "E", "PEPPOL-EN16931-P0111");
+}
+
 fn r003(inv: &Invoice, report: &mut Report) {
     if !peppol_only(inv) {
         return;
@@ -242,6 +425,76 @@ pub static RULES: &[Rule] = &[
         r003,
     ),
     r(
+        "PEPPOL-EN16931-R010",
+        "Buyer electronic address MUST be provided.",
+        r010,
+    ),
+    r(
+        "PEPPOL-EN16931-R020",
+        "Seller electronic address MUST be provided.",
+        r020,
+    ),
+    r(
+        "PEPPOL-EN16931-R005",
+        "VAT accounting currency MUST differ from invoice currency when provided.",
+        r005,
+    ),
+    r(
+        "PEPPOL-EN16931-R055",
+        "BT-110 and BT-111 MUST have the same operational sign.",
+        r055,
+    ),
+    r(
+        "PEPPOL-EN16931-R061",
+        "Mandate reference MUST be provided for direct debit.",
+        r061,
+    ),
+    r(
+        "PEPPOL-EN16931-P0100",
+        "Invoice type code must be in the Peppol billing profile 01 list (not 389).",
+        p0100,
+    ),
+    r(
+        "PEPPOL-EN16931-P0104",
+        "VATEX-EU-G requires tax category G.",
+        p0104,
+    ),
+    r(
+        "PEPPOL-EN16931-P0105",
+        "VATEX-EU-O requires tax category O.",
+        p0105,
+    ),
+    r(
+        "PEPPOL-EN16931-P0106",
+        "VATEX-EU-IC requires tax category K.",
+        p0106,
+    ),
+    r(
+        "PEPPOL-EN16931-P0107",
+        "VATEX-EU-AE requires tax category AE.",
+        p0107,
+    ),
+    r(
+        "PEPPOL-EN16931-P0108",
+        "VATEX-EU-D requires tax category E.",
+        p0108,
+    ),
+    r(
+        "PEPPOL-EN16931-P0109",
+        "VATEX-EU-F requires tax category E.",
+        p0109,
+    ),
+    r(
+        "PEPPOL-EN16931-P0110",
+        "VATEX-EU-I requires tax category E.",
+        p0110,
+    ),
+    r(
+        "PEPPOL-EN16931-P0111",
+        "VATEX-EU-J requires tax category E.",
+        p0111,
+    ),
+    r(
         "PEPPOL-EN16931-R120",
         "Line net ≈ qty × (price / base qty), slack ±0.02 inclusive.",
         r120,
@@ -297,6 +550,8 @@ mod tests {
         inv.type_code = Some(Code::new("380"));
         inv.business_process = Some("urn:fdc:peppol.eu:2017:poacc:billing:01:1.0".into());
         inv.buyer_reference = Some(crate::identifier::DocumentReference::new("PO-1"));
+        inv.seller.electronic_address = Some(Identifier::schemed("1234567890128", "0088"));
+        inv.buyer.electronic_address = Some(Identifier::schemed("1234567890129", "0088"));
         inv.lines = vec![Line::new(
             "1",
             "A",
@@ -355,6 +610,54 @@ mod tests {
                 .findings
                 .iter()
                 .all(|f| f.id != "PEPPOL-EN16931-R120"),
+            "{report}"
+        );
+    }
+
+    #[test]
+    fn r010_buyer_endpoint_not_on_en() {
+        let mut inv = peppol();
+        inv.buyer.electronic_address = None;
+        let report = validate(&inv);
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|f| f.id == "PEPPOL-EN16931-R010"),
+            "{report}"
+        );
+        inv.profile = Profile::En16931;
+        inv.specification_id = Some(Profile::En16931.specification_id().into());
+        let report = validate(&inv);
+        assert!(
+            report
+                .findings
+                .iter()
+                .all(|f| f.id != "PEPPOL-EN16931-R010"),
+            "{report}"
+        );
+    }
+
+    #[test]
+    fn p0100_forbids_389_on_peppol_not_en() {
+        let mut inv = peppol();
+        inv.type_code = Some(Code::new("389"));
+        let report = validate(&inv);
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|f| f.id == "PEPPOL-EN16931-P0100"),
+            "{report}"
+        );
+        inv.profile = Profile::En16931;
+        inv.specification_id = Some(Profile::En16931.specification_id().into());
+        let report = validate(&inv);
+        assert!(
+            report
+                .findings
+                .iter()
+                .all(|f| f.id != "PEPPOL-EN16931-P0100"),
             "{report}"
         );
     }

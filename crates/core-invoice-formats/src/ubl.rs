@@ -1541,7 +1541,7 @@ mod tests {
             {
                 let mut p = Party::new("Seller GmbH", "DE");
                 p.vat_identifier = Some(Identifier::new("DE123456789"));
-                p.electronic_address = Some(Identifier::schemed("DE123456789", "9930"));
+                p.electronic_address = Some(Identifier::schemed("1234567890128", "0088"));
                 p
             },
             {

@@ -50,7 +50,7 @@ pub use proof::{
 };
 pub use reconcile::{ReconcileError, Reconciled, Reconciler, reconcile};
 pub use report::{Finding, Report, Severity, Source};
-pub use rules::{catalogue, explain};
+pub use rules::{catalogue, core_rules, explain};
 pub use tax::{TaxCategory, TaxSystem, pint_my_category, wire_scheme};
 pub use validate::validate;
 

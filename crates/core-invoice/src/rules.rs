@@ -36,13 +36,25 @@ pub fn explain(id: &str) -> Option<&'static str> {
         .map(|r| r.text)
 }
 
-pub fn catalogue() -> &'static [Rule] {
+/// CORE rules only. Peppol extras are `Profile::extra_rules`, not this list.
+pub fn core_rules() -> &'static [Rule] {
     static CELL: std::sync::OnceLock<Vec<Rule>> = std::sync::OnceLock::new();
     CELL.get_or_init(|| {
         ALL.iter()
             .copied()
             .chain(crate::category::RULES.iter().copied())
             .chain(crate::codes::RULES.iter().copied())
+            .collect()
+    })
+}
+
+/// Explain/rules dump: CORE plus every profile's extras so `explain PEPPOL-EN16931-R010` works.
+pub fn catalogue() -> &'static [Rule] {
+    static CELL: std::sync::OnceLock<Vec<Rule>> = std::sync::OnceLock::new();
+    CELL.get_or_init(|| {
+        core_rules()
+            .iter()
+            .copied()
             .chain(crate::peppol::RULES.iter().copied())
             .collect()
     })

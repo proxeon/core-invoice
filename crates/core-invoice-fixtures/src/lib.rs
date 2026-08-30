@@ -65,11 +65,13 @@ pub fn peppol_vat() -> Invoice {
         {
             let mut p = Party::new("Seller GmbH", "DE");
             p.vat_identifier = Some(Identifier::new("DE123456789"));
+            p.electronic_address = Some(Identifier::schemed("1234567890128", "0088"));
             p
         },
         {
             let mut b = Party::new("Buyer SARL", "FR");
             b.vat_identifier = Some(Identifier::new("FR12345678901"));
+            b.electronic_address = Some(Identifier::schemed("1234567890129", "0088"));
             b
         },
     );
@@ -131,6 +133,24 @@ mod tests {
     #[test]
     fn peppol_vat_is_valid() {
         assert!(validate(&peppol_vat()).ok());
+    }
+
+    #[test]
+    fn official_peppol_base_example_when_refers_present() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../refers/peppol-bis-invoice-3/rules/examples/base-example.xml");
+        if !path.exists() {
+            if std::env::var("CORE_INVOICE_REQUIRE_SPEC").ok().as_deref() == Some("1") {
+                panic!("missing {}", path.display());
+            }
+            return;
+        }
+        let xml = std::fs::read_to_string(&path).unwrap();
+        let report = core_invoice_formats::validate_xml(&xml, Some(Profile::PeppolBis3)).unwrap();
+        assert!(
+            report.ok(),
+            "refers/peppol-bis-invoice-3/rules/examples/base-example.xml: {report}"
+        );
     }
 
     #[test]

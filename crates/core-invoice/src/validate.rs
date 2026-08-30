@@ -4,13 +4,14 @@ use crate::rules;
 
 /// Semantic checks on the in-memory invoice. Syntax (UBL/CII) lives in `core-invoice-formats`.
 pub fn validate(invoice: &Invoice) -> Report {
-    let rules = rules::catalogue();
+    let core = rules::core_rules();
+    let extra = invoice.profile.extra_rules();
     let mut report = Report {
         profile_slug: invoice.profile.slug(),
-        rules_checked: rules.len(),
+        rules_checked: core.len() + extra.len(),
         ..Report::default()
     };
-    for rule in rules {
+    for rule in core.iter().chain(extra) {
         (rule.eval)(invoice, &mut report);
     }
     report.sort_stable();
