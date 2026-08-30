@@ -119,30 +119,30 @@ pub fn read(xml: &str) -> Result<Invoice, FormatError> {
         let system = inner_tag(chunk, "TaxScheme", "ID")
             .and_then(|s| TaxSystem::parse(&s))
             .unwrap_or(system);
-        lines.push(Line {
-            id: format!("{}", i + 1),
+        lines.push(Line::new(
+            format!("{}", i + 1),
             name,
             net,
-            tax: TaxCategory {
+            TaxCategory {
                 system,
                 code,
                 percent,
             },
-        });
+        ));
     }
 
-    Ok(Invoice {
+    let mut invoice = Invoice::blank(
         profile,
-        specification_id: customization,
-        kind: core_invoice::DocumentKind::Invoice,
         number,
         currency,
-        seller: Party::new(seller_name, seller_country),
-        buyer: Party::new(buyer_name, buyer_country),
-        lines,
-        tax_total,
-        payable,
-    })
+        Party::new(seller_name, seller_country),
+        Party::new(buyer_name, buyer_country),
+    );
+    invoice.specification_id = customization;
+    invoice.lines = lines;
+    invoice.tax_total = tax_total;
+    invoice.payable = payable;
+    Ok(invoice)
 }
 
 fn default_tax(profile: Profile) -> TaxSystem {

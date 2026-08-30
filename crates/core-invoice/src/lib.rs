@@ -27,7 +27,11 @@ pub use code::Code;
 pub use date::Date;
 pub use error::{AmountError, AttachmentError, DateError};
 pub use identifier::{DocumentReference, Identifier};
-pub use invoice::{Invoice, Line, Party};
+pub use invoice::{
+    AllowanceCharge, Contact, Delivery, DocumentTotals, Invoice, InvoiceNote, Line, Party,
+    PartyTax, Payee, PaymentInstructions, Period, PostalAddress, PrecedingInvoice, Price,
+    SupportingDocument, TaxBreakdown, TaxRepresentative,
+};
 pub use kind::DocumentKind;
 pub use numeric::{Percentage, Quantity};
 pub use payment::{CreditTransfer, DirectDebit, PaymentCard, PaymentMeans};
@@ -43,28 +47,27 @@ mod tests {
     use rust_decimal::Decimal;
 
     fn sst_invoice(profile: Profile) -> Invoice {
-        Invoice {
+        let mut inv = Invoice::blank(
             profile,
-            specification_id: Some(profile.specification_id().into()),
-            kind: DocumentKind::Invoice,
-            number: "INV-1".into(),
-            currency: "MYR".into(),
-            seller: {
+            "INV-1",
+            "MYR",
+            {
                 let mut p = Party::new("Kedai", "MY");
                 p.tax_id = Some("C12345678901".into());
                 p.id_scheme = Some("TIN".into());
                 p
             },
-            buyer: Party::new("Pembeli", "MY"),
-            lines: vec![Line {
-                id: "1".into(),
-                name: "Goods".into(),
-                net: Amount::parse("100.00").unwrap(),
-                tax: TaxCategory::sst("SA", Decimal::from(10)),
-            }],
-            tax_total: Amount::parse("10.00").unwrap(),
-            payable: Amount::parse("110.00").unwrap(),
-        }
+            Party::new("Pembeli", "MY"),
+        );
+        inv.lines = vec![Line::new(
+            "1",
+            "Goods",
+            Amount::parse("100.00").unwrap(),
+            TaxCategory::sst("SA", Decimal::from(10)),
+        )];
+        inv.tax_total = Amount::parse("10.00").unwrap();
+        inv.payable = Amount::parse("110.00").unwrap();
+        inv
     }
 
     #[test]

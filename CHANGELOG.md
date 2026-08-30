@@ -40,6 +40,10 @@ down here**, not that there are none.
 - BT-24 is stored on the invoice. Profile lookup is prefix-based (`starts-with`),
   not `contains("pint")`. Self-billing URNs are a wrong process. Edition 2017+A1
   vs classified 2026. Peppol BIS is the only conformant CIUS of EN 16931.
+- Table 2 field set on `Invoice`: dates, type code, notes, preceding invoices,
+  split party identifiers, payee/tax representative/delivery, payment,
+  allowances/charges, tax breakdown, document totals, line quantity/price.
+  `to_credit_note()` copies amounts without negation.
 
 ## [0.1.0] — 2026-08-30
 

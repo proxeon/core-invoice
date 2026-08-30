@@ -4,48 +4,46 @@ use core_invoice::{Amount, Invoice, Line, Party, Profile, TaxCategory};
 use rust_decimal::Decimal;
 
 pub fn pint_my_sst() -> Invoice {
-    Invoice {
-        profile: Profile::PintMy,
-        specification_id: Some(Profile::PintMy.specification_id().into()),
-        kind: core_invoice::DocumentKind::Invoice,
-        number: "MY-2026-0001".into(),
-        currency: "MYR".into(),
-        seller: {
+    let mut inv = Invoice::blank(
+        Profile::PintMy,
+        "MY-2026-0001",
+        "MYR",
+        {
             let mut p = Party::new("Kedai Contoh Sdn Bhd", "MY");
             p.tax_id = Some("C12345678901".into());
             p.id_scheme = Some("TIN".into());
             p
         },
-        buyer: Party::new("Pembeli Sdn Bhd", "MY"),
-        lines: vec![Line {
-            id: "1".into(),
-            name: "Widget".into(),
-            net: Amount::parse("100.00").unwrap(),
-            tax: TaxCategory::sst("SA", Decimal::from(10)),
-        }],
-        tax_total: Amount::parse("10.00").unwrap(),
-        payable: Amount::parse("110.00").unwrap(),
-    }
+        Party::new("Pembeli Sdn Bhd", "MY"),
+    );
+    inv.lines = vec![Line::new(
+        "1",
+        "Widget",
+        Amount::parse("100.00").unwrap(),
+        TaxCategory::sst("SA", Decimal::from(10)),
+    )];
+    inv.tax_total = Amount::parse("10.00").unwrap();
+    inv.payable = Amount::parse("110.00").unwrap();
+    inv
 }
 
 pub fn peppol_vat() -> Invoice {
-    Invoice {
-        profile: Profile::PeppolBis3,
-        specification_id: Some(Profile::PeppolBis3.specification_id().into()),
-        kind: core_invoice::DocumentKind::Invoice,
-        number: "EU-2026-0001".into(),
-        currency: "EUR".into(),
-        seller: Party::new("Seller GmbH", "DE"),
-        buyer: Party::new("Buyer SARL", "FR"),
-        lines: vec![Line {
-            id: "1".into(),
-            name: "Service".into(),
-            net: Amount::parse("100.00").unwrap(),
-            tax: TaxCategory::vat("S", Decimal::from(19)),
-        }],
-        tax_total: Amount::parse("19.00").unwrap(),
-        payable: Amount::parse("119.00").unwrap(),
-    }
+    let mut inv = Invoice::blank(
+        Profile::PeppolBis3,
+        "EU-2026-0001",
+        "EUR",
+        Party::new("Seller GmbH", "DE"),
+        Party::new("Buyer SARL", "FR"),
+    );
+    inv.lines = vec![Line::new(
+        "1",
+        "Service",
+        Amount::parse("100.00").unwrap(),
+        TaxCategory::vat("S", Decimal::from(19)),
+    )];
+    inv.tax_total = Amount::parse("19.00").unwrap();
+    inv.payable = Amount::parse("119.00").unwrap();
+    inv
 }
 
 #[cfg(test)]
@@ -59,8 +57,6 @@ mod tests {
         let xml = write(&pint_my_sst(), Syntax::Ubl).unwrap();
         let back = read(&xml).unwrap();
         assert_eq!(back.profile, Profile::PintMy);
-        // TIN/scheme are still dropped by the UBL scrape; do not treat validate() as
-        // proof that PINT-MY identity survived.
         assert_eq!(back.seller.tax_id, None);
         assert_eq!(back.seller.id_scheme, None);
     }
