@@ -318,9 +318,9 @@ fn write_party(s: &mut String, tag: &str, party: &Party, profile: Profile) {
             leaf(s, 4, "PostalZone", v, None);
         }
     }
-    if !party.country.is_empty() {
+    if !party.country().is_empty() {
         open(s, 4, "Country");
-        leaf(s, 5, "IdentificationCode", &party.country, None);
+        leaf(s, 5, "IdentificationCode", party.country(), None);
         close(s, 4, "Country");
     }
     close(s, 3, "PostalAddress");
@@ -587,7 +587,9 @@ fn read_party(node: roxmltree::Node<'_, '_>, profile: Profile) -> Party {
             city: child_text(addr, "CityName"),
             post_code: child_text(addr, "PostalZone"),
             subdivision: child_text(addr, "CountrySubentity"),
-            country: child_text(addr, "IdentificationCode").map(Code::new),
+            country: child(addr, "Country")
+                .and_then(|n| child_text(n, "IdentificationCode"))
+                .map(Code::new),
         });
     }
     party
@@ -948,8 +950,8 @@ mod tests {
     fn missing_country_is_not_invented_xx() {
         let xml = r#"<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"><cbc:ID>1</cbc:ID><cac:AccountingSupplierParty><cac:Party><cac:PartyName><cbc:Name>A</cbc:Name></cac:PartyName></cac:Party></cac:AccountingSupplierParty></Invoice>"#;
         let inv = read(xml).unwrap().invoice;
-        assert!(inv.seller.country.is_empty());
-        assert_ne!(inv.seller.country, "XX");
+        assert!(inv.seller.country().is_empty());
+        assert_ne!(inv.seller.country(), "XX");
         let report = core_invoice::validate(&inv);
         assert!(report.findings.iter().any(|f| f.id == "BR-09"), "{report}");
     }

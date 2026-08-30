@@ -99,8 +99,6 @@ mod tests {
         let xml = write_unchecked(&pint_my_sst(), Syntax::Ubl).unwrap();
         let back = read(&xml).unwrap();
         assert_eq!(back.profile, Profile::PintMy);
-        assert_eq!(back.seller.tax_id, None);
-        assert_eq!(back.seller.id_scheme, None);
         assert_eq!(
             back.seller
                 .tax_registration

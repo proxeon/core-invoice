@@ -212,8 +212,8 @@ fn write_trade_party(s: &mut String, tag: &str, party: &Party, _profile: Profile
         s.push_str("        </ram:SpecifiedLegalOrganization>\n");
     }
     s.push_str("        <ram:PostalTradeAddress>\n");
-    if !party.country.is_empty() {
-        leaf_ram(s, 5, "CountryID", &party.country, None);
+    if !party.country().is_empty() {
+        leaf_ram(s, 5, "CountryID", party.country(), None);
     }
     s.push_str("        </ram:PostalTradeAddress>\n");
     if let Some(tin) = party

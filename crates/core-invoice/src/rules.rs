@@ -121,7 +121,7 @@ fn br_04(invoice: &Invoice, report: &mut Report) {
 }
 
 fn br_09(invoice: &Invoice, report: &mut Report) {
-    if invoice.seller.country.trim().is_empty() {
+    if invoice.seller.country().trim().is_empty() {
         report.push(Finding::fatal(
             "BR-09",
             Path::term(BtId(40)),
@@ -131,7 +131,7 @@ fn br_09(invoice: &Invoice, report: &mut Report) {
 }
 
 fn br_11(invoice: &Invoice, report: &mut Report) {
-    if invoice.buyer.country.trim().is_empty() {
+    if invoice.buyer.country().trim().is_empty() {
         report.push(Finding::fatal(
             "BR-11",
             Path::term(BtId(55)),

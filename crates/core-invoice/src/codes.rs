@@ -161,14 +161,14 @@ fn br_cl_14(inv: &Invoice, report: &mut Report) {
         (&inv.seller, Group::Seller, 40u16),
         (&inv.buyer, Group::Buyer, 55u16),
     ] {
-        if party.country.trim().is_empty() {
+        if party.country().trim().is_empty() {
             continue;
         }
-        if !country(&party.country) {
+        if !country(party.country()) {
             report.push(Finding::fatal(
                 "BR-CL-14",
                 Path::group_term(group, BtId(bt)),
-                format!("country {} is not ISO 3166-1 alpha-2", party.country),
+                format!("country {} is not ISO 3166-1 alpha-2", party.country()),
             ));
         }
     }

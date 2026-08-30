@@ -277,10 +277,11 @@ fn diff_party(
     if left.name != right.name {
         lines.push(format!("{label}.name: {} → {}", left.name, right.name));
     }
-    if left.country != right.country {
+    if left.country() != right.country() {
         lines.push(format!(
             "{label}.country: {} → {}",
-            left.country, right.country
+            left.country(),
+            right.country()
         ));
     }
     if left.electronic_address != right.electronic_address {

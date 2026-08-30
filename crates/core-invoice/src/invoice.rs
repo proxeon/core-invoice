@@ -34,12 +34,18 @@ pub struct PartyTax {
     pub scheme: String,
 }
 
+/// Party identifiers are four slots, not a leftover `tax_id`:
+///
+/// - `legal_registration` — BT-30 / BT-47 (PINT-MY BRN, unschemed)
+/// - `vat_identifier` — BT-31 / BT-48
+/// - `tax_registration` — BT-32 (PINT-MY TIN, scheme `GST`)
+/// - `electronic_address` — BT-34 / BT-49 (PINT-MY endpoint scheme `0230`)
+///
+/// Country (BT-40 / BT-55) lives on [`PostalAddress::country`]. [`Party::country`]
+/// reads that field.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Party {
     pub name: String,
-    pub country: String,
-    pub tax_id: Option<String>,
-    pub id_scheme: Option<String>,
     pub trading_name: Option<String>,
     pub identifiers: Vec<Identifier>,
     pub legal_registration: Option<Identifier>,
@@ -54,11 +60,17 @@ pub struct Party {
 
 impl Party {
     pub fn new(name: impl Into<String>, country: impl Into<String>) -> Self {
+        let country = country.into();
+        let address = if country.trim().is_empty() {
+            None
+        } else {
+            Some(PostalAddress {
+                country: Some(Code::new(country)),
+                ..PostalAddress::default()
+            })
+        };
         Self {
             name: name.into(),
-            country: country.into(),
-            tax_id: None,
-            id_scheme: None,
             trading_name: None,
             identifiers: Vec::new(),
             legal_registration: None,
@@ -67,9 +79,18 @@ impl Party {
             electronic_address: None,
             party_taxes: Vec::new(),
             additional_legal: None,
-            address: None,
+            address,
             contact: None,
         }
+    }
+
+    /// BT-40 / BT-55 from [`PostalAddress::country`]. Empty when address or code is absent.
+    pub fn country(&self) -> &str {
+        self.address
+            .as_ref()
+            .and_then(|a| a.country.as_ref())
+            .map(Code::as_str)
+            .unwrap_or("")
     }
 }
 
@@ -208,6 +229,9 @@ pub struct SupportingDocument {
     pub attachment: Option<Attachment>,
 }
 
+/// Semantic invoice. Fields stay public through 0.1–0.2; Table 2 terms will
+/// still be added. Construct with [`Invoice::blank`], then set fields. Do not
+/// match on the struct layout.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Invoice {
     pub profile: Profile,
