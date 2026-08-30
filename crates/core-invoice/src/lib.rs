@@ -17,6 +17,7 @@ pub mod invoice;
 pub mod kind;
 pub mod numeric;
 pub mod payment;
+pub mod peppol;
 pub mod profile;
 pub mod proof;
 pub mod reconcile;

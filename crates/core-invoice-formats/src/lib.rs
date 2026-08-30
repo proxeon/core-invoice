@@ -124,13 +124,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn cii_is_refused() {
-        let xml = r#"<rsm:CrossIndustryInvoice xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100"/>"#;
-        assert!(matches!(read(xml), Err(FormatError::CiiNotImplemented)));
-        let ubl = r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"><cbc:CustomizationID>urn:peppol:pint:billing-1</cbc:CustomizationID><cbc:ID>1</cbc:ID><cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode><cac:LegalMonetaryTotal><cbc:PayableAmount>0</cbc:PayableAmount></cac:LegalMonetaryTotal></Invoice>"#;
-        assert!(matches!(
-            convert(ubl, Syntax::Cii),
-            Err(FormatError::CiiNotImplemented)
-        ));
+    fn ubl_converts_to_real_cii() {
+        let ubl = r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"><cbc:CustomizationID>urn:cen.eu:en16931:2017</cbc:CustomizationID><cbc:ID>1</cbc:ID><cbc:IssueDate>2026-01-15</cbc:IssueDate><cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode><cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode><cac:LegalMonetaryTotal><cbc:PayableAmount currencyID="EUR">0</cbc:PayableAmount></cac:LegalMonetaryTotal></Invoice>"#;
+        let cii = convert(ubl, Syntax::Cii).unwrap();
+        assert!(cii.contains("CrossIndustryInvoice"));
+        assert!(cii.contains("SupplyChainTradeTransaction"));
+        assert!(!cii.contains("<Invoice "));
     }
 }

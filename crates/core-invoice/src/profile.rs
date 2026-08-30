@@ -96,6 +96,14 @@ impl Profile {
         matches!(self, Self::PeppolBis3)
     }
 
+    /// Peppol extra_rules. PINT / PINT-MY / EN core do **not** inherit them.
+    pub fn extra_rules(self) -> &'static [crate::rules::Rule] {
+        match self {
+            Self::PeppolBis3 => crate::peppol::RULES,
+            _ => &[],
+        }
+    }
+
     pub const PEPPOL_BIS3_PREFIX: &'static str =
         "urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0";
 

@@ -43,6 +43,7 @@ pub fn catalogue() -> &'static [Rule] {
             .copied()
             .chain(crate::category::RULES.iter().copied())
             .chain(crate::codes::RULES.iter().copied())
+            .chain(crate::peppol::RULES.iter().copied())
             .collect()
     })
 }

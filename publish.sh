@@ -20,7 +20,11 @@ crates=(
 
 for crate in "${crates[@]}"; do
   echo "=== publishing $crate ==="
-  cargo publish -p "$crate" --allow-dirty
+  if [[ "${1:-}" == "--dry-run" ]]; then
+    cargo publish -p "$crate" --dry-run --allow-dirty
+  else
+    cargo publish -p "$crate"
+  fi
   echo "waiting for crates.io index..."
   for i in 1 2 3 4 5 6 7 8 9 10; do
     if cargo info "$crate" >/dev/null 2>&1; then

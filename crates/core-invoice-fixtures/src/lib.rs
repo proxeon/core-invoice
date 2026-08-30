@@ -29,8 +29,7 @@ pub fn pint_my_sst() -> Invoice {
     )];
     inv.issue_date = core_invoice::Date::parse("2026-01-15").ok();
     inv.type_code = Some(core_invoice::Code::new("380"));
-    inv.tax_total = Amount::parse("10.00").unwrap();
-    inv.payable = Amount::parse("110.00").unwrap();
+    let _ = reconcile(&mut inv);
     inv
 }
 
@@ -82,8 +81,9 @@ pub fn peppol_vat() -> Invoice {
     )];
     inv.issue_date = core_invoice::Date::parse("2026-01-15").ok();
     inv.type_code = Some(core_invoice::Code::new("380"));
-    inv.tax_total = Amount::parse("19.00").unwrap();
-    inv.payable = Amount::parse("119.00").unwrap();
+    inv.business_process = Some("urn:fdc:peppol.eu:2017:poacc:billing:01:1.0".into());
+    inv.buyer_reference = Some(core_invoice::DocumentReference::new("PO-1"));
+    let _ = reconcile(&mut inv);
     inv
 }
 
@@ -111,9 +111,13 @@ mod tests {
     }
 
     #[test]
-    fn cii_write_is_refused() {
-        let err = write(&pint_my_sst(), Syntax::Cii).unwrap_err();
-        assert!(err.to_string().contains("CII D16B is not implemented"));
+    fn cii_write_is_three_part_d16b() {
+        let xml = write(&pint_my_sst(), Syntax::Cii).unwrap();
+        assert!(xml.contains("CrossIndustryInvoice"));
+        let line = xml.find("IncludedSupplyChainTradeLineItem").unwrap();
+        let header = xml.find("ApplicableHeaderTradeAgreement").unwrap();
+        assert!(line < header);
+        assert!(!xml.contains(">SST<"));
     }
 
     #[test]

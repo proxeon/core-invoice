@@ -10,10 +10,10 @@ accounting UI.
 | Crate | Job |
 |---|---|
 | [`core-invoice`](crates/core-invoice) | Semantic model. Tax systems: VAT, GST, SST, consumption. Profiles: EN 16931, Peppol BIS 3.0, PINT, PINT-MY. |
-| [`core-invoice-formats`](crates/core-invoice-formats) | UBL 2.1 subset scrape. **CII D16B is refused** until a real mapping exists. |
-| [`core-invoice-cli`](crates/core-invoice-cli) | `validate` / `convert` / `diff` / `explain` (binary name `core-invoice`) |
-| [`core-invoice-fixtures`](crates/core-invoice-fixtures) | In-memory PINT-MY SST and Peppol VAT samples |
-| [`core-invoice-sys`](crates/core-invoice-sys) | C `validate` only. Python and WASM are not implemented. |
+| [`core-invoice-formats`](crates/core-invoice-formats) | UBL 2.1 tree walk (Invoice + CreditNote) and CII D16B three-part write/read. |
+| [`core-invoice-cli`](crates/core-invoice-cli) | `validate` / `convert` / `diff` / `explain` / `rules` / `inspect` (binary `core-invoice`). Exit 0 valid, 1 invalid, 2 unreadable. |
+| [`core-invoice-fixtures`](crates/core-invoice-fixtures) | In-memory PINT-MY SST, Peppol VAT, Pint GST samples |
+| [`core-invoice-sys`](crates/core-invoice-sys) | C ABI `core_invoice_validate_ubl` (0/1/2). Python is not implemented; the model crate builds for `wasm32-unknown-unknown`. |
 
 ```sh
 task                 # list

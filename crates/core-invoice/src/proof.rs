@@ -167,6 +167,8 @@ mod tests {
         );
         inv.issue_date = Date::parse("2026-01-15").ok();
         inv.type_code = Some(Code::new("380"));
+        inv.business_process = Some("urn:fdc:peppol.eu:2017:poacc:billing:01:1.0".into());
+        inv.buyer_reference = Some(crate::identifier::DocumentReference::new("PO-1"));
         inv.lines = vec![Line::new(
             "1",
             "A",

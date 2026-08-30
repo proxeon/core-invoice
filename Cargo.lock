@@ -217,6 +217,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "core-invoice",
+ "core-invoice-fixtures",
  "core-invoice-formats",
 ]
 

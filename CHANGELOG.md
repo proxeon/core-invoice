@@ -48,6 +48,14 @@ down here**, not that there are none.
   categories restricted to SA/SE/HVG/LVG/TTX/E/O. `wire_scheme()` maps SST to
   TaxScheme `VAT` (never `SST` on the wire).
 - Presence: BR-01, BR-03, BR-04, BR-09, BR-11, BR-21, BR-25.
+- CII D16B is a real three-part mapping (lines before header, format 102
+  dates), not a UBL wrapper. `--to cii` is enabled.
+- Peppol extra_rules: R001/R003/R004/R007, R120 ±0.02 inclusive, R046 exact.
+  They do not run on EN core or PINT-MY.
+- CLI: `rules --format json`, `inspect` (no verdict), `profiles`. `diff`
+  exits 1 when documents differ. Process tests cover 0/1/2.
+- C ABI snippet in `core-invoice-sys`. CI: fmt, clippy `-D warnings`, tests,
+  wasm32 model build. `publish.sh` no longer `--allow-dirty` on a real publish.
 - UBL 2.1 codec is a tree walk (`roxmltree`): Invoice and CreditNote roots,
   no first-tag-wins, no invented EUR/XX/S. DTD refused. Writer emits IssueDate,
   type code, EndpointID, TaxSubtotal, LegalMonetaryTotal children, quantity/price.

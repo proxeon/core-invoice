@@ -173,6 +173,7 @@ pub fn read(xml: &str) -> Result<Invoice, FormatError> {
     let mut invoice = Invoice::blank(profile, number, currency, seller, buyer);
     invoice.kind = kind;
     invoice.specification_id = customization;
+    invoice.business_process = child_text(root, "ProfileID");
     invoice.issue_date = child_text(root, "IssueDate").and_then(|s| Date::parse(&s).ok());
     let type_tag = if kind == DocumentKind::CreditNote {
         "CreditNoteTypeCode"
@@ -202,8 +203,12 @@ pub fn read(xml: &str) -> Result<Invoice, FormatError> {
             .collect();
     }
     if let Some(lmt) = child(root, "LegalMonetaryTotal") {
-        invoice.totals = Some(read_totals(lmt));
-        invoice.payable = child_amount(lmt, "PayableAmount").unwrap_or(Amount::ZERO);
+        let mut totals = read_totals(lmt);
+        if totals.tax_total.is_none() && !invoice.tax_total.is_zero() {
+            totals.tax_total = Some(invoice.tax_total);
+        }
+        invoice.payable = totals.payable;
+        invoice.totals = Some(totals);
     }
     let line_tag = if kind == DocumentKind::CreditNote {
         "CreditNoteLine"
