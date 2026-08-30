@@ -38,7 +38,7 @@ pub use payment::{CreditTransfer, DirectDebit, PaymentCard, PaymentMeans};
 pub use profile::{Edition, Profile, ProfileLookup};
 pub use report::{Finding, Report, Severity, Source};
 pub use rules::{catalogue, explain};
-pub use tax::{TaxCategory, TaxSystem};
+pub use tax::{TaxCategory, TaxSystem, pint_my_category, wire_scheme};
 pub use validate::validate;
 
 #[cfg(test)]
@@ -53,11 +53,16 @@ mod tests {
             "MYR",
             {
                 let mut p = Party::new("Kedai", "MY");
-                p.tax_id = Some("C12345678901".into());
-                p.id_scheme = Some("TIN".into());
+                p.tax_registration = Some(Identifier::new("C12345678901"));
+                p.legal_registration = Some(Identifier::new("2023010000001"));
+                p.electronic_address = Some(Identifier::schemed("C12345678901", "0230"));
                 p
             },
-            Party::new("Pembeli", "MY"),
+            {
+                let mut b = Party::new("Pembeli", "MY");
+                b.legal_registration = Some(Identifier::new("1999010000001"));
+                b
+            },
         );
         inv.lines = vec![Line::new(
             "1",

@@ -1,6 +1,6 @@
 //! On-disk and in-crate sample invoices.
 
-use core_invoice::{Amount, Invoice, Line, Party, Profile, TaxCategory};
+use core_invoice::{Amount, Identifier, Invoice, Line, Party, Profile, TaxCategory};
 use rust_decimal::Decimal;
 
 pub fn pint_my_sst() -> Invoice {
@@ -10,11 +10,16 @@ pub fn pint_my_sst() -> Invoice {
         "MYR",
         {
             let mut p = Party::new("Kedai Contoh Sdn Bhd", "MY");
-            p.tax_id = Some("C12345678901".into());
-            p.id_scheme = Some("TIN".into());
+            p.tax_registration = Some(Identifier::new("C12345678901"));
+            p.legal_registration = Some(Identifier::new("2023010000001"));
+            p.electronic_address = Some(Identifier::schemed("C12345678901", "0230"));
             p
         },
-        Party::new("Pembeli Sdn Bhd", "MY"),
+        {
+            let mut b = Party::new("Pembeli Sdn Bhd", "MY");
+            b.legal_registration = Some(Identifier::new("1999010000001"));
+            b
+        },
     );
     inv.lines = vec![Line::new(
         "1",

@@ -132,30 +132,42 @@ fn pint_tax(invoice: &Invoice, report: &mut Report) {
     }
 }
 
-fn pint_my_id(invoice: &Invoice, report: &mut Report) {
+fn ibr_my(invoice: &Invoice, report: &mut Report) {
     if invoice.profile != crate::profile::Profile::PintMy {
         return;
     }
-    let path = Path::term(BtId(32));
-    match invoice.seller.id_scheme.as_deref() {
-        Some("TIN") | Some("BRN") | Some("NRIC") | Some("PASSPORT") => {}
-        Some(other) => report.push(Finding {
-            id: "PINT-MY-ID",
-            severity: Severity::Fatal,
-            path,
-            message: format!("Seller id scheme {other} is not a PINT-MY identification type"),
-            detail: None,
-            hint: Some("Replaced by IBR-02/03/04-MY once party identifiers are split.".into()),
-        }),
-        None if invoice.seller.tax_id.is_some() => report.push(Finding {
-            id: "PINT-MY-ID",
-            severity: Severity::Fatal,
-            path,
-            message: "Seller tax id on PINT-MY requires a scheme (TIN, BRN, NRIC, PASSPORT)".into(),
-            detail: None,
-            hint: Some("Replaced by IBR-02/03/04-MY once party identifiers are split.".into()),
-        }),
-        None => {}
+    if invoice.seller.legal_registration.is_none() {
+        report.push(Finding::fatal(
+            "IBR-02-MY",
+            Path::term(BtId(30)),
+            "Seller legal registration identifier (BRN) shall be present",
+        ));
+    }
+    if invoice.buyer.legal_registration.is_none() {
+        report.push(Finding::fatal(
+            "IBR-03-MY",
+            Path::term(BtId(47)),
+            "Buyer legal registration identifier (BRN) shall be present",
+        ));
+    }
+    if invoice.seller.tax_registration.is_none() {
+        report.push(Finding::fatal(
+            "IBR-04-MY",
+            Path::term(BtId(32)),
+            "Seller TIN (tax registration) shall be present",
+        ));
+    }
+    for (i, line) in invoice.lines.iter().enumerate() {
+        if !crate::tax::pint_my_category(&line.tax.code) {
+            report.push(Finding::fatal(
+                "ALIGNED-IBRP-CL-01-MY",
+                Path::at_term(Group::Line, i, BtId(151)),
+                format!(
+                    "Tax category {} is not a PINT-MY code (SA SE HVG LVG TTX E O)",
+                    line.tax.code
+                ),
+            ));
+        }
     }
 }
 
@@ -233,11 +245,32 @@ pub static ALL: &[Rule] = &[
         eval: pint_tax,
     },
     Rule {
-        id: "PINT-MY-ID",
+        id: "IBR-02-MY",
         severity: Severity::Fatal,
-        text: "PINT-MY seller identification scheme must be TIN, BRN, NRIC or PASSPORT. Replaced by IBR-02/03/04-MY once party identifiers are split.",
+        text: "Seller legal registration identifier (BRN / IBT-030) shall be present.",
         source: Source::Crate,
-        eval: pint_my_id,
+        eval: ibr_my,
+    },
+    Rule {
+        id: "IBR-03-MY",
+        severity: Severity::Fatal,
+        text: "Buyer legal registration identifier (BRN / IBT-047) shall be present.",
+        source: Source::Crate,
+        eval: |_i, _r| {},
+    },
+    Rule {
+        id: "IBR-04-MY",
+        severity: Severity::Fatal,
+        text: "Seller TIN (IBT-032) shall be present.",
+        source: Source::Crate,
+        eval: |_i, _r| {},
+    },
+    Rule {
+        id: "ALIGNED-IBRP-CL-01-MY",
+        severity: Severity::Fatal,
+        text: "Malaysian invoice tax categories shall be SA, SE, HVG, LVG, TTX, E or O.",
+        source: Source::Crate,
+        eval: |_i, _r| {},
     },
 ];
 

@@ -61,3 +61,25 @@ impl TaxCategory {
         }
     }
 }
+
+/// TaxScheme/cbc:ID on the wire. Never `SST` for PINT-MY.
+pub fn wire_scheme(
+    profile: crate::profile::Profile,
+    system: TaxSystem,
+    category: &str,
+) -> &'static str {
+    use crate::profile::Profile;
+    match profile {
+        Profile::En16931 | Profile::PeppolBis3 => "VAT",
+        Profile::PintMy if category.eq_ignore_ascii_case("TTX") => "AAL",
+        Profile::PintMy => "VAT",
+        Profile::Pint => match system {
+            TaxSystem::Gst => "GST",
+            _ => "VAT",
+        },
+    }
+}
+
+pub fn pint_my_category(code: &str) -> bool {
+    matches!(code, "SA" | "SE" | "HVG" | "LVG" | "TTX" | "E" | "O")
+}
