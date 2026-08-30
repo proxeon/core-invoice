@@ -181,7 +181,9 @@ fn br_cl_16(inv: &Invoice, report: &mut Report) {
     let Some(code) = pay.means_code.as_ref() else {
         return;
     };
-    if !UNCL_4461.contains(&code.as_str()) {
+    let ok = UNCL_4461.contains(&code.as_str())
+        || (inv.profile == Profile::PintMy && pint_my_payment(code.as_str()));
+    if !ok {
         report.push(Finding::fatal(
             "BR-CL-16",
             Path::group_term(Group::Payment, BtId(81)),
@@ -191,6 +193,11 @@ fn br_cl_16(inv: &Invoice, report: &mut Report) {
             ),
         ));
     }
+}
+
+/// Z01/Z03–Z08 are PINT-MY extras on BT-81, not UNCL 4461 membership for EN/Peppol.
+fn pint_my_payment(code: &str) -> bool {
+    matches!(code, "Z01" | "Z03" | "Z04" | "Z05" | "Z06" | "Z07" | "Z08")
 }
 
 fn vat_profile(inv: &Invoice) -> bool {

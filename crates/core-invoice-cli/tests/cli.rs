@@ -55,6 +55,26 @@ fn unreadable_xml_is_2() {
 }
 
 #[test]
+fn validate_json_ok_is_0() {
+    let path = write_tmp("ok-json", &peppol_xml());
+    let out = bin()
+        .args([
+            "validate",
+            "--format",
+            "json",
+            "--profile",
+            "peppol",
+            path.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(0));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("\"ok\":true"), "{stdout}");
+    assert!(stdout.contains("\"profile\":\"peppol\""));
+}
+
+#[test]
 fn valid_peppol_is_0() {
     let path = write_tmp("ok", &peppol_xml());
     let out = bin()

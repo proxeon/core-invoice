@@ -1,6 +1,22 @@
 //! On-disk and in-crate sample invoices.
 
-use core_invoice::{Amount, Identifier, Invoice, Line, Party, Profile, TaxCategory, reconcile};
+use core_invoice::{
+    Amount, Code, Identifier, Invoice, Line, Party, Price, Profile, Quantity, TaxCategory,
+    UnitPriceAmount, reconcile,
+};
+
+fn priced(mut line: Line, price: &str) -> Line {
+    line.quantity = Some(Quantity::parse("1").unwrap());
+    line.unit = Some(Code::new("C62"));
+    line.price = Some(Price {
+        net: UnitPriceAmount::parse(price).unwrap(),
+        discount: None,
+        gross: None,
+        base_qty: None,
+        base_unit: None,
+    });
+    line
+}
 use rust_decimal::Decimal;
 
 pub fn pint_my_sst() -> Invoice {
@@ -21,11 +37,14 @@ pub fn pint_my_sst() -> Invoice {
             b
         },
     );
-    inv.lines = vec![Line::new(
-        "1",
-        "Widget",
-        Amount::parse("100.00").unwrap(),
-        TaxCategory::sst("SA", Decimal::from(10)),
+    inv.lines = vec![priced(
+        Line::new(
+            "1",
+            "Widget",
+            Amount::parse("100.00").unwrap(),
+            TaxCategory::sst("SA", Decimal::from(10)),
+        ),
+        "100.00",
     )];
     inv.issue_date = core_invoice::Date::parse("2026-01-15").ok();
     inv.type_code = Some(core_invoice::Code::new("380"));
@@ -45,11 +64,14 @@ pub fn pint_gst_sr() -> Invoice {
         },
         Party::new("Buyer Pte Ltd", "SG"),
     );
-    inv.lines = vec![Line::new(
-        "1",
-        "Service",
-        Amount::parse("100.00").unwrap(),
-        TaxCategory::gst("SR", Decimal::from(9)),
+    inv.lines = vec![priced(
+        Line::new(
+            "1",
+            "Service",
+            Amount::parse("100.00").unwrap(),
+            TaxCategory::gst("SR", Decimal::from(9)),
+        ),
+        "100.00",
     )];
     inv.issue_date = core_invoice::Date::parse("2026-01-15").ok();
     inv.type_code = Some(core_invoice::Code::new("380"));
@@ -75,11 +97,14 @@ pub fn peppol_vat() -> Invoice {
             b
         },
     );
-    inv.lines = vec![Line::new(
-        "1",
-        "Service",
-        Amount::parse("100.00").unwrap(),
-        TaxCategory::vat("S", Decimal::from(19)),
+    inv.lines = vec![priced(
+        Line::new(
+            "1",
+            "Service",
+            Amount::parse("100.00").unwrap(),
+            TaxCategory::vat("S", Decimal::from(19)),
+        ),
+        "100.00",
     )];
     inv.issue_date = core_invoice::Date::parse("2026-01-15").ok();
     inv.type_code = Some(core_invoice::Code::new("380"));
@@ -133,6 +158,65 @@ mod tests {
     #[test]
     fn peppol_vat_is_valid() {
         assert!(validate(&peppol_vat()).ok());
+    }
+
+    #[test]
+    fn z03_is_allowed_on_pint_my_not_peppol() {
+        let mut my = pint_my_sst();
+        my.payment = Some(core_invoice::PaymentInstructions {
+            means_code: Some(core_invoice::Code::new("Z03")),
+            means_text: None,
+            remittance: None,
+            means: None,
+        });
+        let report = validate(&my);
+        assert!(
+            report.findings.iter().all(|f| f.id != "BR-CL-16"),
+            "{report}"
+        );
+        let mut pep = peppol_vat();
+        pep.payment = Some(core_invoice::PaymentInstructions {
+            means_code: Some(core_invoice::Code::new("Z03")),
+            means_text: None,
+            remittance: None,
+            means: None,
+        });
+        let report = validate(&pep);
+        assert!(
+            report.findings.iter().any(|f| f.id == "BR-CL-16"),
+            "{report}"
+        );
+    }
+
+    #[test]
+    fn official_pint_my_sa_when_refers_present() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(
+            "../../refers/pint-my-1.3.0/unpacked/trn-invoice/example/Invoice-Sample-SA_1.3.0.xml",
+        );
+        if !path.exists() {
+            if std::env::var("CORE_INVOICE_REQUIRE_SPEC").ok().as_deref() == Some("1") {
+                panic!("missing {}", path.display());
+            }
+            return;
+        }
+        let xml = std::fs::read_to_string(&path).unwrap();
+        let inv = core_invoice_formats::read(&xml).unwrap();
+        assert_eq!(inv.profile, Profile::PintMy);
+        let report = validate(&inv);
+        if !report.ok() {
+            for f in &report.findings {
+                assert!(
+                    f.id != "FormatError",
+                    "parse-shaped failure on official SA: {report}"
+                );
+            }
+        }
+        let as_peppol = {
+            let mut i = inv;
+            i.profile = Profile::PeppolBis3;
+            i
+        };
+        assert!(!validate(&as_peppol).ok());
     }
 
     #[test]

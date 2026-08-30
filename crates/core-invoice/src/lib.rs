@@ -57,6 +57,7 @@ pub use validate::validate;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::invoice::Price;
     use rust_decimal::Decimal;
 
     fn sst_invoice(profile: Profile) -> Invoice {
@@ -77,12 +78,24 @@ mod tests {
                 b
             },
         );
-        inv.lines = vec![Line::new(
-            "1",
-            "Goods",
-            Amount::parse("100.00").unwrap(),
-            TaxCategory::sst("SA", Decimal::from(10)),
-        )];
+        inv.lines = vec![{
+            let mut line = Line::new(
+                "1",
+                "Goods",
+                Amount::parse("100.00").unwrap(),
+                TaxCategory::sst("SA", Decimal::from(10)),
+            );
+            line.quantity = Some(Quantity::parse("1").unwrap());
+            line.unit = Some(Code::new("C62"));
+            line.price = Some(Price {
+                net: UnitPriceAmount::parse("100.00").unwrap(),
+                discount: None,
+                gross: None,
+                base_qty: None,
+                base_unit: None,
+            });
+            line
+        }];
         inv.issue_date = Date::parse("2026-01-15").ok();
         inv.type_code = Some(Code::new("380"));
         let _ = reconcile(&mut inv);
@@ -127,12 +140,24 @@ mod tests {
         );
         inv.issue_date = Date::parse("2026-01-15").ok();
         inv.type_code = Some(Code::new("380"));
-        inv.lines = vec![Line::new(
-            "1",
-            "A",
-            Amount::parse("100.00").unwrap(),
-            TaxCategory::vat("S", Decimal::from(19)),
-        )];
+        inv.lines = vec![{
+            let mut line = Line::new(
+                "1",
+                "A",
+                Amount::parse("100.00").unwrap(),
+                TaxCategory::vat("S", Decimal::from(19)),
+            );
+            line.quantity = Some(Quantity::parse("1").unwrap());
+            line.unit = Some(Code::new("C62"));
+            line.price = Some(Price {
+                net: UnitPriceAmount::parse("100.00").unwrap(),
+                discount: None,
+                gross: None,
+                base_qty: None,
+                base_unit: None,
+            });
+            line
+        }];
         let report = validate(&inv);
         assert!(
             report.findings.iter().any(|f| f.id == "BR-CO-18"),

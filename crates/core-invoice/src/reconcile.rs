@@ -459,14 +459,29 @@ pub(crate) fn counts_toward_tax_total(profile: Profile, row: &TaxBreakdown) -> b
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::code::Code;
     use crate::date::Date;
     use crate::invoice::{Invoice, Line, Party};
     use crate::kind::DocumentKind;
+    use crate::numeric::Quantity;
     use crate::tax::TaxCategory;
     use crate::validate;
 
     fn amt(s: &str) -> InvoiceAmount {
         InvoiceAmount::parse(s).unwrap()
+    }
+
+    fn with_price(mut line: Line, price: &str) -> Line {
+        line.quantity = Some(Quantity::parse("1").unwrap());
+        line.unit = Some(Code::new("C62"));
+        line.price = Some(crate::invoice::Price {
+            net: crate::amount::UnitPriceAmount::parse(price).unwrap(),
+            discount: None,
+            gross: None,
+            base_qty: None,
+            base_unit: None,
+        });
+        line
     }
 
     fn en_blank() -> Invoice {
@@ -490,17 +505,23 @@ mod tests {
     fn two_standard_rates_are_two_breakdown_rows() {
         let mut inv = en_blank();
         inv.lines = vec![
-            Line::new(
-                "1",
-                "A",
-                amt("100.00"),
-                TaxCategory::vat("S", Decimal::from(19)),
+            with_price(
+                Line::new(
+                    "1",
+                    "A",
+                    amt("100.00"),
+                    TaxCategory::vat("S", Decimal::from(19)),
+                ),
+                "100.00",
             ),
-            Line::new(
-                "2",
-                "B",
-                amt("50.00"),
-                TaxCategory::vat("S", Decimal::from(7)),
+            with_price(
+                Line::new(
+                    "2",
+                    "B",
+                    amt("50.00"),
+                    TaxCategory::vat("S", Decimal::from(7)),
+                ),
+                "50.00",
             ),
         ];
         reconcile(&mut inv).unwrap();
@@ -533,11 +554,14 @@ mod tests {
     #[test]
     fn prepaid_may_make_payable_negative() {
         let mut inv = en_blank();
-        inv.lines = vec![Line::new(
-            "1",
-            "A",
-            amt("125.00"),
-            TaxCategory::vat("S", Decimal::from(10)),
+        inv.lines = vec![with_price(
+            Line::new(
+                "1",
+                "A",
+                amt("125.00"),
+                TaxCategory::vat("S", Decimal::from(10)),
+            ),
+            "125.00",
         )];
         Reconciler::new()
             .paid(amt("250.00"))
@@ -553,11 +577,14 @@ mod tests {
     #[test]
     fn stuffed_payable_fails_real_br_co_16() {
         let mut inv = en_blank();
-        inv.lines = vec![Line::new(
-            "1",
-            "A",
-            amt("125.00"),
-            TaxCategory::vat("S", Decimal::from(10)),
+        inv.lines = vec![with_price(
+            Line::new(
+                "1",
+                "A",
+                amt("125.00"),
+                TaxCategory::vat("S", Decimal::from(10)),
+            ),
+            "125.00",
         )];
         Reconciler::new()
             .paid(amt("250.00"))
@@ -607,18 +634,42 @@ mod tests {
         inv.issue_date = Date::parse("2026-01-15").ok();
         inv.type_code = Some(Code::new("380"));
         inv.lines = vec![
-            Line::new(
-                "1",
-                "Taxed",
-                amt("100.00"),
-                TaxCategory::sst("SA", Decimal::from(10)),
-            ),
-            Line::new(
-                "2",
-                "Exempt",
-                amt("40.00"),
-                TaxCategory::sst("SE", Decimal::from(8)),
-            ),
+            {
+                let mut l = Line::new(
+                    "1",
+                    "Taxed",
+                    amt("100.00"),
+                    TaxCategory::sst("SA", Decimal::from(10)),
+                );
+                l.quantity = Some(Quantity::parse("1").unwrap());
+                l.unit = Some(Code::new("C62"));
+                l.price = Some(crate::invoice::Price {
+                    net: crate::amount::UnitPriceAmount::parse("100.00").unwrap(),
+                    discount: None,
+                    gross: None,
+                    base_qty: None,
+                    base_unit: None,
+                });
+                l
+            },
+            {
+                let mut l = Line::new(
+                    "2",
+                    "Exempt",
+                    amt("40.00"),
+                    TaxCategory::sst("SE", Decimal::from(8)),
+                );
+                l.quantity = Some(Quantity::parse("1").unwrap());
+                l.unit = Some(Code::new("C62"));
+                l.price = Some(crate::invoice::Price {
+                    net: crate::amount::UnitPriceAmount::parse("40.00").unwrap(),
+                    discount: None,
+                    gross: None,
+                    base_qty: None,
+                    base_unit: None,
+                });
+                l
+            },
         ];
         reconcile(&mut inv).unwrap();
         assert_eq!(inv.tax_breakdown.len(), 2);
@@ -638,11 +689,9 @@ mod tests {
     #[test]
     fn o_is_exclusive_one_group() {
         let mut inv = en_blank();
-        inv.lines = vec![Line::new(
-            "1",
-            "Out",
-            amt("10.00"),
-            TaxCategory::out_of_scope(),
+        inv.lines = vec![with_price(
+            Line::new("1", "Out", amt("10.00"), TaxCategory::out_of_scope()),
+            "10.00",
         )];
         reconcile(&mut inv).unwrap();
         assert_eq!(inv.tax_breakdown.len(), 1);

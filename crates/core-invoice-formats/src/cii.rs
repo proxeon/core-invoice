@@ -172,8 +172,25 @@ fn write_line(s: &mut String, line: &Line, invoice: &Invoice) {
     s.push_str("      <ram:SpecifiedTradeProduct>\n");
     leaf_ram(s, 4, "Name", &line.name, None);
     s.push_str("      </ram:SpecifiedTradeProduct>\n");
-    s.push_str("      <ram:SpecifiedLineTradeAgreement/>\n");
-    s.push_str("      <ram:SpecifiedLineTradeDelivery/>\n");
+    s.push_str("      <ram:SpecifiedLineTradeAgreement>\n");
+    if let Some(price) = line.price.as_ref() {
+        s.push_str("        <ram:NetPriceProductTradePrice>\n");
+        leaf_ram(
+            s,
+            5,
+            "ChargeAmount",
+            &price.net.to_string(),
+            Some(("currencyID", invoice.currency.as_str())),
+        );
+        s.push_str("        </ram:NetPriceProductTradePrice>\n");
+    }
+    s.push_str("      </ram:SpecifiedLineTradeAgreement>\n");
+    s.push_str("      <ram:SpecifiedLineTradeDelivery>\n");
+    if let Some(q) = line.quantity {
+        let unit = line.unit.as_ref().map(|c| ("unitCode", c.as_str()));
+        leaf_ram(s, 5, "BilledQuantity", &q.to_string(), unit);
+    }
+    s.push_str("      </ram:SpecifiedLineTradeDelivery>\n");
     s.push_str("      <ram:SpecifiedLineTradeSettlement>\n");
     s.push_str("        <ram:ApplicableTradeTax>\n");
     leaf_ram(

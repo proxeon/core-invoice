@@ -26,6 +26,8 @@ enum Command {
         /// `auto` reads BT-24 (CustomizationID). A named profile forces that rule set.
         #[arg(short, long, value_enum, default_value = "auto")]
         profile: ProfileArg,
+        #[arg(long, value_enum, default_value = "text")]
+        format: RulesFormat,
     },
     /// Convert through the semantic model (UBL; CII subset for EN/Peppol, not PINT-MY)
     Convert {
@@ -35,6 +37,9 @@ enum Command {
         /// `auto` reads BT-24 (CustomizationID). A named profile forces that rule set.
         #[arg(short, long, value_enum, default_value = "auto")]
         profile: ProfileArg,
+        /// Write XML to this path; stdout stays empty on success.
+        #[arg(short, long)]
+        output: Option<PathBuf>,
     },
     /// Semantic diff of two documents (exit 1 if they differ)
     Diff { left: PathBuf, right: PathBuf },
@@ -103,6 +108,38 @@ fn main() -> ExitCode {
     }
 }
 
+fn report_json(report: &core_invoice::Report) -> String {
+    let mut findings = String::new();
+    for (i, f) in report.findings.iter().enumerate() {
+        if i > 0 {
+            findings.push(',');
+        }
+        let msg = f
+            .message
+            .replace('\\', "\\\\")
+            .replace('"', "\\\"")
+            .replace('\n', "\\n");
+        findings.push_str(&format!(
+            r#"{{"id":"{}","severity":"{:?}","path":"{}","message":"{msg}"}}"#,
+            f.id, f.severity, f.path
+        ));
+    }
+    format!(
+        r#"{{"ok":{},"profile":"{}","findings":[{findings}]}}"#,
+        if report.ok() { "true" } else { "false" },
+        report.profile_slug
+    )
+}
+
+fn write_stdout(s: &str) -> Result<(), String> {
+    use std::io::{self, Write};
+    match io::stdout().write_all(s.as_bytes()) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == io::ErrorKind::BrokenPipe => Ok(()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
 fn read_xml(path: &PathBuf) -> Result<String, String> {
     // Hostile or mistaken multi-GB “invoice” is size, not a valid document.
     if let Ok(meta) = fs::metadata(path)
@@ -119,25 +156,48 @@ fn read_xml(path: &PathBuf) -> Result<String, String> {
 fn run() -> Result<ExitCode, String> {
     let cli = Cli::parse();
     match cli.command {
-        Command::Validate { path, profile } => {
+        Command::Validate {
+            path,
+            profile,
+            format,
+        } => {
             let xml = read_xml(&path)?;
             let report = match validate_xml(&xml, profile.forced()) {
                 Ok(report) => report,
                 Err(e) => return Err(e.to_string()),
             };
+            match format {
+                RulesFormat::Json => {
+                    println!("{}", report_json(&report));
+                }
+                RulesFormat::Text => {
+                    if report.ok() {
+                        println!("valid ({})", report.profile_slug);
+                    } else {
+                        print!("{report}");
+                    }
+                }
+            }
             if report.ok() {
-                println!("valid ({})", report.profile_slug);
                 Ok(ExitCode::SUCCESS)
             } else {
-                print!("{report}");
                 Ok(ExitCode::from(1))
             }
         }
-        Command::Convert { path, to, profile } => {
+        Command::Convert {
+            path,
+            to,
+            profile,
+            output,
+        } => {
             let xml = read_xml(&path)?;
             match convert_with_profile(&xml, to.into(), profile.forced()) {
                 Ok(out) => {
-                    print!("{out}");
+                    if let Some(dest) = output {
+                        fs::write(&dest, &out).map_err(|e| format!("{dest:?}: {e}"))?;
+                    } else if let Err(e) = write_stdout(&out) {
+                        return Err(e);
+                    }
                     Ok(ExitCode::SUCCESS)
                 }
                 Err(FormatError::Semantic(SemanticReject(report))) => {

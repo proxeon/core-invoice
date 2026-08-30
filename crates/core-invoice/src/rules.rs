@@ -132,6 +132,62 @@ fn br_04(invoice: &Invoice, report: &mut Report) {
     }
 }
 
+fn br_08(invoice: &Invoice, report: &mut Report) {
+    if invoice.seller.address.is_none() {
+        report.push(Finding::fatal(
+            "BR-08",
+            Path::group(Group::Seller),
+            "The Seller shall have a Seller postal address (BG-5)",
+        ));
+    }
+}
+
+fn br_10(invoice: &Invoice, report: &mut Report) {
+    if invoice.buyer.address.is_none() {
+        report.push(Finding::fatal(
+            "BR-10",
+            Path::group(Group::Buyer),
+            "The Buyer shall have a Buyer postal address (BG-8)",
+        ));
+    }
+}
+
+fn br_22(invoice: &Invoice, report: &mut Report) {
+    for (i, line) in invoice.lines.iter().enumerate() {
+        if line.quantity.is_none() {
+            report.push(Finding::fatal(
+                "BR-22",
+                Path::at_term(Group::Line, i, BtId(129)),
+                "Each Invoice line shall have an Invoiced quantity (BT-129)",
+            ));
+        }
+    }
+}
+
+fn br_26(invoice: &Invoice, report: &mut Report) {
+    for (i, line) in invoice.lines.iter().enumerate() {
+        if line.quantity.is_some() && line.unit.is_none() {
+            report.push(Finding::fatal(
+                "BR-26",
+                Path::at_term(Group::Line, i, BtId(130)),
+                "Invoiced quantity unit of measure (BT-130) shall be present when BT-129 is present",
+            ));
+        }
+    }
+}
+
+fn br_27(invoice: &Invoice, report: &mut Report) {
+    for (i, line) in invoice.lines.iter().enumerate() {
+        if line.price.is_none() {
+            report.push(Finding::fatal(
+                "BR-27",
+                Path::at_term(Group::Line, i, BtId(146)),
+                "Each Invoice line shall have an Item net price (BT-146)",
+            ));
+        }
+    }
+}
+
 fn br_09(invoice: &Invoice, report: &mut Report) {
     if invoice.seller.country().trim().is_empty() {
         report.push(Finding::fatal(
@@ -632,11 +688,25 @@ pub static ALL: &[Rule] = &[
         eval: br_04,
     },
     Rule {
+        id: "BR-08",
+        severity: Severity::Fatal,
+        text: "The Seller shall have a Seller postal address (BG-5).",
+        source: Source::Both,
+        eval: br_08,
+    },
+    Rule {
         id: "BR-09",
         severity: Severity::Fatal,
         text: "The Seller postal address shall contain a Seller country code (BT-40).",
         source: Source::Both,
         eval: br_09,
+    },
+    Rule {
+        id: "BR-10",
+        severity: Severity::Fatal,
+        text: "The Buyer shall have a Buyer postal address (BG-8).",
+        source: Source::Both,
+        eval: br_10,
     },
     Rule {
         id: "BR-11",
@@ -658,6 +728,34 @@ pub static ALL: &[Rule] = &[
         text: "Each Invoice line shall have an Item name (BT-153).",
         source: Source::Both,
         eval: br_25,
+    },
+    Rule {
+        id: "BR-22",
+        severity: Severity::Fatal,
+        text: "Each Invoice line shall have an Invoiced quantity (BT-129).",
+        source: Source::Both,
+        eval: br_22,
+    },
+    Rule {
+        id: "BR-26",
+        severity: Severity::Fatal,
+        text: "Invoiced quantity unit of measure (BT-130) shall be present when quantity is present.",
+        source: Source::Both,
+        eval: br_26,
+    },
+    Rule {
+        id: "BR-27",
+        severity: Severity::Fatal,
+        text: "Each Invoice line shall have an Item net price (BT-146).",
+        source: Source::Both,
+        eval: br_27,
+    },
+    Rule {
+        id: "BR-DEC-12",
+        severity: Severity::Fatal,
+        text: "Invoice amount type has at most two fraction digits (enforced by InvoiceAmount).",
+        source: Source::Both,
+        eval: |_i, _r| {},
     },
     Rule {
         id: "BR-05",
