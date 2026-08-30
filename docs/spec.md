@@ -23,7 +23,7 @@ The hupe1980 crate at `/Users/akmalfirdaus/Code/lazuar/en16931` is a **shape** r
 
 Do not copy CEN example XML into `crates/core-invoice-fixtures/data/`. Synthetic samples we author may be MIT OR Apache-2.0. Never `git add refers/*.zip` or the clones.
 
-Optional CI job `artefacts` (`CORE_INVOICE_REQUIRE_SPEC=1`) fetches `refers/` then runs official-sample tests. Default CI skips when artefacts are absent.
+Optional CI job `artefacts` (`CORE_INVOICE_REQUIRE_SPEC=1`) fetches `refers/` then runs official-sample tests. Default PR/`check` skips when artefacts are absent. **Tag skip is not OK:** pushes of `v*` tags run `artefacts`.
 
 SVRL oracle: `task svrl` (Saxon / `SAXON_JAR`). Mapping: [`svrl-id-map.md`](svrl-id-map.md). Not the default `task test`. Mustang (`MUSTANG_JAR`) is VAT CII only and never default CI.
 
