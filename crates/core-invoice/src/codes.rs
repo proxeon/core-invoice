@@ -1,8 +1,9 @@
-//! Code lists. Hand-curated **subsets**; labelled incomplete vs full artefacts.
+//! Code lists generated from `refers/` genericode (code points only; EUPL XML stays out of git).
 //!
-//! CEN XML is EUPL — not in git. Generate from `spec/` after `task spec`.
+//! `task lists` / `python3 xtask/gen_codes.py` refreshes [`generated_codes`].
 
 use crate::bt::{BtId, Group, Path};
+use crate::generated_codes as lists;
 use crate::invoice::Invoice;
 use crate::kind::DocumentKind;
 use crate::profile::Profile;
@@ -14,85 +15,46 @@ use crate::tax::TaxSystem;
 pub const ARTEFACT_VERSION: &str = "validation-1.3.16";
 pub const PEPPOL_BIS_VERSION: &str = "v3.0.20";
 pub const PINT_MY_VERSION: &str = "1.3.0";
+/// ConnectingEurope/eInvoicing-EN16931 release tag commit (docs/spec.md).
+pub const EN16931_GIT: &str = "b6c9e06";
+pub const PINT_VERSION: &str = "1.1.2";
 
-/// ISO 4217 alphabetic codes we accept. Subset; `XXX` is in ISO 4217.
-/// UNCOVERED: remaining ISO 4217 entries vs full table.
-const CURRENCIES: &[&str] = &[
-    "AED", "AUD", "BDT", "BHD", "BND", "BRL", "CAD", "CHF", "CNY", "CZK", "DKK", "EGP", "EUR",
-    "GBP", "HKD", "HUF", "IDR", "INR", "JPY", "KES", "KRW", "KWD", "LKR", "MXN", "MYR", "NOK",
-    "NZD", "OMR", "PHP", "PKR", "PLN", "QAR", "RON", "RUB", "SAR", "SEK", "SGD", "THB", "TRY",
-    "TWD", "USD", "VND", "ZAR", "XXX",
-];
-
-/// ISO 3166-1 alpha-2 subset. UNCOVERED vs full table.
-const COUNTRIES: &[&str] = &[
-    "AT", "AU", "BE", "BG", "BN", "BR", "CA", "CH", "CN", "CY", "CZ", "DE", "DK", "EE", "EG", "ES",
-    "FI", "FR", "GB", "GR", "HK", "HR", "HU", "ID", "IE", "IN", "IT", "JP", "KR", "LT", "LU", "LV",
-    "MT", "MX", "MY", "NL", "NO", "NZ", "PH", "PL", "PT", "RO", "SA", "SE", "SG", "SI", "SK", "TH",
-    "TR", "US", "VN", "ZA",
-];
-
-/// UNTDID 1001 invoice-related subset (not credit-note).
-const INVOICE_TYPE_CODES: &[&str] = &[
-    "80", "82", "84", "130", "202", "218", "219", "325", "326", "331", "380", "382", "383", "384",
-    "385", "386", "387", "388", "389", "390", "393", "394", "395", "456", "457", "458", "527",
-    "870", "875", "876", "877", "935",
-];
-
-/// UNTDID 1001 credit-note-related subset. Overlaps invoice only at `81`-family
-/// codes such as `81` itself — `381` is credit-note only.
-const CREDIT_NOTE_TYPE_CODES: &[&str] = &[
-    "81", "83", "261", "262", "296", "308", "381", "396", "420", "458", "527", "532",
-];
-
-/// UNCL 5305 VAT categories. Not PINT-MY TaxCat.
-const UNCL_5305: &[&str] = &["S", "Z", "E", "AE", "K", "G", "O", "L", "M", "B"];
-
-/// UNCL 4461 payment means subset. MY Z0x are profile extras, not this list.
-const UNCL_4461: &[&str] = &[
-    "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "30", "31", "42", "48", "49", "57", "58",
-    "59", "68",
-];
-
-const UNITS: &[&str] = &[
-    "C62", "H87", "KGM", "LTR", "MTR", "MTK", "MTQ", "HUR", "DAY", "MON", "TNE",
-];
-const MIME: &[&str] = &[
-    "application/pdf",
-    "image/png",
-    "image/jpeg",
-    "text/csv",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "application/vnd.oasis.opendocument.spreadsheet",
-];
-const EAS: &[&str] = &[
-    "0002", "0088", "0096", "0190", "0192", "0204", "0230", "9944", "9952",
-];
-const VATEX: &[&str] = &[
-    "VATEX-EU-AE",
-    "VATEX-EU-D",
-    "VATEX-EU-F",
-    "VATEX-EU-G",
-    "VATEX-EU-I",
-    "VATEX-EU-IC",
-    "VATEX-EU-O",
-    "VATEX-EU-J",
-];
+fn listed(list: &[&str], code: &str) -> bool {
+    list.iter().any(|c| c.eq_ignore_ascii_case(code))
+}
 
 pub fn currency(code: &str) -> bool {
-    CURRENCIES.iter().any(|c| c.eq_ignore_ascii_case(code))
+    listed(lists::ISO_4217, code)
 }
 pub fn country(code: &str) -> bool {
-    COUNTRIES.iter().any(|c| c.eq_ignore_ascii_case(code))
+    listed(lists::ISO_3166, code)
 }
 pub fn uncl_5305(code: &str) -> bool {
-    UNCL_5305.iter().any(|c| c.eq_ignore_ascii_case(code))
+    listed(lists::UNCL_5305, code)
 }
 pub fn invoice_type(code: &str) -> bool {
-    INVOICE_TYPE_CODES.contains(&code)
+    lists::UNCL_1001_INVOICE.contains(&code)
 }
 pub fn credit_note_type(code: &str) -> bool {
-    CREDIT_NOTE_TYPE_CODES.contains(&code)
+    lists::UNCL_1001_CREDIT_NOTE.contains(&code)
+}
+pub fn eas(code: &str) -> bool {
+    lists::EAS.contains(&code)
+}
+pub fn vatex(code: &str) -> bool {
+    listed(lists::VATEX, code)
+}
+pub fn unit(code: &str) -> bool {
+    lists::REC20.contains(&code)
+}
+pub fn mime(code: &str) -> bool {
+    lists::MIME.contains(&code)
+}
+pub fn icd(code: &str) -> bool {
+    lists::ICD.contains(&code)
+}
+pub fn pint_my_taxcat(code: &str) -> bool {
+    listed(lists::PINT_MY_TAXCAT, code)
 }
 
 pub mod guard {
@@ -151,7 +113,7 @@ fn br_cl_05(inv: &Invoice, report: &mut Report) {
         report.push(Finding::fatal(
             "BR-CL-05",
             Path::term(BtId(6)),
-            format!("BT-6 {} is not an ISO 4217 alphabetic code", code),
+            format!("BT-6 {code} is not an ISO 4217 alphabetic code"),
         ));
     }
 }
@@ -181,16 +143,13 @@ fn br_cl_16(inv: &Invoice, report: &mut Report) {
     let Some(code) = pay.means_code.as_ref() else {
         return;
     };
-    let ok = UNCL_4461.contains(&code.as_str())
+    let ok = lists::UNCL_4461.contains(&code.as_str())
         || (inv.profile == Profile::PintMy && pint_my_payment(code.as_str()));
     if !ok {
         report.push(Finding::fatal(
             "BR-CL-16",
             Path::group_term(Group::Payment, BtId(81)),
-            format!(
-                "BT-81 {} is not in UNCL 4461 (MY Z0x are profile extras)",
-                code
-            ),
+            format!("BT-81 {code} is not in UNCL 4461 (MY Z0x are profile extras)"),
         ));
     }
 }
@@ -242,11 +201,11 @@ fn br_cl_22(inv: &Invoice, report: &mut Report) {
         let Some(code) = e.exemption_code.as_ref() else {
             continue;
         };
-        if !VATEX.iter().any(|c| c.eq_ignore_ascii_case(code.as_str())) {
+        if !vatex(code.as_str()) {
             report.push(Finding::fatal(
                 "BR-CL-22",
                 Path::at_term(Group::TaxBreakdown, i, BtId(121)),
-                format!("BT-121 {} is not a VATEX code", code),
+                format!("BT-121 {code} is not a VATEX code"),
             ));
         }
     }
@@ -257,11 +216,11 @@ fn br_cl_23(inv: &Invoice, report: &mut Report) {
         let Some(u) = line.unit.as_ref() else {
             continue;
         };
-        if !UNITS.contains(&u.as_str()) {
+        if !unit(u.as_str()) {
             report.push(Finding::fatal(
                 "BR-CL-23",
                 Path::at_term(Group::Line, i, BtId(130)),
-                format!("BT-130 {u} is not Rec 20/21 in this subset"),
+                format!("BT-130 {u} is not UNECE Rec 20/21"),
             ));
         }
     }
@@ -272,7 +231,7 @@ fn br_cl_24(inv: &Invoice, report: &mut Report) {
         let Some(att) = doc.attachment.as_ref() else {
             continue;
         };
-        if !MIME.contains(&att.mime.as_str()) {
+        if !mime(att.mime.as_str()) {
             report.push(Finding::fatal(
                 "BR-CL-24",
                 Path::at_term(Group::Attachment, i, BtId(125)),
@@ -293,11 +252,88 @@ fn br_cl_25(inv: &Invoice, report: &mut Report) {
         let Some(scheme) = ep.scheme.as_deref() else {
             continue;
         };
-        if !EAS.contains(&scheme) {
+        if !eas(scheme) {
             report.push(Finding::fatal(
                 "BR-CL-25",
                 Path::group_term(group, BtId(bt)),
                 format!("EAS {scheme} is not in the subset"),
+            ));
+        }
+    }
+}
+
+fn br_cl_06(inv: &Invoice, report: &mut Report) {
+    let Some(code) = inv.tax_point_code.as_ref() else {
+        return;
+    };
+    // BR-CL-06: BT-8 is UNCL 2005 subset 3 / 35 / 432.
+    if !lists::UNCL_2005.contains(&code.as_str()) {
+        report.push(Finding::fatal(
+            "BR-CL-06",
+            Path::term(BtId(8)),
+            format!("BT-8 {code} is not UNCL 2005 (3, 35, 432)"),
+        ));
+    }
+}
+
+fn br_cl_13(inv: &Invoice, report: &mut Report) {
+    for (i, line) in inv.lines.iter().enumerate() {
+        for cl in &line.classifications {
+            let Some(scheme) = cl.scheme.as_deref() else {
+                continue;
+            };
+            // BR-CL-13 / IBR-CL-13: Item classification listID is UNCL 7143 (CG is CLASS in PINT-MY).
+            if !lists::UNCL_7143.contains(&scheme) {
+                report.push(Finding::fatal(
+                    "BR-CL-13",
+                    Path::at_term(Group::Line, i, BtId(158)),
+                    format!("classification listID {scheme} is not UNCL 7143"),
+                ));
+            }
+        }
+    }
+}
+
+fn br_cl_15(inv: &Invoice, report: &mut Report) {
+    for (i, line) in inv.lines.iter().enumerate() {
+        let Some(c) = line.origin_country.as_ref() else {
+            continue;
+        };
+        if !country(c.as_str()) {
+            report.push(Finding::fatal(
+                "BR-CL-15",
+                Path::at_term(Group::Line, i, BtId(159)),
+                format!("BT-159 {c} is not ISO 3166-1 alpha-2"),
+            ));
+        }
+    }
+}
+
+fn br_cl_19(inv: &Invoice, report: &mut Report) {
+    for (i, a) in inv.document_allowances.iter().enumerate() {
+        let Some(code) = a.reason_code.as_ref() else {
+            continue;
+        };
+        if !lists::UNCL_5189.contains(&code.as_str()) {
+            report.push(Finding::fatal(
+                "BR-CL-19",
+                Path::at_term(Group::DocumentAllowance, i, BtId(98)),
+                format!("BT-98 {code} is not UNCL 5189"),
+            ));
+        }
+    }
+}
+
+fn br_cl_20(inv: &Invoice, report: &mut Report) {
+    for (i, a) in inv.document_charges.iter().enumerate() {
+        let Some(code) = a.reason_code.as_ref() else {
+            continue;
+        };
+        if !lists::UNCL_7161.contains(&code.as_str()) {
+            report.push(Finding::fatal(
+                "BR-CL-20",
+                Path::at_term(Group::DocumentCharge, i, BtId(105)),
+                format!("BT-105 {code} is not UNCL 7161"),
             ));
         }
     }
@@ -335,9 +371,34 @@ pub static RULES: &[Rule] = &[
         br_cl_14,
     ),
     r(
+        "BR-CL-06",
+        "VAT point date code (BT-8) MUST be coded using UNCL 2005 (3, 35, 432).",
+        br_cl_06,
+    ),
+    r(
+        "BR-CL-13",
+        "Item classification scheme (BT-158-1) MUST be coded using UNCL 7143.",
+        br_cl_13,
+    ),
+    r(
+        "BR-CL-15",
+        "Item origin country (BT-159) MUST be coded using ISO 3166-1 alpha-2.",
+        br_cl_15,
+    ),
+    r(
         "BR-CL-16",
         "Payment means code MUST be coded using UNCL 4461.",
         br_cl_16,
+    ),
+    r(
+        "BR-CL-19",
+        "Document allowance reason code MUST be coded using UNCL 5189.",
+        br_cl_19,
+    ),
+    r(
+        "BR-CL-20",
+        "Document charge reason code MUST be coded using UNCL 7161.",
+        br_cl_20,
     ),
     r(
         "BR-CL-17",

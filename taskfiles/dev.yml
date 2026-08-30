@@ -52,3 +52,18 @@ tasks:
     desc: Fetch official artefacts into refers/ (clones/zips gitignored)
     cmds:
       - bash refers/fetch.sh
+
+  lists:
+    desc: Regenerate code-list arrays from refers/ genericode
+    cmds:
+      - python3 xtask/gen_codes.py
+
+  deny:
+    desc: cargo deny check (licences, advisories)
+    cmds:
+      - cargo deny check
+
+  svrl:
+    desc: Optional ConnectingEurope XSLT SVRL oracle (needs Saxon + refers/)
+    cmds:
+      - python3 xtask/svrl_oracle.py

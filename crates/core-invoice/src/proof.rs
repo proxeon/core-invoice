@@ -180,7 +180,7 @@ mod tests {
         inv.business_process = Some("urn:fdc:peppol.eu:2017:poacc:billing:01:1.0".into());
         inv.buyer_reference = Some(crate::identifier::DocumentReference::new("PO-1"));
         inv.seller.electronic_address = Some(Identifier::schemed("1234567890128", "0088"));
-        inv.buyer.electronic_address = Some(Identifier::schemed("1234567890129", "0088"));
+        inv.buyer.electronic_address = Some(Identifier::schemed("1234567890135", "0088"));
         inv.lines = vec![{
             let mut line = Line::new(
                 "1",

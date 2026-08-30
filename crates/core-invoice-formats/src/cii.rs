@@ -50,6 +50,11 @@ pub fn write_unchecked(invoice: &Invoice) -> Result<String, FormatError> {
     ));
     s.push('\n');
     s.push_str("  <rsm:ExchangedDocumentContext>\n");
+    if let Some(bp) = invoice.business_process.as_deref() {
+        s.push_str("    <ram:BusinessProcessSpecifiedDocumentContextParameter>\n");
+        leaf_ram(&mut s, 3, "ID", bp, None);
+        s.push_str("    </ram:BusinessProcessSpecifiedDocumentContextParameter>\n");
+    }
     s.push_str("    <ram:GuidelineSpecifiedDocumentContextParameter>\n");
     leaf_ram(&mut s, 3, "ID", spec, None);
     s.push_str("    </ram:GuidelineSpecifiedDocumentContextParameter>\n");
@@ -65,6 +70,11 @@ pub fn write_unchecked(invoice: &Invoice) -> Result<String, FormatError> {
         ));
         s.push_str("    </ram:IssueDateTime>\n");
     }
+    for n in &invoice.notes {
+        s.push_str("    <ram:IncludedNote>\n");
+        leaf_ram(&mut s, 3, "Content", &n.text, None);
+        s.push_str("    </ram:IncludedNote>\n");
+    }
     s.push_str("  </rsm:ExchangedDocument>\n");
     s.push_str("  <rsm:SupplyChainTradeTransaction>\n");
     for line in &invoice.lines {
@@ -74,11 +84,13 @@ pub fn write_unchecked(invoice: &Invoice) -> Result<String, FormatError> {
     write_trade_party(&mut s, "SellerTradeParty", &invoice.seller, invoice.profile);
     write_trade_party(&mut s, "BuyerTradeParty", &invoice.buyer, invoice.profile);
     s.push_str("    </ram:ApplicableHeaderTradeAgreement>\n");
-    s.push_str("    <ram:ApplicableHeaderTradeDelivery/>\n");
+    write_delivery(&mut s, invoice);
     s.push_str("    <ram:ApplicableHeaderTradeSettlement>\n");
     if !invoice.currency.is_empty() {
         leaf_ram(&mut s, 3, "InvoiceCurrencyCode", &invoice.currency, None);
     }
+    write_payment(&mut s, invoice);
+    write_doc_ac(&mut s, invoice);
     write_tax(&mut s, invoice);
     write_totals(&mut s, invoice);
     s.push_str("    </ram:ApplicableHeaderTradeSettlement>\n");
@@ -149,12 +161,85 @@ pub fn read(xml: &str) -> Result<Read, FormatError> {
     invoice.lines = children(tx, "IncludedSupplyChainTradeLineItem")
         .filter_map(|n| read_line(n, profile, &mut malformed))
         .collect();
+    if let Some(ag) = agreement {
+        if let Some(bp) = ctx
+            .and_then(|n| child(n, "BusinessProcessSpecifiedDocumentContextParameter"))
+            .and_then(|n| child_text(n, "ID"))
+        {
+            invoice.business_process = Some(bp);
+        }
+        let _ = ag;
+    }
+    if let Some(del) = child(tx, "ApplicableHeaderTradeDelivery") {
+        let date = child(del, "ActualDeliverySupplyChainEvent")
+            .and_then(|n| child(n, "OccurrenceDateTime"))
+            .and_then(|n| child(n, "DateTimeString"))
+            .and_then(text)
+            .and_then(|s| from_102(&s));
+        let ship = child(del, "ShipToTradeParty");
+        if date.is_some() || ship.is_some() {
+            invoice.delivery = Some(core_invoice::Delivery {
+                name: ship.and_then(|n| child_text(n, "Name")),
+                location_id: None,
+                date,
+                address: ship.and_then(|n| {
+                    child(n, "PostalTradeAddress").map(|a| core_invoice::PostalAddress {
+                        country: child_text(a, "CountryID").map(Code::new),
+                        ..core_invoice::PostalAddress::default()
+                    })
+                }),
+            });
+        }
+    }
     if let Some(st) = settlement {
         invoice.tax_breakdown = children(st, "ApplicableTradeTax")
             .filter_map(|n| read_tax(n, profile, &mut malformed))
             .collect();
         if let Some(ms) = child(st, "SpecifiedTradeSettlementHeaderMonetarySummation") {
             invoice.totals = Some(read_totals(ms, &mut malformed));
+        }
+        if let Some(pm) = child(st, "SpecifiedTradeSettlementPaymentMeans") {
+            invoice.payment = Some(core_invoice::PaymentInstructions {
+                means_code: child_text(pm, "TypeCode").map(Code::new),
+                means_text: None,
+                remittance: None,
+                means: {
+                    let accts: Vec<_> = children(pm, "PayeePartyCreditorFinancialAccount")
+                        .filter_map(|n| child_text(n, "IBANID"))
+                        .map(|iban| core_invoice::CreditTransfer {
+                            account_id: Identifier::new(iban),
+                            account_name: None,
+                            provider: None,
+                        })
+                        .collect();
+                    if accts.is_empty() {
+                        None
+                    } else {
+                        Some(core_invoice::PaymentMeans::CreditTransfer(accts))
+                    }
+                },
+            });
+        }
+        for ac in children(st, "SpecifiedTradeAllowanceCharge") {
+            let charge = child(ac, "ChargeIndicator")
+                .and_then(|n| child_text(n, "Indicator"))
+                .is_some_and(|s| s.eq_ignore_ascii_case("true"));
+            let Some(amount) = child_amount(ac, "ActualAmount", &mut malformed, "CII-ac") else {
+                continue;
+            };
+            let row = core_invoice::AllowanceCharge {
+                amount,
+                base: None,
+                percent: None,
+                reason: None,
+                reason_code: None,
+                tax: None,
+            };
+            if charge {
+                invoice.document_charges.push(row);
+            } else {
+                invoice.document_allowances.push(row);
+            }
         }
     }
     Ok(Read {
@@ -241,6 +326,76 @@ fn write_trade_party(s: &mut String, tag: &str, party: &Party, _profile: Profile
         s.push_str("        </ram:SpecifiedTaxRegistration>\n");
     }
     s.push_str(&format!("      </ram:{tag}>\n"));
+}
+
+fn write_delivery(s: &mut String, invoice: &Invoice) {
+    let Some(d) = invoice.delivery.as_ref() else {
+        s.push_str("    <ram:ApplicableHeaderTradeDelivery/>\n");
+        return;
+    };
+    s.push_str("    <ram:ApplicableHeaderTradeDelivery>\n");
+    if let Some(date) = d.date {
+        s.push_str("      <ram:ActualDeliverySupplyChainEvent>\n");
+        s.push_str("        <ram:OccurrenceDateTime>\n");
+        s.push_str(&format!(
+            "          <udt:DateTimeString format=\"102\">{}</udt:DateTimeString>\n",
+            to_102(date)
+        ));
+        s.push_str("        </ram:OccurrenceDateTime>\n");
+        s.push_str("      </ram:ActualDeliverySupplyChainEvent>\n");
+    }
+    if let Some(addr) = d.address.as_ref() {
+        s.push_str("      <ram:ShipToTradeParty>\n");
+        if let Some(n) = d.name.as_deref() {
+            leaf_ram(s, 4, "Name", n, None);
+        }
+        s.push_str("        <ram:PostalTradeAddress>\n");
+        if let Some(c) = addr.country.as_ref() {
+            leaf_ram(s, 5, "CountryID", c.as_str(), None);
+        }
+        s.push_str("        </ram:PostalTradeAddress>\n");
+        s.push_str("      </ram:ShipToTradeParty>\n");
+    }
+    s.push_str("    </ram:ApplicableHeaderTradeDelivery>\n");
+}
+
+fn write_payment(s: &mut String, invoice: &Invoice) {
+    let Some(pay) = invoice.payment.as_ref() else {
+        return;
+    };
+    s.push_str("      <ram:SpecifiedTradeSettlementPaymentMeans>\n");
+    if let Some(code) = pay.means_code.as_ref() {
+        leaf_ram(s, 4, "TypeCode", code.as_str(), None);
+    }
+    if let Some(core_invoice::PaymentMeans::CreditTransfer(cts)) = pay.means.as_ref() {
+        for ct in cts {
+            s.push_str("        <ram:PayeePartyCreditorFinancialAccount>\n");
+            leaf_ram(s, 5, "IBANID", &ct.account_id.value, None);
+            s.push_str("        </ram:PayeePartyCreditorFinancialAccount>\n");
+        }
+    }
+    s.push_str("      </ram:SpecifiedTradeSettlementPaymentMeans>\n");
+}
+
+fn write_doc_ac(s: &mut String, invoice: &Invoice) {
+    for a in &invoice.document_allowances {
+        write_cii_ac(s, a, false, &invoice.currency);
+    }
+    for a in &invoice.document_charges {
+        write_cii_ac(s, a, true, &invoice.currency);
+    }
+}
+
+fn write_cii_ac(s: &mut String, a: &core_invoice::AllowanceCharge, charge: bool, cur: &str) {
+    s.push_str("      <ram:SpecifiedTradeAllowanceCharge>\n");
+    s.push_str("        <ram:ChargeIndicator>\n");
+    s.push_str(&format!(
+        "          <udt:Indicator>{}</udt:Indicator>\n",
+        if charge { "true" } else { "false" }
+    ));
+    s.push_str("        </ram:ChargeIndicator>\n");
+    amount_ram(s, 4, "ActualAmount", a.amount, cur);
+    s.push_str("      </ram:SpecifiedTradeAllowanceCharge>\n");
 }
 
 fn write_tax(s: &mut String, invoice: &Invoice) {
@@ -349,7 +504,29 @@ fn read_line(
             code: String::new(),
             percent: None,
         });
-    Some(Line::new(id, name, net, tax))
+    let mut line = Line::new(id, name, net, tax);
+    if let Some(del) = child(node, "SpecifiedLineTradeDelivery")
+        && let Some(q) = child(del, "BilledQuantity")
+    {
+        if let Some(t) = text(q) {
+            line.quantity = core_invoice::Quantity::parse(&t).ok();
+        }
+        line.unit = q.attribute("unitCode").map(Code::new);
+    }
+    if let Some(agr) = child(node, "SpecifiedLineTradeAgreement")
+        && let Some(price) = child(agr, "NetPriceProductTradePrice")
+        && let Some(amt) = child_text(price, "ChargeAmount")
+        && let Ok(net) = core_invoice::UnitPriceAmount::parse(&amt)
+    {
+        line.price = Some(core_invoice::Price {
+            net,
+            discount: None,
+            gross: None,
+            base_qty: None,
+            base_unit: None,
+        });
+    }
+    Some(line)
 }
 
 fn read_tax(
@@ -511,12 +688,25 @@ mod tests {
         );
         inv.issue_date = Date::parse("2026-01-15").ok();
         inv.type_code = Some(Code::new("380"));
-        inv.lines = vec![Line::new(
-            "1",
-            "Service",
-            Amount::parse("100.00").unwrap(),
-            TaxCategory::vat("S", Decimal::from(19)),
-        )];
+        inv.lines = vec![{
+            let mut line = Line::new(
+                "1",
+                "Service",
+                Amount::parse("100.00").unwrap(),
+                TaxCategory::vat("S", Decimal::from(19)),
+            );
+            line.quantity = Some(core_invoice::Quantity::parse("1").unwrap());
+            line.unit = Some(Code::new("C62"));
+            line.price = Some(core_invoice::Price {
+                net: core_invoice::UnitPriceAmount::parse("100.00").unwrap(),
+                discount: None,
+                gross: None,
+                base_qty: None,
+                base_unit: None,
+            });
+            line
+        }];
+        inv.payment_terms = Some("Net 30".into());
         reconcile(&mut inv).unwrap();
         inv
     }
@@ -537,6 +727,11 @@ mod tests {
         let xml = write_unchecked(&inv).unwrap();
         let back = read(&xml).unwrap().invoice;
         assert_eq!(back.number, "INV-CII");
+        assert_eq!(back.lines[0].quantity, inv.lines[0].quantity);
+        assert_eq!(
+            back.lines[0].price.as_ref().map(|p| p.net),
+            inv.lines[0].price.as_ref().map(|p| p.net)
+        );
         assert_eq!(back.currency, "EUR");
         assert_eq!(back.lines[0].id, "1");
         assert_eq!(back.lines[0].tax.code, "S");

@@ -24,6 +24,27 @@ jobs:
       - name: test
         run: cargo test --workspace
 
+  artefacts:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[artefacts]')
+    env:
+      CORE_INVOICE_REQUIRE_SPEC: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.88.0
+      - name: fetch refers
+        run: bash refers/fetch.sh
+      - name: official samples
+        run: cargo test --workspace -- official_
+
+  deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+
   wasm:
     runs-on: ubuntu-latest
     steps:

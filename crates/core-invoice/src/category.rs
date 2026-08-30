@@ -160,21 +160,39 @@ fn my_families_apply(inv: &Invoice) -> bool {
     families_ready(inv) && inv.profile == Profile::PintMy
 }
 
+/// Which repeating group a family row applies to. Artefacts number
+/// line (`-02`/`-05`), allowance (`-03`/`-06`), and charge (`-04`/`-07`) separately.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RateContext {
+    Line,
+    Allowance,
+    Charge,
+}
+
 fn uses_category(inv: &Invoice, cat: VatCategory) -> bool {
+    uses_in(inv, cat, RateContext::Line)
+        || uses_in(inv, cat, RateContext::Allowance)
+        || uses_in(inv, cat, RateContext::Charge)
+}
+
+fn uses_in(inv: &Invoice, cat: VatCategory, ctx: RateContext) -> bool {
     let code = cat.code();
-    inv.lines
-        .iter()
-        .any(|l| l.tax.system == TaxSystem::Vat && l.tax.code.eq_ignore_ascii_case(code))
-        || inv.document_allowances.iter().any(|a| {
+    match ctx {
+        RateContext::Line => inv
+            .lines
+            .iter()
+            .any(|l| l.tax.system == TaxSystem::Vat && l.tax.code.eq_ignore_ascii_case(code)),
+        RateContext::Allowance => inv.document_allowances.iter().any(|a| {
             a.tax
                 .as_ref()
                 .is_some_and(|t| t.system == TaxSystem::Vat && t.code.eq_ignore_ascii_case(code))
-        })
-        || inv.document_charges.iter().any(|c| {
+        }),
+        RateContext::Charge => inv.document_charges.iter().any(|c| {
             c.tax
                 .as_ref()
                 .is_some_and(|t| t.system == TaxSystem::Vat && t.code.eq_ignore_ascii_case(code))
-        })
+        }),
+    }
 }
 
 fn breakdown_of(
@@ -256,6 +274,56 @@ fn check_rate_line(inv: &Invoice, report: &mut Report, p: CategoryProfile, id: &
     }
 }
 
+fn check_rate_ac(
+    inv: &Invoice,
+    report: &mut Report,
+    p: CategoryProfile,
+    id: &'static str,
+    ctx: RateContext,
+) {
+    if !vat_families_apply(inv) {
+        return;
+    }
+    let code = p.category.code();
+    let rows: Vec<(usize, Option<Percentage>)> = match ctx {
+        RateContext::Allowance => inv
+            .document_allowances
+            .iter()
+            .enumerate()
+            .filter_map(|(i, a)| {
+                let t = a.tax.as_ref()?;
+                (t.system == TaxSystem::Vat && t.code.eq_ignore_ascii_case(code))
+                    .then_some((i, t.percent))
+            })
+            .collect(),
+        RateContext::Charge => inv
+            .document_charges
+            .iter()
+            .enumerate()
+            .filter_map(|(i, a)| {
+                let t = a.tax.as_ref()?;
+                (t.system == TaxSystem::Vat && t.code.eq_ignore_ascii_case(code))
+                    .then_some((i, t.percent))
+            })
+            .collect(),
+        RateContext::Line => return,
+    };
+    let group = match ctx {
+        RateContext::Allowance => Group::DocumentAllowance,
+        RateContext::Charge => Group::DocumentCharge,
+        RateContext::Line => Group::Line,
+    };
+    for (i, rate) in rows {
+        if !rate_ok(p.rate, rate) {
+            report.push(Finding::fatal(
+                id,
+                Path::at_term(group, i, BtId(96)),
+                format!("rate {rate:?} is not valid for {code} in this context"),
+            ));
+        }
+    }
+}
+
 fn seller_vat(inv: &Invoice) -> bool {
     inv.seller.vat_identifier.is_some()
 }
@@ -272,7 +340,17 @@ fn buyer_vat(inv: &Invoice) -> bool {
 }
 
 fn check_identifiers(inv: &Invoice, report: &mut Report, p: CategoryProfile, id: &'static str) {
-    if !vat_families_apply(inv) || !uses_category(inv, p.category) {
+    check_identifiers_in(inv, report, p, id, RateContext::Line);
+}
+
+fn check_identifiers_in(
+    inv: &Invoice,
+    report: &mut Report,
+    p: CategoryProfile,
+    id: &'static str,
+    ctx: RateContext,
+) {
+    if !vat_families_apply(inv) || !uses_in(inv, p.category, ctx) {
         return;
     }
     let ok = match p.category {
@@ -401,25 +479,84 @@ fn check_exemption(inv: &Invoice, report: &mut Report, p: CategoryProfile, id: &
             report.push(Finding::fatal(
                 id,
                 Path::at_term(Group::TaxBreakdown, i, BtId(120)),
-                format!("exemption reason rule {} failed", id),
+                format!("exemption reason rule {id} failed"),
             ));
         }
     }
 }
 
-fn check_o_exclusive(inv: &Invoice, report: &mut Report) {
-    if !vat_families_apply(inv) || !uses_category(inv, VatCategory::OutOfScope) {
+fn o_group_present(inv: &Invoice) -> bool {
+    inv.tax_breakdown
+        .iter()
+        .any(|e| e.category.as_str().eq_ignore_ascii_case("O"))
+}
+
+fn br_o_11(inv: &Invoice, report: &mut Report) {
+    if !vat_families_apply(inv) || !o_group_present(inv) {
         return;
     }
-    let other = inv
-        .lines
+    // BR-O-11: O group forbids other BG-23 groups.
+    let other_groups = inv
+        .tax_breakdown
         .iter()
-        .any(|l| l.tax.system == TaxSystem::Vat && !l.tax.code.eq_ignore_ascii_case("O"));
-    if other {
+        .any(|e| !e.category.as_str().eq_ignore_ascii_case("O"));
+    if other_groups {
         report.push(Finding::fatal(
             "BR-O-11",
             Path::group(Group::TaxBreakdown),
-            "category O shall not be mixed with other VAT categories",
+            "An Invoice with VAT category O shall not contain other VAT breakdown groups",
+        ));
+    }
+}
+
+fn br_o_12(inv: &Invoice, report: &mut Report) {
+    if !vat_families_apply(inv) || !o_group_present(inv) {
+        return;
+    }
+    // BR-O-12: O group forbids non-O lines.
+    if inv
+        .lines
+        .iter()
+        .any(|l| l.tax.system == TaxSystem::Vat && !l.tax.code.eq_ignore_ascii_case("O"))
+    {
+        report.push(Finding::fatal(
+            "BR-O-12",
+            Path::group(Group::Line),
+            "An Invoice with VAT category O shall not contain a line that is not O",
+        ));
+    }
+}
+
+fn br_o_13(inv: &Invoice, report: &mut Report) {
+    if !vat_families_apply(inv) || !o_group_present(inv) {
+        return;
+    }
+    if inv.document_allowances.iter().any(|a| {
+        a.tax
+            .as_ref()
+            .is_some_and(|t| t.system == TaxSystem::Vat && !t.code.eq_ignore_ascii_case("O"))
+    }) {
+        report.push(Finding::fatal(
+            "BR-O-13",
+            Path::group(Group::DocumentAllowance),
+            "An Invoice with VAT category O shall not contain a document allowance that is not O",
+        ));
+    }
+}
+
+fn br_o_14(inv: &Invoice, report: &mut Report) {
+    if !vat_families_apply(inv) || !o_group_present(inv) {
+        return;
+    }
+    if inv.document_charges.iter().any(|a| {
+        a.tax
+            .as_ref()
+            .is_some_and(|t| t.system == TaxSystem::Vat && !t.code.eq_ignore_ascii_case("O"))
+    }) {
+        report.push(Finding::fatal(
+            "BR-O-14",
+            Path::group(Group::DocumentCharge),
+            "An Invoice with VAT category O shall not contain a document charge that is not O",
         ));
     }
 }
@@ -654,16 +791,40 @@ fn br_b_01(inv: &Invoice, report: &mut Report) {
 }
 
 fn br_s_03(inv: &Invoice, report: &mut Report) {
-    check_identifiers(inv, report, profile(VatCategory::Standard), "BR-S-03");
+    check_identifiers_in(
+        inv,
+        report,
+        profile(VatCategory::Standard),
+        "BR-S-03",
+        RateContext::Allowance,
+    );
 }
 fn br_s_04(inv: &Invoice, report: &mut Report) {
-    check_identifiers(inv, report, profile(VatCategory::Standard), "BR-S-04");
+    check_identifiers_in(
+        inv,
+        report,
+        profile(VatCategory::Standard),
+        "BR-S-04",
+        RateContext::Charge,
+    );
 }
 fn br_s_06(inv: &Invoice, report: &mut Report) {
-    check_rate_line(inv, report, profile(VatCategory::Standard), "BR-S-06");
+    check_rate_ac(
+        inv,
+        report,
+        profile(VatCategory::Standard),
+        "BR-S-06",
+        RateContext::Allowance,
+    );
 }
 fn br_s_07(inv: &Invoice, report: &mut Report) {
-    check_rate_line(inv, report, profile(VatCategory::Standard), "BR-S-07");
+    check_rate_ac(
+        inv,
+        report,
+        profile(VatCategory::Standard),
+        "BR-S-07",
+        RateContext::Charge,
+    );
 }
 
 fn my_sa_01(i: &Invoice, r: &mut Report) {
@@ -867,8 +1028,23 @@ pub static RULES: &[Rule] = &[
     ),
     r(
         "BR-O-11",
-        "Out of scope is exclusive of other VAT categories.",
-        check_o_exclusive,
+        "Out of scope VAT breakdown forbids other BG-23 groups.",
+        br_o_11,
+    ),
+    r(
+        "BR-O-12",
+        "Out of scope VAT breakdown forbids non-O invoice lines.",
+        br_o_12,
+    ),
+    r(
+        "BR-O-13",
+        "Out of scope VAT breakdown forbids non-O document allowances.",
+        br_o_13,
+    ),
+    r(
+        "BR-O-14",
+        "Out of scope VAT breakdown forbids non-O document charges.",
+        br_o_14,
     ),
     r("BR-AF-01", "IGIC: at least one BG-23 group.", br_af_01),
     r("BR-AF-02", "IGIC: seller tax identifier.", br_af_02),
@@ -1000,6 +1176,7 @@ mod tests {
         );
         inv.issue_date = Date::parse("2026-01-15").ok();
         inv.type_code = Some(Code::new("380"));
+        inv.payment_terms = Some("Net 30".into());
         inv.lines = vec![Line::new(
             "1",
             "A",
@@ -1121,6 +1298,89 @@ mod tests {
                 .findings
                 .iter()
                 .any(|f| f.id == "ALIGNED-IBRP-SA-08-MY"),
+            "{report}"
+        );
+    }
+
+    #[test]
+    fn s_line_missing_vat_is_only_br_s_02() {
+        let mut inv = en_s();
+        inv.seller.vat_identifier = None;
+        let report = validate(&inv);
+        let ids: Vec<_> = report.findings.iter().map(|f| f.id).collect();
+        assert!(ids.contains(&"BR-S-02"), "{report}");
+        assert!(!ids.contains(&"BR-S-03"), "{report}");
+        assert!(!ids.contains(&"BR-S-04"), "{report}");
+    }
+
+    #[test]
+    fn s_charge_missing_vat_is_only_br_s_04() {
+        let mut inv = en_s();
+        inv.seller.vat_identifier = None;
+        inv.lines[0].tax = TaxCategory::vat("Z", Decimal::from(0));
+        inv.document_charges.push(crate::invoice::AllowanceCharge {
+            amount: amt("10.00"),
+            base: None,
+            percent: None,
+            reason: None,
+            reason_code: None,
+            tax: Some(TaxCategory::vat("S", Decimal::from(19))),
+        });
+        let _ = reconcile(&mut inv);
+        let report = validate(&inv);
+        let ids: Vec<_> = report.findings.iter().map(|f| f.id).collect();
+        assert!(ids.contains(&"BR-S-04"), "{report}");
+        assert!(!ids.contains(&"BR-S-02"), "{report}");
+        assert!(!ids.contains(&"BR-S-03"), "{report}");
+    }
+
+    #[test]
+    fn o_group_plus_s_group_is_o_11() {
+        let mut inv = en_s();
+        inv.lines[0].tax = TaxCategory {
+            system: TaxSystem::Vat,
+            code: "O".into(),
+            percent: None,
+        };
+        reconcile(&mut inv).unwrap();
+        inv.tax_breakdown.push(crate::invoice::TaxBreakdown {
+            system: TaxSystem::Vat,
+            scheme: "VAT".into(),
+            category: Code::new("S"),
+            rate: Some(Percentage::new(Decimal::from(19))),
+            taxable: amt("0.00"),
+            tax: amt("0.00"),
+            exemption_reason: None,
+            exemption_code: None,
+        });
+        let report = validate(&inv);
+        assert!(
+            report.findings.iter().any(|f| f.id == "BR-O-11"),
+            "{report}"
+        );
+    }
+
+    #[test]
+    fn o_group_plus_s_line_is_o_12() {
+        let mut inv = en_s();
+        inv.lines[0].tax = TaxCategory {
+            system: TaxSystem::Vat,
+            code: "O".into(),
+            percent: None,
+        };
+        inv.lines.push(Line::new(
+            "2",
+            "Std",
+            amt("10.00"),
+            TaxCategory::vat("S", Decimal::from(19)),
+        ));
+        let _ = reconcile(&mut inv);
+        // Keep only the O group so O-12 is the mix on lines, not extra groups.
+        inv.tax_breakdown
+            .retain(|e| e.category.as_str().eq_ignore_ascii_case("O"));
+        let report = validate(&inv);
+        assert!(
+            report.findings.iter().any(|f| f.id == "BR-O-12"),
             "{report}"
         );
     }

@@ -329,6 +329,14 @@ mod tests {
     }
 
     #[test]
+    fn random_bytes_do_not_panic() {
+        let _ = read("\0\0<?xml");
+        let _ = read("<");
+        let _ = read("<<<<<<<<");
+        let _ = read(&"a".repeat(100));
+    }
+
+    #[test]
     fn neither_root_is_parse_error() {
         let xml = r#"<NotAnInvoice/>"#;
         let err = read(xml).unwrap_err();
@@ -422,15 +430,21 @@ mod tests {
     }
 
     #[test]
-    fn ubl_to_cii_to_ubl_reports_dropped_quantity() {
-        let ubl = r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"><cbc:CustomizationID>urn:cen.eu:en16931:2017</cbc:CustomizationID><cbc:ID>1</cbc:ID><cbc:IssueDate>2026-01-15</cbc:IssueDate><cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode><cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode><cac:InvoiceLine><cbc:ID>1</cbc:ID><cbc:InvoicedQuantity unitCode="C62">2</cbc:InvoicedQuantity><cbc:LineExtensionAmount currencyID="EUR">10.00</cbc:LineExtensionAmount><cac:Item><cbc:Name>A</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>S</cbc:ID><cbc:Percent>19</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item></cac:InvoiceLine></Invoice>"#;
+    fn ubl_to_cii_to_ubl_keeps_qty_price() {
+        let ubl = r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"><cbc:CustomizationID>urn:cen.eu:en16931:2017</cbc:CustomizationID><cbc:ID>1</cbc:ID><cbc:IssueDate>2026-01-15</cbc:IssueDate><cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode><cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode><cac:InvoiceLine><cbc:ID>1</cbc:ID><cbc:InvoicedQuantity unitCode="C62">2</cbc:InvoicedQuantity><cbc:LineExtensionAmount currencyID="EUR">10.00</cbc:LineExtensionAmount><cac:Item><cbc:Name>A</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>S</cbc:ID><cbc:Percent>19</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item><cac:Price><cbc:PriceAmount currencyID="EUR">5.00</cbc:PriceAmount></cac:Price></cac:InvoiceLine></Invoice>"#;
         let inv = read(ubl).unwrap();
         assert!(inv.lines[0].quantity.is_some());
         let cii = write_unchecked(&inv, Syntax::Cii).unwrap();
         let back = read(&cii).unwrap();
-        assert!(back.lines[0].quantity.is_none());
+        assert_eq!(back.lines[0].quantity, inv.lines[0].quantity);
+        assert_eq!(
+            back.lines[0].price.as_ref().map(|p| p.net.to_string()),
+            Some("5.00".into())
+        );
         let ubl2 = write_unchecked(&back, Syntax::Ubl).unwrap();
         let out = diff(ubl, &ubl2).unwrap();
-        assert!(out.contains("quantity"), "{out}");
+        // Named remaining CII drops (shrink this list as mapping grows):
+        // BT-23 ProfileID, endpoints, notes subject, line object, supporting docs.
+        assert!(!out.contains("quantity"), "qty is mapped on CII: {out}");
     }
 }

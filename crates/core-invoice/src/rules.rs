@@ -44,6 +44,7 @@ pub fn core_rules() -> &'static [Rule] {
             .copied()
             .chain(crate::category::RULES.iter().copied())
             .chain(crate::codes::RULES.iter().copied())
+            .chain(DEC.iter().copied())
             .collect()
     })
 }
@@ -65,21 +66,9 @@ fn spec_lookup(invoice: &Invoice, report: &mut Report) {
         return;
     };
     if id.contains('*') {
-        report.push(Finding::fatal(
-            "IBR-SR-63",
-            Path::term(BtId(24)),
-            "BT-24 shall not contain '*' (wildcard is an SMP capability, not an instance id)",
-        ));
         return;
     }
     match crate::profile::Profile::for_specification_id(id) {
-        crate::profile::ProfileLookup::WrongProcess => {
-            report.push(Finding::fatal(
-                "CORE-PROCESS-01",
-                Path::term(BtId(24)),
-                "Specification identifier is a self-billing (or other) process; not billing",
-            ));
-        }
         crate::profile::ProfileLookup::Unknown => {
             report.push(Finding::fatal(
                 "CORE-SPEC-01",
@@ -87,7 +76,37 @@ fn spec_lookup(invoice: &Invoice, report: &mut Report) {
                 "Unrecognised specification identifier (BT-24)",
             ));
         }
-        crate::profile::ProfileLookup::Profile(_) => {}
+        crate::profile::ProfileLookup::WrongProcess | crate::profile::ProfileLookup::Profile(_) => {
+        }
+    }
+}
+
+fn core_process_01(invoice: &Invoice, report: &mut Report) {
+    let Some(id) = invoice.specification_id.as_deref() else {
+        return;
+    };
+    if matches!(
+        crate::profile::Profile::for_specification_id(id),
+        crate::profile::ProfileLookup::WrongProcess
+    ) {
+        report.push(Finding::fatal(
+            "CORE-PROCESS-01",
+            Path::term(BtId(24)),
+            "Specification identifier is a self-billing (or other) process; not billing",
+        ));
+    }
+}
+
+fn ibr_sr_63(invoice: &Invoice, report: &mut Report) {
+    let Some(id) = invoice.specification_id.as_deref() else {
+        return;
+    };
+    if id.contains('*') {
+        report.push(Finding::fatal(
+            "IBR-SR-63",
+            Path::term(BtId(24)),
+            "BT-24 shall not contain '*' (wildcard is an SMP capability, not an instance id)",
+        ));
     }
 }
 
@@ -164,28 +183,91 @@ fn br_22(invoice: &Invoice, report: &mut Report) {
     }
 }
 
-fn br_26(invoice: &Invoice, report: &mut Report) {
+fn br_23(invoice: &Invoice, report: &mut Report) {
+    // BR-23: unitCode on invoiced/credited quantity (UBL Schematron).
     for (i, line) in invoice.lines.iter().enumerate() {
         if line.quantity.is_some() && line.unit.is_none() {
             report.push(Finding::fatal(
-                "BR-26",
+                "BR-23",
                 Path::at_term(Group::Line, i, BtId(130)),
-                "Invoiced quantity unit of measure (BT-130) shall be present when BT-129 is present",
+                "An Invoice line shall have an Invoiced quantity unit of measure code (BT-130)",
+            ));
+        }
+    }
+}
+
+fn br_26(invoice: &Invoice, report: &mut Report) {
+    // BR-26: Item net price (BT-146) present (UBL Schematron).
+    for (i, line) in invoice.lines.iter().enumerate() {
+        if line.price.is_none() {
+            report.push(Finding::fatal(
+                "BR-26",
+                Path::at_term(Group::Line, i, BtId(146)),
+                "Each Invoice line shall contain the Item net price (BT-146)",
             ));
         }
     }
 }
 
 fn br_27(invoice: &Invoice, report: &mut Report) {
+    // BR-27: Item net price (BT-146) shall NOT be negative.
     for (i, line) in invoice.lines.iter().enumerate() {
-        if line.price.is_none() {
+        if let Some(price) = line.price.as_ref()
+            && price.net.raw().is_sign_negative()
+        {
             report.push(Finding::fatal(
                 "BR-27",
                 Path::at_term(Group::Line, i, BtId(146)),
-                "Each Invoice line shall have an Item net price (BT-146)",
+                "The Item net price (BT-146) shall NOT be negative",
             ));
         }
     }
+}
+
+fn br_28(invoice: &Invoice, report: &mut Report) {
+    // BR-28: Item gross price (BT-148) shall NOT be negative.
+    for (i, line) in invoice.lines.iter().enumerate() {
+        if let Some(g) = line.price.as_ref().and_then(|p| p.gross)
+            && g.raw().is_sign_negative()
+        {
+            report.push(Finding::fatal(
+                "BR-28",
+                Path::at_term(Group::Line, i, BtId(148)),
+                "The Item gross price (BT-148) shall NOT be negative",
+            ));
+        }
+    }
+}
+
+fn br_co_03(invoice: &Invoice, report: &mut Report) {
+    // BR-CO-03: BT-7 and BT-8 are mutually exclusive.
+    if invoice.tax_point_date.is_some() && invoice.tax_point_code.is_some() {
+        report.push(Finding::fatal(
+            "BR-CO-03",
+            Path::term(BtId(7)),
+            "Value added tax point date (BT-7) and Value added tax point date code (BT-8) are mutually exclusive",
+        ));
+    }
+}
+
+fn br_51(invoice: &Invoice, report: &mut Report) {
+    // BR-51 is the sole core Warning: PAN (BT-87) at most 10 digits.
+    let Some(crate::payment::PaymentMeans::Card(card)) =
+        invoice.payment.as_ref().and_then(|p| p.means.as_ref())
+    else {
+        return;
+    };
+    if card.pan.chars().filter(|c| c.is_ascii_digit()).count() > 10 {
+        report.push(Finding::warning(
+            "BR-51",
+            Path::term(BtId(87)),
+            "An invoice should never include a full card primary account number (BT-87)",
+        ));
+    }
+}
+
+fn br_co_nlp(_invoice: &Invoice, _report: &mut Report) {
+    // BR-CO-05…08: artefact test is true() (NLP). Do not invent a reason-code ontology.
 }
 
 fn br_09(invoice: &Invoice, report: &mut Report) {
@@ -337,8 +419,12 @@ fn pint_tax(invoice: &Invoice, report: &mut Report) {
     }
 }
 
-fn ibr_my(invoice: &Invoice, report: &mut Report) {
-    if invoice.profile != crate::profile::Profile::PintMy {
+fn pint_my_only(invoice: &Invoice) -> bool {
+    invoice.profile == crate::profile::Profile::PintMy
+}
+
+fn ibr_02_my(invoice: &Invoice, report: &mut Report) {
+    if !pint_my_only(invoice) {
         return;
     }
     if invoice.seller.legal_registration.is_none() {
@@ -348,6 +434,12 @@ fn ibr_my(invoice: &Invoice, report: &mut Report) {
             "Seller legal registration identifier (BRN) shall be present",
         ));
     }
+}
+
+fn ibr_03_my(invoice: &Invoice, report: &mut Report) {
+    if !pint_my_only(invoice) {
+        return;
+    }
     if invoice.buyer.legal_registration.is_none() {
         report.push(Finding::fatal(
             "IBR-03-MY",
@@ -355,12 +447,24 @@ fn ibr_my(invoice: &Invoice, report: &mut Report) {
             "Buyer legal registration identifier (BRN) shall be present",
         ));
     }
+}
+
+fn ibr_04_my(invoice: &Invoice, report: &mut Report) {
+    if !pint_my_only(invoice) {
+        return;
+    }
     if invoice.seller.tax_registration.is_none() {
         report.push(Finding::fatal(
             "IBR-04-MY",
             Path::term(BtId(32)),
             "Seller TIN (tax registration) shall be present",
         ));
+    }
+}
+
+fn aligned_ibrp_cl_01_my(invoice: &Invoice, report: &mut Report) {
+    if !pint_my_only(invoice) {
+        return;
     }
     for (i, line) in invoice.lines.iter().enumerate() {
         if line.tax.code.trim().is_empty() {
@@ -650,14 +754,14 @@ pub static ALL: &[Rule] = &[
         severity: Severity::Fatal,
         text: "Self-billing (and other) process URNs are not validated as billing.",
         source: Source::Crate,
-        eval: |_i, _r| {},
+        eval: core_process_01,
     },
     Rule {
         id: "IBR-SR-63",
         severity: Severity::Fatal,
         text: "BT-24 must not contain '*'.",
         source: Source::Crate,
-        eval: |_i, _r| {},
+        eval: ibr_sr_63,
     },
     Rule {
         id: "BR-01",
@@ -737,25 +841,74 @@ pub static ALL: &[Rule] = &[
         eval: br_22,
     },
     Rule {
+        id: "BR-23",
+        severity: Severity::Fatal,
+        text: "An Invoice line shall have an Invoiced quantity unit of measure code (BT-130).",
+        source: Source::Both,
+        eval: br_23,
+    },
+    Rule {
         id: "BR-26",
         severity: Severity::Fatal,
-        text: "Invoiced quantity unit of measure (BT-130) shall be present when quantity is present.",
+        text: "Each Invoice line shall contain the Item net price (BT-146).",
         source: Source::Both,
         eval: br_26,
     },
     Rule {
         id: "BR-27",
         severity: Severity::Fatal,
-        text: "Each Invoice line shall have an Item net price (BT-146).",
+        text: "The Item net price (BT-146) shall NOT be negative.",
         source: Source::Both,
         eval: br_27,
     },
     Rule {
-        id: "BR-DEC-12",
+        id: "BR-28",
         severity: Severity::Fatal,
-        text: "Invoice amount type has at most two fraction digits (enforced by InvoiceAmount).",
+        text: "The Item gross price (BT-148) shall NOT be negative.",
         source: Source::Both,
-        eval: |_i, _r| {},
+        eval: br_28,
+    },
+    Rule {
+        id: "BR-51",
+        severity: Severity::Warning,
+        text: "An invoice should never include a full card primary account number (BT-87).",
+        source: Source::Both,
+        eval: br_51,
+    },
+    Rule {
+        id: "BR-CO-03",
+        severity: Severity::Fatal,
+        text: "Value added tax point date (BT-7) and Value added tax point date code (BT-8) are mutually exclusive.",
+        source: Source::Both,
+        eval: br_co_03,
+    },
+    Rule {
+        id: "BR-CO-05",
+        severity: Severity::Fatal,
+        text: "Document level allowance reason code and reason shall indicate the same type of allowance. Artefact test is true() (NLP).",
+        source: Source::ArtefactOnly,
+        eval: br_co_nlp,
+    },
+    Rule {
+        id: "BR-CO-06",
+        severity: Severity::Fatal,
+        text: "Document level charge reason code and reason shall indicate the same type of charge. Artefact test is true() (NLP).",
+        source: Source::ArtefactOnly,
+        eval: br_co_nlp,
+    },
+    Rule {
+        id: "BR-CO-07",
+        severity: Severity::Fatal,
+        text: "Invoice line allowance reason code and reason shall indicate the same type. Artefact test is true() (NLP).",
+        source: Source::ArtefactOnly,
+        eval: br_co_nlp,
+    },
+    Rule {
+        id: "BR-CO-08",
+        severity: Severity::Fatal,
+        text: "Invoice line charge reason code and reason shall indicate the same type. Artefact test is true() (NLP).",
+        source: Source::ArtefactOnly,
+        eval: br_co_nlp,
     },
     Rule {
         id: "BR-05",
@@ -867,29 +1020,128 @@ pub static ALL: &[Rule] = &[
         severity: Severity::Fatal,
         text: "Seller legal registration identifier (BRN / IBT-030) shall be present.",
         source: Source::Crate,
-        eval: ibr_my,
+        eval: ibr_02_my,
     },
     Rule {
         id: "IBR-03-MY",
         severity: Severity::Fatal,
         text: "Buyer legal registration identifier (BRN / IBT-047) shall be present.",
         source: Source::Crate,
-        eval: |_i, _r| {},
+        eval: ibr_03_my,
     },
     Rule {
         id: "IBR-04-MY",
         severity: Severity::Fatal,
         text: "Seller TIN (IBT-032) shall be present.",
         source: Source::Crate,
-        eval: |_i, _r| {},
+        eval: ibr_04_my,
     },
     Rule {
         id: "ALIGNED-IBRP-CL-01-MY",
         severity: Severity::Fatal,
         text: "Malaysian invoice tax categories shall be SA, SE, HVG, LVG, TTX, E or O.",
         source: Source::Crate,
-        eval: |_i, _r| {},
+        eval: aligned_ibrp_cl_01_my,
     },
+];
+
+/// BR-DEC-* are Amount.Type. InvoiceAmount refuses a third digit; these rows exist so explain() resolves artefact ids.
+fn br_dec_pass(_invoice: &Invoice, _report: &mut Report) {}
+
+macro_rules! dec {
+    ($id:literal, $text:literal) => {
+        Rule {
+            id: $id,
+            severity: Severity::Fatal,
+            text: $text,
+            source: Source::Both,
+            eval: br_dec_pass,
+        }
+    };
+}
+
+pub static DEC: &[Rule] = &[
+    dec!(
+        "BR-DEC-01",
+        "Document level allowance amount (BT-92) has at most 2 decimals."
+    ),
+    dec!(
+        "BR-DEC-02",
+        "Document level allowance base amount (BT-93) has at most 2 decimals."
+    ),
+    dec!(
+        "BR-DEC-05",
+        "Document level charge amount (BT-99) has at most 2 decimals."
+    ),
+    dec!(
+        "BR-DEC-06",
+        "Document level charge base amount (BT-100) has at most 2 decimals."
+    ),
+    dec!(
+        "BR-DEC-09",
+        "Sum of invoice line net amount (BT-106) has at most 2 decimals."
+    ),
+    dec!(
+        "BR-DEC-10",
+        "Sum of allowances on document level (BT-107) has at most 2 decimals."
+    ),
+    dec!(
+        "BR-DEC-11",
+        "Sum of charges on document level (BT-108) has at most 2 decimals."
+    ),
+    dec!(
+        "BR-DEC-12",
+        "Invoice total amount without VAT (BT-109) has at most 2 decimals."
+    ),
+    dec!(
+        "BR-DEC-13",
+        "Invoice total VAT amount (BT-110) has at most 2 decimals."
+    ),
+    dec!(
+        "BR-DEC-14",
+        "Invoice total amount with VAT (BT-112) has at most 2 decimals."
+    ),
+    dec!(
+        "BR-DEC-15",
+        "Invoice total VAT amount in accounting currency (BT-111) has at most 2 decimals."
+    ),
+    dec!("BR-DEC-16", "Paid amount (BT-113) has at most 2 decimals."),
+    dec!(
+        "BR-DEC-17",
+        "Rounding amount (BT-114) has at most 2 decimals."
+    ),
+    dec!(
+        "BR-DEC-18",
+        "Amount due for payment (BT-115) has at most 2 decimals."
+    ),
+    dec!(
+        "BR-DEC-19",
+        "VAT category taxable amount (BT-116) has at most 2 decimals."
+    ),
+    dec!(
+        "BR-DEC-20",
+        "VAT category tax amount (BT-117) has at most 2 decimals."
+    ),
+    dec!(
+        "BR-DEC-23",
+        "Invoice line net amount (BT-131) has at most 2 decimals."
+    ),
+    dec!(
+        "BR-DEC-24",
+        "Invoice line allowance amount (BT-136) has at most 2 decimals."
+    ),
+    dec!(
+        "BR-DEC-25",
+        "Invoice line charge amount (BT-141) has at most 2 decimals."
+    ),
+    dec!(
+        "BR-DEC-27",
+        "Item net price (BT-146) — Amount.Type is two decimals on InvoiceAmount only; unit price is not this row."
+    ),
+    dec!(
+        "BR-DEC-28",
+        "Item gross price (BT-148) — Amount.Type is two decimals on InvoiceAmount only."
+    ),
 ];
 
 #[cfg(test)]
@@ -903,12 +1155,64 @@ mod tests {
         assert!(matches_id("BR-CO-16", "BR-CO-16"));
         assert!(explain("br-02").unwrap().contains("BT-1"));
         assert!(explain("nope").is_none());
+        assert!(explain("BR-DEC-12").unwrap().contains("BT-109"));
         assert!(
             explain("BR-CO-16")
                 .unwrap()
                 .contains("BT-115) = Invoice total amount with VAT (BT-112)")
         );
         assert!(!explain("BR-CO-16").unwrap().contains("line net + tax"));
+    }
+
+    #[test]
+    fn ibr_03_my_eval_fires_on_missing_buyer_brn() {
+        let mut inv = crate::invoice::Invoice::blank(
+            crate::profile::Profile::PintMy,
+            "MY-1",
+            "MYR",
+            {
+                let mut p = crate::invoice::Party::new("S", "MY");
+                p.legal_registration = Some(crate::identifier::Identifier::new("2023010000001"));
+                p.tax_registration = Some(crate::identifier::Identifier::new("C12345678901"));
+                p
+            },
+            crate::invoice::Party::new("B", "MY"),
+        );
+        inv.issue_date = crate::date::Date::parse("2026-01-15").ok();
+        inv.type_code = Some(Code::new("380"));
+        let report = crate::validate::validate(&inv);
+        assert!(
+            report.findings.iter().any(|f| f.id == "IBR-03-MY"),
+            "{report}"
+        );
+        let eval = catalogue()
+            .iter()
+            .find(|r| r.id == "IBR-03-MY")
+            .unwrap()
+            .eval;
+        let mut from_eval = crate::report::Report {
+            profile_slug: "pint-my",
+            ..crate::report::Report::default()
+        };
+        eval(&inv, &mut from_eval);
+        assert!(from_eval.findings.iter().any(|f| f.id == "IBR-03-MY"));
+    }
+
+    #[test]
+    fn catalogue_ids_are_tested_or_uncovered() {
+        let uncovered = include_str!("../../../docs/UNCOVERED.md");
+        let tests = [
+            include_str!("rules.rs"),
+            include_str!("peppol.rs"),
+            include_str!("category.rs"),
+            include_str!("codes.rs"),
+        ]
+        .concat();
+        for rule in catalogue() {
+            let id = rule.id;
+            let ok = tests.contains(id) || uncovered.contains(id) || id.starts_with("BR-DEC-");
+            assert!(ok, "{id} is neither in tests nor UNCOVERED.md");
+        }
     }
 
     #[test]

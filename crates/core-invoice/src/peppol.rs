@@ -377,6 +377,366 @@ fn r040(inv: &Invoice, report: &mut Report) {
     }
 }
 
+fn both_de(inv: &Invoice) -> bool {
+    inv.seller.country().eq_ignore_ascii_case("DE")
+        && inv.buyer.country().eq_ignore_ascii_case("DE")
+}
+
+fn r002(inv: &Invoice, report: &mut Report) {
+    if !peppol_only(inv) {
+        return;
+    }
+    // PEPPOL-EN16931-R002: at most one Note, unless both parties are DE.
+    if inv.notes.len() > 1 && !both_de(inv) {
+        report.push(Finding::fatal(
+            "PEPPOL-EN16931-R002",
+            Path::term(BtId(22)),
+            "No more than one note is allowed on document level, unless both buyer and seller are German",
+        ));
+    }
+}
+
+fn each_ac(inv: &Invoice, mut f: impl FnMut(&crate::invoice::AllowanceCharge, Path)) {
+    for (i, a) in inv.document_allowances.iter().enumerate() {
+        f(a, Path::at_term(Group::DocumentAllowance, i, BtId(92)));
+    }
+    for (i, a) in inv.document_charges.iter().enumerate() {
+        f(a, Path::at_term(Group::DocumentCharge, i, BtId(99)));
+    }
+}
+
+fn r041(inv: &Invoice, report: &mut Report) {
+    if !peppol_only(inv) {
+        return;
+    }
+    // PEPPOL-EN16931-R041: base amount MUST be provided when percentage is provided.
+    each_ac(inv, |a, path| {
+        if a.percent.is_some() && a.base.is_none() {
+            report.push(Finding::fatal(
+                "PEPPOL-EN16931-R041",
+                path,
+                "Allowance/charge base amount MUST be provided when allowance/charge percentage is provided",
+            ));
+        }
+    });
+    for (i, line) in inv.lines.iter().enumerate() {
+        for a in line.allowances.iter().chain(line.charges.iter()) {
+            if a.percent.is_some() && a.base.is_none() {
+                report.push(Finding::fatal(
+                    "PEPPOL-EN16931-R041",
+                    Path::at_term(Group::Line, i, BtId(136)),
+                    "Allowance/charge base amount MUST be provided when allowance/charge percentage is provided",
+                ));
+            }
+        }
+    }
+}
+
+fn r042(inv: &Invoice, report: &mut Report) {
+    if !peppol_only(inv) {
+        return;
+    }
+    // PEPPOL-EN16931-R042: percentage MUST be provided when base amount is provided.
+    each_ac(inv, |a, path| {
+        if a.base.is_some() && a.percent.is_none() {
+            report.push(Finding::fatal(
+                "PEPPOL-EN16931-R042",
+                path,
+                "Allowance/charge percentage MUST be provided when allowance/charge base amount is provided",
+            ));
+        }
+    });
+    for (i, line) in inv.lines.iter().enumerate() {
+        for a in line.allowances.iter().chain(line.charges.iter()) {
+            if a.base.is_some() && a.percent.is_none() {
+                report.push(Finding::fatal(
+                    "PEPPOL-EN16931-R042",
+                    Path::at_term(Group::Line, i, BtId(137)),
+                    "Allowance/charge percentage MUST be provided when allowance/charge base amount is provided",
+                ));
+            }
+        }
+    }
+}
+
+fn r054(inv: &Invoice, report: &mut Report) {
+    if !peppol_only(inv) {
+        return;
+    }
+    // PEPPOL-EN16931-R054: tax total without subtotals (BT-111) iff tax currency (BT-6).
+    let has_tax_ccy = inv.tax_currency.is_some();
+    let has_acct = inv
+        .totals
+        .as_ref()
+        .and_then(|t| t.tax_total_accounting)
+        .is_some();
+    if has_tax_ccy != has_acct {
+        report.push(Finding::fatal(
+            "PEPPOL-EN16931-R054",
+            Path::term(BtId(111)),
+            "Only one tax total without tax subtotals MUST be provided when tax currency code is provided",
+        ));
+    }
+}
+
+fn r101(inv: &Invoice, report: &mut Report) {
+    if !peppol_only(inv) {
+        return;
+    }
+    for (i, line) in inv.lines.iter().enumerate() {
+        if line.invoiced_object.is_none() {
+            continue;
+        }
+        let code = line
+            .invoiced_object_code
+            .as_ref()
+            .map(crate::code::Code::as_str)
+            .unwrap_or("130");
+        if code != "130" {
+            report.push(Finding::fatal(
+                "PEPPOL-EN16931-R101",
+                Path::at_term(Group::Line, i, BtId(128)),
+                "Element Document reference can only be used for Invoice line object (code 130)",
+            ));
+        }
+    }
+}
+
+fn r110(inv: &Invoice, report: &mut Report) {
+    if !peppol_only(inv) {
+        return;
+    }
+    let Some(start) = inv.period.as_ref().and_then(|p| p.start) else {
+        return;
+    };
+    for (i, line) in inv.lines.iter().enumerate() {
+        if let Some(ls) = line.period.as_ref().and_then(|p| p.start)
+            && ls < start
+        {
+            report.push(Finding::fatal(
+                "PEPPOL-EN16931-R110",
+                Path::at_term(Group::Line, i, BtId(134)),
+                "Start date of line period MUST be within invoice period",
+            ));
+        }
+    }
+}
+
+fn r111(inv: &Invoice, report: &mut Report) {
+    if !peppol_only(inv) {
+        return;
+    }
+    let Some(end) = inv.period.as_ref().and_then(|p| p.end) else {
+        return;
+    };
+    for (i, line) in inv.lines.iter().enumerate() {
+        if let Some(le) = line.period.as_ref().and_then(|p| p.end)
+            && le > end
+        {
+            report.push(Finding::fatal(
+                "PEPPOL-EN16931-R111",
+                Path::at_term(Group::Line, i, BtId(135)),
+                "End date of line period MUST be within invoice period",
+            ));
+        }
+    }
+}
+
+fn r130(inv: &Invoice, report: &mut Report) {
+    if !peppol_only(inv) {
+        return;
+    }
+    for (i, line) in inv.lines.iter().enumerate() {
+        let Some(price) = line.price.as_ref() else {
+            continue;
+        };
+        let (Some(bu), Some(u)) = (price.base_unit.as_ref(), line.unit.as_ref()) else {
+            continue;
+        };
+        if bu.as_str() != u.as_str() {
+            report.push(Finding::fatal(
+                "PEPPOL-EN16931-R130",
+                Path::at_term(Group::Line, i, BtId(150)),
+                "Unit code of price base quantity MUST be same as invoiced quantity",
+            ));
+        }
+    }
+}
+
+fn cl001(inv: &Invoice, report: &mut Report) {
+    if !peppol_only(inv) {
+        return;
+    }
+    for (i, doc) in inv.supporting_documents.iter().enumerate() {
+        let Some(att) = doc.attachment.as_ref() else {
+            continue;
+        };
+        if !crate::codes::mime(&att.mime) {
+            report.push(Finding::fatal(
+                "PEPPOL-EN16931-CL001",
+                Path::at_term(Group::Attachment, i, BtId(125)),
+                "Mime code must be according to subset of IANA code list",
+            ));
+        }
+    }
+}
+
+fn cl002(inv: &Invoice, report: &mut Report) {
+    if !peppol_only(inv) {
+        return;
+    }
+    for (i, a) in inv.document_allowances.iter().enumerate() {
+        let Some(code) = a.reason_code.as_ref() else {
+            continue;
+        };
+        if !crate::generated_codes::UNCL_5189.contains(&code.as_str()) {
+            report.push(Finding::fatal(
+                "PEPPOL-EN16931-CL002",
+                Path::at_term(Group::DocumentAllowance, i, BtId(98)),
+                "Reason code MUST be according to subset of UNCL 5189 D.16B",
+            ));
+        }
+    }
+}
+
+fn cl003(inv: &Invoice, report: &mut Report) {
+    if !peppol_only(inv) {
+        return;
+    }
+    for (i, a) in inv.document_charges.iter().enumerate() {
+        let Some(code) = a.reason_code.as_ref() else {
+            continue;
+        };
+        if !crate::generated_codes::UNCL_7161.contains(&code.as_str()) {
+            report.push(Finding::fatal(
+                "PEPPOL-EN16931-CL003",
+                Path::at_term(Group::DocumentCharge, i, BtId(105)),
+                "Reason code MUST be according to UNCL 7161 D.16B",
+            ));
+        }
+    }
+}
+
+fn cl006(inv: &Invoice, report: &mut Report) {
+    if !peppol_only(inv) {
+        return;
+    }
+    let Some(code) = inv.tax_point_code.as_ref() else {
+        return;
+    };
+    if !crate::generated_codes::UNCL_2005.contains(&code.as_str()) {
+        report.push(Finding::fatal(
+            "PEPPOL-EN16931-CL006",
+            Path::term(BtId(8)),
+            "Invoice period description code must be according to UNCL 2005 D.16B",
+        ));
+    }
+}
+
+fn cl008(inv: &Invoice, report: &mut Report) {
+    if !peppol_only(inv) {
+        return;
+    }
+    for (party, group, bt) in [
+        (&inv.seller, Group::Seller, 34u16),
+        (&inv.buyer, Group::Buyer, 49u16),
+    ] {
+        let Some(ep) = party.electronic_address.as_ref() else {
+            continue;
+        };
+        let Some(scheme) = ep.scheme.as_deref() else {
+            continue;
+        };
+        if !crate::codes::eas(scheme) {
+            report.push(Finding::fatal(
+                "PEPPOL-EN16931-CL008",
+                Path::group_term(group, BtId(bt)),
+                "Electronic address identifier scheme must be from the Electronic Address Identifier Scheme list",
+            ));
+        }
+    }
+}
+
+fn f001(_inv: &Invoice, _report: &mut Report) {
+    // PEPPOL-EN16931-F001: dates are YYYY-MM-DD. Date::parse already refuses other shapes.
+}
+
+fn p0101(inv: &Invoice, report: &mut Report) {
+    if !peppol_only(inv) || inv.kind != crate::kind::DocumentKind::CreditNote {
+        return;
+    }
+    let Some(code) = inv.type_code.as_ref() else {
+        return;
+    };
+    const ALLOWED: &[&str] = &["381", "396", "81", "83", "532"];
+    if !ALLOWED.contains(&code.as_str()) {
+        report.push(Finding::fatal(
+            "PEPPOL-EN16931-P0101",
+            Path::term(BtId(3)),
+            format!(
+                "Credit note type code {} is not allowed for Peppol billing profile 01",
+                code.as_str()
+            ),
+        ));
+    }
+}
+
+fn p0112(inv: &Invoice, report: &mut Report) {
+    if !peppol_only(inv) {
+        return;
+    }
+    let Some(code) = inv.type_code.as_ref() else {
+        return;
+    };
+    if matches!(code.as_str(), "326" | "384") && !both_de(inv) {
+        report.push(Finding::fatal(
+            "PEPPOL-EN16931-P0112",
+            Path::term(BtId(3)),
+            "Invoice type code 326 or 384 are only allowed when both buyer and seller are German organizations",
+        ));
+    }
+}
+
+/// GS1 check digit (PEPPOL-COMMON-R040 / u:gln). Any length ≥ 2; weight 3 from the right of the data digits.
+fn gln_ok(s: &str) -> bool {
+    let s = s.trim();
+    if s.len() < 2 || !s.bytes().all(|b| b.is_ascii_digit()) {
+        return false;
+    }
+    let digits: Vec<u32> = s.bytes().map(|b| u32::from(b - b'0')).collect();
+    let n = digits.len();
+    let mut sum = 0u32;
+    for (i, d) in digits[..n - 1].iter().rev().enumerate() {
+        sum += d * if i % 2 == 0 { 3 } else { 1 };
+    }
+    let check = (10 - (sum % 10)) % 10;
+    digits[n - 1] == check
+}
+
+fn common_r040(inv: &Invoice, report: &mut Report) {
+    if !peppol_only(inv) {
+        return;
+    }
+    for (party, group, bt) in [
+        (&inv.seller, Group::Seller, 34u16),
+        (&inv.buyer, Group::Buyer, 49u16),
+    ] {
+        let Some(ep) = party.electronic_address.as_ref() else {
+            continue;
+        };
+        if ep.scheme.as_deref() != Some("0088") {
+            continue;
+        }
+        if !gln_ok(&ep.value) {
+            report.push(Finding::fatal(
+                "PEPPOL-COMMON-R040",
+                Path::group_term(group, BtId(bt)),
+                "GLN must have a valid format according to GS1 rules",
+            ));
+        }
+    }
+}
+
 fn r121(inv: &Invoice, report: &mut Report) {
     if !peppol_only(inv) {
         return;
@@ -514,6 +874,91 @@ pub static RULES: &[Rule] = &[
         "Base quantity shall be greater than zero.",
         r121,
     ),
+    r(
+        "PEPPOL-EN16931-R002",
+        "No more than one note on document level unless both parties are German.",
+        r002,
+    ),
+    r(
+        "PEPPOL-EN16931-R041",
+        "Allowance/charge base amount MUST be provided when percentage is provided.",
+        r041,
+    ),
+    r(
+        "PEPPOL-EN16931-R042",
+        "Allowance/charge percentage MUST be provided when base amount is provided.",
+        r042,
+    ),
+    r(
+        "PEPPOL-EN16931-R054",
+        "Tax total without subtotals (BT-111) iff tax currency (BT-6).",
+        r054,
+    ),
+    r(
+        "PEPPOL-EN16931-R101",
+        "Line document reference is only for invoiced object (code 130).",
+        r101,
+    ),
+    r(
+        "PEPPOL-EN16931-R110",
+        "Line period start MUST be within invoice period.",
+        r110,
+    ),
+    r(
+        "PEPPOL-EN16931-R111",
+        "Line period end MUST be within invoice period.",
+        r111,
+    ),
+    r(
+        "PEPPOL-EN16931-R130",
+        "Price base quantity unit MUST equal invoiced quantity unit.",
+        r130,
+    ),
+    r(
+        "PEPPOL-EN16931-CL001",
+        "Attachment mime code must be from the IANA subset.",
+        cl001,
+    ),
+    r(
+        "PEPPOL-EN16931-CL002",
+        "Allowance reason code MUST be UNCL 5189.",
+        cl002,
+    ),
+    r(
+        "PEPPOL-EN16931-CL003",
+        "Charge reason code MUST be UNCL 7161.",
+        cl003,
+    ),
+    r(
+        "PEPPOL-EN16931-CL006",
+        "Invoice period description code MUST be UNCL 2005.",
+        cl006,
+    ),
+    r(
+        "PEPPOL-EN16931-CL008",
+        "Endpoint scheme MUST be from the Electronic Address Identifier Scheme list.",
+        cl008,
+    ),
+    r(
+        "PEPPOL-EN16931-F001",
+        "A date MUST be formatted YYYY-MM-DD (enforced by Date).",
+        f001,
+    ),
+    r(
+        "PEPPOL-EN16931-P0101",
+        "Credit note type code must be in the Peppol billing profile 01 list.",
+        p0101,
+    ),
+    r(
+        "PEPPOL-EN16931-P0112",
+        "Invoice type 326 or 384 only when both parties are German.",
+        p0112,
+    ),
+    r(
+        "PEPPOL-COMMON-R040",
+        "GLN (EAS 0088) must have a valid GS1 check digit.",
+        common_r040,
+    ),
 ];
 
 #[cfg(test)]
@@ -548,10 +993,11 @@ mod tests {
         );
         inv.issue_date = Date::parse("2026-01-15").ok();
         inv.type_code = Some(Code::new("380"));
+        inv.payment_terms = Some("Net 30".into());
         inv.business_process = Some("urn:fdc:peppol.eu:2017:poacc:billing:01:1.0".into());
         inv.buyer_reference = Some(crate::identifier::DocumentReference::new("PO-1"));
         inv.seller.electronic_address = Some(Identifier::schemed("1234567890128", "0088"));
-        inv.buyer.electronic_address = Some(Identifier::schemed("1234567890129", "0088"));
+        inv.buyer.electronic_address = Some(Identifier::schemed("1234567890135", "0088"));
         inv.lines = vec![{
             let mut line = Line::new(
                 "1",
@@ -750,6 +1196,139 @@ mod tests {
                 .findings
                 .iter()
                 .all(|f| !f.id.starts_with("PEPPOL-EN16931")),
+            "{report}"
+        );
+    }
+
+    #[test]
+    fn r002_two_notes_fail_unless_both_de() {
+        let mut inv = peppol();
+        inv.notes = vec![
+            crate::invoice::InvoiceNote {
+                subject: None,
+                text: "a".into(),
+            },
+            crate::invoice::InvoiceNote {
+                subject: None,
+                text: "b".into(),
+            },
+        ];
+        let report = validate(&inv);
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|f| f.id == "PEPPOL-EN16931-R002"),
+            "{report}"
+        );
+        inv.buyer = {
+            let mut b = crate::invoice::Party::new("B", "DE");
+            b.vat_identifier = Some(Identifier::new("DE000"));
+            b.electronic_address = Some(Identifier::schemed("1234567890135", "0088"));
+            b
+        };
+        let report = validate(&inv);
+        assert!(
+            report
+                .findings
+                .iter()
+                .all(|f| f.id != "PEPPOL-EN16931-R002"),
+            "{report}"
+        );
+    }
+
+    #[test]
+    fn r041_percent_without_base() {
+        let mut inv = peppol();
+        inv.document_charges.push(crate::invoice::AllowanceCharge {
+            amount: InvoiceAmount::parse("1.00").unwrap(),
+            base: None,
+            percent: Some(crate::numeric::Percentage::new(Decimal::from(10))),
+            reason: None,
+            reason_code: None,
+            tax: Some(TaxCategory::vat("S", Decimal::from(19))),
+        });
+        let report = validate(&inv);
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|f| f.id == "PEPPOL-EN16931-R041"),
+            "{report}"
+        );
+    }
+
+    #[test]
+    fn r101_rejects_non_130() {
+        let mut inv = peppol();
+        inv.lines[0].invoiced_object = Some(Identifier::new("OBJ"));
+        inv.lines[0].invoiced_object_code = Some(Code::new("50"));
+        let report = validate(&inv);
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|f| f.id == "PEPPOL-EN16931-R101"),
+            "{report}"
+        );
+    }
+
+    #[test]
+    fn p0101_forbids_380_on_credit_note() {
+        let mut inv = peppol();
+        inv.kind = crate::kind::DocumentKind::CreditNote;
+        inv.type_code = Some(Code::new("380"));
+        let report = validate(&inv);
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|f| f.id == "PEPPOL-EN16931-P0101"),
+            "{report}"
+        );
+    }
+
+    #[test]
+    fn p0112_326_needs_both_de() {
+        let mut inv = peppol();
+        inv.type_code = Some(Code::new("326"));
+        let report = validate(&inv);
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|f| f.id == "PEPPOL-EN16931-P0112"),
+            "{report}"
+        );
+    }
+
+    #[test]
+    fn common_r040_bad_gln() {
+        let mut inv = peppol();
+        inv.seller.electronic_address = Some(Identifier::schemed("1234567890129", "0088"));
+        let report = validate(&inv);
+        assert!(
+            report.findings.iter().any(|f| f.id == "PEPPOL-COMMON-R040"),
+            "{report}"
+        );
+    }
+
+    #[test]
+    fn r046_one_cent_fails_exact() {
+        let mut inv = peppol();
+        inv.lines[0].price = Some(Price {
+            net: crate::amount::UnitPriceAmount::parse("100.00").unwrap(),
+            discount: Some(crate::amount::UnitPriceAmount::parse("1.00").unwrap()),
+            gross: Some(crate::amount::UnitPriceAmount::parse("100.99").unwrap()),
+            base_qty: None,
+            base_unit: None,
+        });
+        let report = validate(&inv);
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|f| f.id == "PEPPOL-EN16931-R046"),
             "{report}"
         );
     }

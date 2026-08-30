@@ -30,7 +30,12 @@ down here**, not that there are none.
 - **Presence.** BR-08/10 address group; BR-22 quantity; BR-26 unit; BR-27 net price. PINT-MY Z01/Z03–Z08 overlay BR-CL-16. `validate --format json`. convert `-o`. CII writes qty/price. `docs/UNCOVERED.md` lists remaining catalogue ids.
 - **Convert.** CLI `convert` proves, then `write_validated`. Fatal → exit 1, findings on stdout, empty XML. `write` is renamed `write_unchecked` (tests only). `write_validated` overwrites BT-24 / BT-23 from the proved profile. Self-billing BT-24 cannot be re-stamped as billing (`CORE-PROCESS-01`).
 - **CII (historical, crates.io 0.1.0 / 004 P0).** `convert --to cii` used to wrap UBL in `CrossIndustryInvoice` and was then refused as `CiiNotImplemented`. That wrapper is gone.
-- **CII (current).** Three-part D16B **subset** for EN 16931 and Peppol BIS (lines before header, format 102). Qty, price, payment, allowances, and delivery are not mapped yet. **PINT-MY is UBL-only:** `FormatError::CiiNotForProfile`, CLI exit 2.
+- **CII (current).** Three-part D16B **subset** for EN 16931 and Peppol BIS (lines before header, format 102). Qty, price, payment means, document A/C, and delivery date/address are mapped. Remaining CII drops are named in the cross-syntax test. **PINT-MY is UBL-only:** `FormatError::CiiNotForProfile`, CLI exit 2.
+- **Lists.** ISO 4217 / 3166, EAS, UNCL 1001/4461/5189/7161/2005/7143, Rec 20, MIME generated from `refers/` genericode (`task lists`). `XXX` stays allowed.
+- **Peppol.** Remaining extras: R002, R041/R042, R054, R101, R110/R111, R130, CL001–CL003/CL006/CL008, F001, P0101, P0112, COMMON-R040 (GLN).
+- **Families.** BR-S-03/04/06/07 are RateContext allowance/charge, not aliases of BR-S-02/05. BR-O-11 groups vs BR-O-12 lines. BR-DEC-* explainable constant-pass.
+- **CLI.** `validate` batch paths, stdin `-`, `--quiet`. `rules --profile peppol`. `inspect` prints unmapped. `profiles` prints artefact pins.
+- **C ABI.** `core_invoice_validate`, convert, diff, version. Python ctypes wrapper.
 - **Breaking (0.1.x).** `FormatError::CiiNotImplemented` is renamed to `CiiNotForProfile` and is returned when writing CII for PINT-MY.
 - **CLI.** `--profile` default is `auto` (BT-24). Invalid findings print on **stdout**. `explain` unknown ids exit 2. `explain` covers BR-06 and BR-07.
 - **BR-05** is currency **presence**, not a 3-letter length check.

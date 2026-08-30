@@ -136,8 +136,12 @@ pub struct Line {
     pub item_id: Option<Identifier>,
     /// BT-159 item origin country (BR-CL-15), not BT-80.
     pub origin_country: Option<Code>,
-    /// BG-32 classification identifiers (PINT-MY CLASS may use this).
+    /// BG-32 classification identifiers (PINT-MY CLASS is listID `CG`, not LHDN).
     pub classifications: Vec<Identifier>,
+    /// Line invoiced object (BT-128). Peppol R101: DocumentTypeCode 130 only.
+    pub invoiced_object: Option<Identifier>,
+    /// UBL DocumentTypeCode on the line DocumentReference. Absent means 130.
+    pub invoiced_object_code: Option<Code>,
 }
 
 impl Line {
@@ -164,6 +168,8 @@ impl Line {
             item_id: None,
             origin_country: None,
             classifications: vec![],
+            invoiced_object: None,
+            invoiced_object_code: None,
         }
     }
 }

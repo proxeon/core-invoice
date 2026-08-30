@@ -37,6 +37,17 @@ impl Finding {
             hint: None,
         }
     }
+
+    pub fn warning(id: &'static str, path: Path, message: impl Into<String>) -> Self {
+        Self {
+            id,
+            severity: Severity::Warning,
+            path,
+            message: message.into(),
+            detail: None,
+            hint: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

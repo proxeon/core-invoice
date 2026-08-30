@@ -754,7 +754,13 @@ fn write_allowance(
         if charge { "true" } else { "false" },
         None,
     );
+    if let Some(p) = a.percent {
+        leaf(s, 2, "MultiplierFactorNumeric", &p.to_string(), None);
+    }
     amount(s, 2, "Amount", a.amount, cur);
+    if let Some(b) = a.base {
+        amount(s, 2, "BaseAmount", b, cur);
+    }
     if let Some(tax) = a.tax.as_ref() {
         open(s, 2, "TaxCategory");
         leaf(s, 3, "ID", &tax.code, None);
@@ -874,6 +880,17 @@ fn write_line(
         }
         close(s, 2, "InvoicePeriod");
     }
+    if let Some(obj) = line.invoiced_object.as_ref() {
+        open(s, 2, "DocumentReference");
+        leaf(s, 3, "ID", &obj.value, None);
+        let code = line
+            .invoiced_object_code
+            .as_ref()
+            .map(Code::as_str)
+            .unwrap_or("130");
+        leaf(s, 3, "DocumentTypeCode", code, None);
+        close(s, 2, "DocumentReference");
+    }
     for a in &line.allowances {
         write_line_ac(s, a, false, cur);
     }
@@ -946,7 +963,8 @@ fn write_line(
         open(s, 2, "Price");
         amount_unit(s, 3, "PriceAmount", price.net, cur);
         if let Some(q) = price.base_qty {
-            leaf(s, 3, "BaseQuantity", &q.to_string(), None);
+            let unit = price.base_unit.as_ref().map(|c| ("unitCode", c.as_str()));
+            leaf(s, 3, "BaseQuantity", &q.to_string(), unit);
         }
         close(s, 2, "Price");
     }
@@ -968,7 +986,13 @@ fn write_line_ac(s: &mut String, a: &LineAllowanceCharge, charge: bool, cur: &st
     if let Some(r) = a.reason.as_deref() {
         leaf(s, 3, "AllowanceChargeReason", r, None);
     }
+    if let Some(p) = a.percent {
+        leaf(s, 3, "MultiplierFactorNumeric", &p.to_string(), None);
+    }
     amount(s, 3, "Amount", a.amount, cur);
+    if let Some(b) = a.base {
+        amount(s, 3, "BaseAmount", b, cur);
+    }
     close(s, 2, "AllowanceCharge");
 }
 
@@ -1231,7 +1255,9 @@ fn read_line(
             discount: None,
             gross: None,
             base_qty: child_text(p, "BaseQuantity").and_then(|t| Quantity::parse(&t).ok()),
-            base_unit: None,
+            base_unit: child(p, "BaseQuantity")
+                .and_then(|n| n.attribute("unitCode"))
+                .map(Code::new),
         })
     });
     let period = child(node, "InvoicePeriod").map(|p| Period {
@@ -1285,6 +1311,12 @@ fn read_line(
                     .collect()
             })
             .unwrap_or_default(),
+        invoiced_object: child(node, "DocumentReference")
+            .and_then(|n| child(n, "ID"))
+            .map(ident),
+        invoiced_object_code: child(node, "DocumentReference")
+            .and_then(|n| child_text(n, "DocumentTypeCode"))
+            .map(Code::new),
     })
 }
 

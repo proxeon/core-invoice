@@ -2,43 +2,49 @@
 
 Every `catalogue()` id is either exercised by a `#[test]` or listed here with a reason.
 
-## Code lists (hand subsets)
+## Code lists (generated; remaining holes)
 
-- ISO 4217 / ISO 3166 remaining codes — generated lists are P10.01–P10.02; current hand subsets live in `codes.rs`.
-- UNCL 1001 vs artefact — BR-CL-01 is a split subset; remainder P10.04.
-- UNCL 4461 remainder; Rec 20 units — P10.04.
-- EAS vs full CEF list (9 codes shipped) — P10.03.
-- VATEX vs full list — P8.05 implemented pairing P0104–P0111; membership list P10.03.
+- BR-CL-07, BR-CL-08, BR-CL-10, BR-CL-11, BR-CL-21, BR-CL-26 — ICD/UNCL 1153 scheme slots on specific identifier elements; lists generated (`ICD`) but not yet bound per BT. Owner: P10.
+- BR-CL-03 `@currencyID` on wire amounts — model amounts inherit `Invoice.currency`; P8 R051 same reason.
 
-## CEN BR-CL not yet membership-complete
+## Peppol extra_rules not modelled (syntax-only or Option-at-most-one)
 
-- BR-CL-06, 07, 08, 10, 11, 13, 15, 19, 20, 21, 26 — need generated lists (P10).
+From `refers/peppol-bis-invoice-3` v3.0.20:
 
-## VAT family rows still aliased
+- PEPPOL-EN16931-R006 — CII-only “one invoiced object”; UBL is `Invoice.invoiced_object: Option`.
+- PEPPOL-EN16931-R008 — empty XML elements (syntax walk, not model).
+- PEPPOL-EN16931-R043 — ChargeIndicator true/false; model uses two vecs, writer emits the boolean.
+- PEPPOL-EN16931-R044 — price-level charge forbidden; `Price` has discount only.
+- PEPPOL-EN16931-R051 — `@currencyID` on every amount vs BT-5 except BT-111; wire-only.
+- PEPPOL-EN16931-R053 — one TaxTotal with subtotals; model has one `tax_breakdown` vec.
+- PEPPOL-EN16931-R080 — one project reference; `Invoice.project` is `Option`.
+- PEPPOL-EN16931-R100 — at most one line DocumentReference; `Line.invoiced_object` is `Option`.
+- PEPPOL-EN16931-CL007 — `@currencyID` ISO 4217; CORE BR-CL-04 covers BT-5.
+- PEPPOL-COMMON-R041–R053 — ICD checksums besides GLN (R040 shipped). Owner: P8/P10.
 
-- BR-S-03/04/06/07 currently share identifier/rate helpers with BR-S-02 — uncollapse P12.02.
+## VAT family rows still only for S-03/04/06/07
 
-## Dummy / type-enforced
+- BR-Z-03/04/06/07, BR-E-03/04/06/07, BR-AE-03/04, BR-IC-03/04, BR-G-03/04, BR-AF-03/04, BR-AG-03/04 — artefacts have allowance/charge identifier rows; only the S family is uncollapsed. Owner: P12.
 
-- `CORE-PROCESS-01` eval is empty; finding is emitted from `spec_lookup` — P12.03.
-- `IBR-SR-63` eval empty; emitted from `spec_lookup` — P12.03.
-- `BR-DEC-12` is a constant-pass: `InvoiceAmount` already refuses a third decimal.
+## Dummy / type-enforced (now explainable)
 
-## Peppol extra_rules not yet implemented
+- `BR-DEC-*` constant-pass: `InvoiceAmount` refuses a third decimal. Holes 03,04,07,08,21,22,26,29,30 not invented (percent / unit price).
+- `BR-CO-05`…`BR-CO-08` artefact `true()` (NLP). Owner: P11.05.
+- `BR-CO-25` — UBL Schematron 1.3.16 has no BR-CO-25. EDIFACT wording is positive BT-115 → BT-9 or BT-20. Owner: P11.04.
 
-From `refers/peppol-bis-invoice-3` v3.0.20, not in `peppol::RULES`:
+## PINT-MY remaining from 1.3.0 zip
 
-- PEPPOL-EN16931-R002, R041, R042, R043, R044, R051, R053, R054, R080, R100, R101, R110, R111, R130
-- PEPPOL-EN16931-CL001, CL002, CL003, CL006, CL007, CL008, F001
-- PEPPOL-EN16931-P0101, P0112
-- PEPPOL-COMMON-* (EAS/ICD) — P10 lists
+Registered+evaluated: `ibr-02-my`, `ibr-03-my`, `ibr-04-my`, `aligned-ibrp-cl-01-my`, SA/SE/HVG/LVG/E/TTX `-08/-09/-10`, `aligned-ibrp-o-11-my`, `aligned-ibrp-001-my` not separately registered (BT-24 lookup).
+UNCOVERED: `aligned-ibrp-002`, `aligned-ibrp-046/047/048`, `aligned-ibrp-hvg-10`, `aligned-ibrp-lvg-10`, `aligned-ibrp-ttx-08`, `aligned-ibrp-e-05/08`, `aligned-ibrp-o-09`, `ibr-cl-05-my`. Owner: P9.03.
 
-## PINT-MY
+CLASS: mapped as `Line.classifications` with `listID` (`CG` is CLASS in PINT-MY). `BR-CL-13` / UNCL 7143. Not an LHDN submit artefact.
 
-- Remaining IBR-* / ALIGNED-IBRP-* from the 1.3.0 zip not in `category.rs` — P9.03.
-- CLASS on line (BG-32) mapping to official CLASS samples — P9.04.
-- Official samples may still fire presence/list ids listed above until P10/P11 complete.
+## Pint GST
 
-## `pint_gst_category`
+- `pint_gst_category` helper exists; GST family table on `Profile::Pint` is not a full IBR set. Owner: P12/P9.
 
-- Helper exists; GST family table on `Profile::Pint` is not a full IBR set — P12/P9.
+## P14 / P18
+
+- ConnectingEurope XSLT SVRL job: `task svrl` / `xtask/svrl_oracle.py` (Saxon). Mapping table `docs/svrl-id-map.md`.
+- Mustang: only if `MUSTANG_JAR` is set; VAT CII; never default CI.
+- nix flake: Later (P18.03 / P19).

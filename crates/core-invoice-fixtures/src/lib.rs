@@ -48,6 +48,7 @@ pub fn pint_my_sst() -> Invoice {
     )];
     inv.issue_date = core_invoice::Date::parse("2026-01-15").ok();
     inv.type_code = Some(core_invoice::Code::new("380"));
+    inv.payment_terms = Some("Net 30".into());
     let _ = reconcile(&mut inv);
     inv
 }
@@ -75,6 +76,7 @@ pub fn pint_gst_sr() -> Invoice {
     )];
     inv.issue_date = core_invoice::Date::parse("2026-01-15").ok();
     inv.type_code = Some(core_invoice::Code::new("380"));
+    inv.payment_terms = Some("Net 30".into());
     let _ = reconcile(&mut inv);
     inv
 }
@@ -93,7 +95,7 @@ pub fn peppol_vat() -> Invoice {
         {
             let mut b = Party::new("Buyer SARL", "FR");
             b.vat_identifier = Some(Identifier::new("FR12345678901"));
-            b.electronic_address = Some(Identifier::schemed("1234567890129", "0088"));
+            b.electronic_address = Some(Identifier::schemed("1234567890135", "0088"));
             b
         },
     );
@@ -110,6 +112,7 @@ pub fn peppol_vat() -> Invoice {
     inv.type_code = Some(core_invoice::Code::new("380"));
     inv.business_process = Some("urn:fdc:peppol.eu:2017:poacc:billing:01:1.0".into());
     inv.buyer_reference = Some(core_invoice::DocumentReference::new("PO-1"));
+    inv.payment_terms = Some("Net 30".into());
     let _ = reconcile(&mut inv);
     inv
 }
@@ -235,6 +238,30 @@ mod tests {
             report.ok(),
             "refers/peppol-bis-invoice-3/rules/examples/base-example.xml: {report}"
         );
+    }
+
+    #[test]
+    fn official_en16931_example_when_refers_present() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../refers/en16931/ubl/examples/ubl-tc434-example1.xml");
+        if !path.exists() {
+            if std::env::var("CORE_INVOICE_REQUIRE_SPEC").ok().as_deref() == Some("1") {
+                panic!("missing {}", path.display());
+            }
+            return;
+        }
+        let xml = std::fs::read_to_string(&path).unwrap();
+        let inv = core_invoice_formats::read(&xml).unwrap();
+        assert_eq!(inv.profile, Profile::En16931);
+        let report = validate(&inv);
+        if !report.ok() {
+            for f in &report.findings {
+                assert!(
+                    f.id != "FormatError",
+                    "parse-shaped failure on official EN example: {report}"
+                );
+            }
+        }
     }
 
     #[test]

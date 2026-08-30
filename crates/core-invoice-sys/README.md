@@ -1,6 +1,6 @@
 # core-invoice-sys
 
-C ABI for `core_invoice_validate_ubl`. Returns **0** valid, **1** invalid, **2** unreadable / bad args.
+C ABI for `core_invoice_validate` / `_ubl`, convert, diff, version. Returns **0** valid, **1** invalid, **2** unreadable / bad args.
 
 ```c
 #include "core_invoice.h"
@@ -16,4 +16,6 @@ int main(void) {
 }
 ```
 
-Python bindings are not implemented in 0.1.x. The semantic crate (`core-invoice`) is the WASM target — `cargo build -p core-invoice --target wasm32-unknown-unknown` — not the codecs.
+Python: [`python/core_invoice.py`](../../python/core_invoice.py) `validate_xml(xml, profile=None) -> 0|1|2` via ctypes on this ABI (build `-p core-invoice-sys` first). Not a second parser. PyPI wheel is Later.
+
+The semantic crate (`core-invoice`) is the WASM target — `cargo build -p core-invoice --target wasm32-unknown-unknown` — the model, not a browser AP. Formats/sys are not that job.

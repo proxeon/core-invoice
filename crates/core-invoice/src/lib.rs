@@ -12,6 +12,7 @@ pub mod code;
 pub mod codes;
 pub mod date;
 pub mod error;
+mod generated_codes;
 pub mod identifier;
 pub mod invoice;
 pub mod kind;
@@ -31,7 +32,10 @@ pub use attachment::Attachment;
 pub use bt::{BtId, Group, Path};
 pub use category::{CategoryProfile, VatCategory, pint_gst_category};
 pub use code::Code;
-pub use codes::{ARTEFACT_VERSION, currency as is_currency};
+pub use codes::{
+    ARTEFACT_VERSION, EN16931_GIT, PEPPOL_BIS_VERSION, PINT_MY_VERSION, PINT_VERSION,
+    currency as is_currency,
+};
 pub use date::Date;
 pub use error::{AmountError, AttachmentError, DateError};
 pub use identifier::{DocumentReference, Identifier};
@@ -98,6 +102,7 @@ mod tests {
         }];
         inv.issue_date = Date::parse("2026-01-15").ok();
         inv.type_code = Some(Code::new("380"));
+        inv.payment_terms = Some("Net 30".into());
         let _ = reconcile(&mut inv);
         inv
     }
