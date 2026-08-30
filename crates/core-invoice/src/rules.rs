@@ -35,6 +35,37 @@ pub fn catalogue() -> &'static [Rule] {
     ALL
 }
 
+fn spec_lookup(invoice: &Invoice, report: &mut Report) {
+    let Some(id) = invoice.specification_id.as_deref() else {
+        return;
+    };
+    if id.contains('*') {
+        report.push(Finding::fatal(
+            "IBR-SR-63",
+            Path::term(BtId(24)),
+            "BT-24 shall not contain '*' (wildcard is an SMP capability, not an instance id)",
+        ));
+        return;
+    }
+    match crate::profile::Profile::for_specification_id(id) {
+        crate::profile::ProfileLookup::WrongProcess => {
+            report.push(Finding::fatal(
+                "CORE-PROCESS-01",
+                Path::term(BtId(24)),
+                "Specification identifier is a self-billing (or other) process; not billing",
+            ));
+        }
+        crate::profile::ProfileLookup::Unknown => {
+            report.push(Finding::fatal(
+                "CORE-SPEC-01",
+                Path::term(BtId(24)),
+                "Unrecognised specification identifier (BT-24)",
+            ));
+        }
+        crate::profile::ProfileLookup::Profile(_) => {}
+    }
+}
+
 fn br_02(invoice: &Invoice, report: &mut Report) {
     if invoice.number.trim().is_empty() {
         report.push(Finding::fatal(
@@ -131,6 +162,27 @@ fn pint_my_id(invoice: &Invoice, report: &mut Report) {
 fn br_co_16_unregistered(_invoice: &Invoice, _report: &mut Report) {}
 
 pub static ALL: &[Rule] = &[
+    Rule {
+        id: "CORE-SPEC-01",
+        severity: Severity::Fatal,
+        text: "Unrecognised specification identifier (BT-24).",
+        source: Source::Crate,
+        eval: spec_lookup,
+    },
+    Rule {
+        id: "CORE-PROCESS-01",
+        severity: Severity::Fatal,
+        text: "Self-billing (and other) process URNs are not validated as billing.",
+        source: Source::Crate,
+        eval: |_i, _r| {},
+    },
+    Rule {
+        id: "IBR-SR-63",
+        severity: Severity::Fatal,
+        text: "BT-24 must not contain '*'.",
+        source: Source::Crate,
+        eval: |_i, _r| {},
+    },
     Rule {
         id: "BR-02",
         severity: Severity::Fatal,

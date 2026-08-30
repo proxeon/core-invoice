@@ -58,7 +58,12 @@ pub fn write(invoice: &Invoice) -> String {
   </cac:LegalMonetaryTotal>
 {lines}</Invoice>
 "#,
-        escape(invoice.profile.specification_id()),
+        escape(
+            invoice
+                .specification_id
+                .as_deref()
+                .unwrap_or_else(|| invoice.profile.specification_id()),
+        ),
         escape(&invoice.number),
         escape(&invoice.currency),
         escape(&invoice.seller.name),
@@ -74,10 +79,15 @@ pub fn write(invoice: &Invoice) -> String {
 
 pub fn read(xml: &str) -> Result<Invoice, FormatError> {
     let customization = tag(xml, "CustomizationID");
-    let profile = customization
-        .as_deref()
-        .and_then(profile_from_bt24)
-        .unwrap_or(Profile::En16931);
+    let profile = match customization.as_deref() {
+        Some(id) => match Profile::for_specification_id(id) {
+            core_invoice::ProfileLookup::Profile(p) => p,
+            core_invoice::ProfileLookup::WrongProcess | core_invoice::ProfileLookup::Unknown => {
+                Profile::En16931
+            }
+        },
+        None => Profile::En16931,
+    };
 
     let number = tag(xml, "ID").ok_or_else(|| FormatError::Parse("missing cbc:ID".into()))?;
     let currency = tag(xml, "DocumentCurrencyCode").unwrap_or_else(|| "EUR".into());
@@ -123,6 +133,8 @@ pub fn read(xml: &str) -> Result<Invoice, FormatError> {
 
     Ok(Invoice {
         profile,
+        specification_id: customization,
+        kind: core_invoice::DocumentKind::Invoice,
         number,
         currency,
         seller: Party::new(seller_name, seller_country),
@@ -138,20 +150,6 @@ fn default_tax(profile: Profile) -> TaxSystem {
         Profile::PintMy => TaxSystem::Sst,
         Profile::Pint => TaxSystem::Gst,
         _ => TaxSystem::Vat,
-    }
-}
-
-fn profile_from_bt24(id: &str) -> Option<Profile> {
-    if id.contains("pint") && (id.contains("@my") || id.contains("my-1")) {
-        Some(Profile::PintMy)
-    } else if id.contains("pint") {
-        Some(Profile::Pint)
-    } else if id.contains("peppol") {
-        Some(Profile::PeppolBis3)
-    } else if id.contains("en16931") {
-        Some(Profile::En16931)
-    } else {
-        None
     }
 }
 

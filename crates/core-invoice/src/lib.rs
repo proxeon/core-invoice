@@ -31,7 +31,7 @@ pub use invoice::{Invoice, Line, Party};
 pub use kind::DocumentKind;
 pub use numeric::{Percentage, Quantity};
 pub use payment::{CreditTransfer, DirectDebit, PaymentCard, PaymentMeans};
-pub use profile::Profile;
+pub use profile::{Edition, Profile, ProfileLookup};
 pub use report::{Finding, Report, Severity, Source};
 pub use rules::{catalogue, explain};
 pub use tax::{TaxCategory, TaxSystem};
@@ -45,6 +45,8 @@ mod tests {
     fn sst_invoice(profile: Profile) -> Invoice {
         Invoice {
             profile,
+            specification_id: Some(profile.specification_id().into()),
+            kind: DocumentKind::Invoice,
             number: "INV-1".into(),
             currency: "MYR".into(),
             seller: {

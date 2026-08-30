@@ -6,6 +6,8 @@ use rust_decimal::Decimal;
 pub fn pint_my_sst() -> Invoice {
     Invoice {
         profile: Profile::PintMy,
+        specification_id: Some(Profile::PintMy.specification_id().into()),
+        kind: core_invoice::DocumentKind::Invoice,
         number: "MY-2026-0001".into(),
         currency: "MYR".into(),
         seller: {
@@ -29,6 +31,8 @@ pub fn pint_my_sst() -> Invoice {
 pub fn peppol_vat() -> Invoice {
     Invoice {
         profile: Profile::PeppolBis3,
+        specification_id: Some(Profile::PeppolBis3.specification_id().into()),
+        kind: core_invoice::DocumentKind::Invoice,
         number: "EU-2026-0001".into(),
         currency: "EUR".into(),
         seller: Party::new("Seller GmbH", "DE"),

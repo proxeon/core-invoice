@@ -1,4 +1,5 @@
 use crate::amount::Amount;
+use crate::kind::DocumentKind;
 use crate::profile::Profile;
 use crate::tax::TaxCategory;
 
@@ -32,7 +33,11 @@ pub struct Line {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Invoice {
+    /// Derived cache. Source of truth for BT-24 is [`Self::specification_id`].
     pub profile: Profile,
+    /// BT-24 raw string, if the document stated one.
+    pub specification_id: Option<String>,
+    pub kind: DocumentKind,
     pub number: String,
     pub currency: String,
     pub seller: Party,

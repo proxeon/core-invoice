@@ -37,6 +37,9 @@ down here**, not that there are none.
   `InvoiceAmount`.
 - Rule registry: `validate` and `explain` share one table. Findings include a
   BT path (`BG-25[0]/BT-151`). `catalogue()` lists shipped ids.
+- BT-24 is stored on the invoice. Profile lookup is prefix-based (`starts-with`),
+  not `contains("pint")`. Self-billing URNs are a wrong process. Edition 2017+A1
+  vs classified 2026. Peppol BIS is the only conformant CIUS of EN 16931.
 
 ## [0.1.0] — 2026-08-30
 
