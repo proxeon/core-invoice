@@ -1,0 +1,14 @@
+[package]
+name = "core-invoice-fixtures"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Pass/fail UBL corpus for core-invoice (PINT, PINT-MY, EN 16931)"
+
+[dependencies]
+core-invoice.workspace = true
+core-invoice-formats.workspace = true
+rust_decimal.workspace = true

@@ -1,0 +1,18 @@
+[package]
+name = "core-invoice-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Offline CLI: validate, convert, diff, explain core-invoice documents"
+
+[[bin]]
+name = "core-invoice"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+core-invoice.workspace = true
+core-invoice-formats.workspace = true

@@ -1,0 +1,27 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/core-invoice",
+    "crates/core-invoice-formats",
+    "crates/core-invoice-cli",
+    "crates/core-invoice-fixtures",
+    "crates/core-invoice-sys",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+authors = ["Proxeon"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/proxeon/core-invoice"
+homepage = "https://github.com/proxeon/core-invoice"
+readme = "README.md"
+
+[workspace.dependencies]
+core-invoice = { version = "0.1.0", path = "crates/core-invoice" }
+core-invoice-formats = { version = "0.1.0", path = "crates/core-invoice-formats" }
+core-invoice-fixtures = { version = "0.1.0", path = "crates/core-invoice-fixtures" }
+rust_decimal = { version = "1.39", default-features = false, features = ["std"] }
+thiserror = "2"
+clap = { version = "4", features = ["derive"] }

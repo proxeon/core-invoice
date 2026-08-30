@@ -1,0 +1,14 @@
+[package]
+name = "core-invoice-formats"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "UBL 2.1 and UN/CEFACT CII codecs for core-invoice"
+
+[dependencies]
+core-invoice.workspace = true
+rust_decimal.workspace = true
+thiserror.workspace = true

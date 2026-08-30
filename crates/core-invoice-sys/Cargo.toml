@@ -1,0 +1,16 @@
+[package]
+name = "core-invoice-sys"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "C ABI for core-invoice (Python/WASM bind to this)"
+
+[lib]
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+core-invoice.workspace = true
+core-invoice-formats.workspace = true
