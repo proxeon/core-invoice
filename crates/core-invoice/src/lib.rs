@@ -70,6 +70,8 @@ mod tests {
             Amount::parse("100.00").unwrap(),
             TaxCategory::sst("SA", Decimal::from(10)),
         )];
+        inv.issue_date = Date::parse("2026-01-15").ok();
+        inv.type_code = Some(Code::new("380"));
         inv.tax_total = Amount::parse("10.00").unwrap();
         inv.payable = Amount::parse("110.00").unwrap();
         inv

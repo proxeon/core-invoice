@@ -27,6 +27,8 @@ pub fn pint_my_sst() -> Invoice {
         Amount::parse("100.00").unwrap(),
         TaxCategory::sst("SA", Decimal::from(10)),
     )];
+    inv.issue_date = core_invoice::Date::parse("2026-01-15").ok();
+    inv.type_code = Some(core_invoice::Code::new("380"));
     inv.tax_total = Amount::parse("10.00").unwrap();
     inv.payable = Amount::parse("110.00").unwrap();
     inv
@@ -46,6 +48,8 @@ pub fn peppol_vat() -> Invoice {
         Amount::parse("100.00").unwrap(),
         TaxCategory::vat("S", Decimal::from(19)),
     )];
+    inv.issue_date = core_invoice::Date::parse("2026-01-15").ok();
+    inv.type_code = Some(core_invoice::Code::new("380"));
     inv.tax_total = Amount::parse("19.00").unwrap();
     inv.payable = Amount::parse("119.00").unwrap();
     inv

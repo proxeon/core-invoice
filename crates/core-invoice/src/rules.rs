@@ -66,6 +66,91 @@ fn spec_lookup(invoice: &Invoice, report: &mut Report) {
     }
 }
 
+fn br_01(invoice: &Invoice, report: &mut Report) {
+    if invoice
+        .specification_id
+        .as_deref()
+        .unwrap_or("")
+        .trim()
+        .is_empty()
+    {
+        report.push(Finding::fatal(
+            "BR-01",
+            Path::term(BtId(24)),
+            "An Invoice shall have a Specification identifier (BT-24)",
+        ));
+    }
+}
+
+fn br_03(invoice: &Invoice, report: &mut Report) {
+    if invoice.issue_date.is_none() {
+        report.push(Finding::fatal(
+            "BR-03",
+            Path::term(BtId(2)),
+            "An Invoice shall have an Invoice issue date (BT-2)",
+        ));
+    }
+}
+
+fn br_04(invoice: &Invoice, report: &mut Report) {
+    if invoice
+        .type_code
+        .as_ref()
+        .map(|c| c.is_empty())
+        .unwrap_or(true)
+    {
+        report.push(Finding::fatal(
+            "BR-04",
+            Path::term(BtId(3)),
+            "An Invoice shall have an Invoice type code (BT-3)",
+        ));
+    }
+}
+
+fn br_09(invoice: &Invoice, report: &mut Report) {
+    if invoice.seller.country.trim().is_empty() {
+        report.push(Finding::fatal(
+            "BR-09",
+            Path::term(BtId(40)),
+            "The Seller postal address shall contain a Seller country code (BT-40)",
+        ));
+    }
+}
+
+fn br_11(invoice: &Invoice, report: &mut Report) {
+    if invoice.buyer.country.trim().is_empty() {
+        report.push(Finding::fatal(
+            "BR-11",
+            Path::term(BtId(55)),
+            "The Buyer postal address shall contain a Buyer country code (BT-55)",
+        ));
+    }
+}
+
+fn br_21(invoice: &Invoice, report: &mut Report) {
+    for (i, line) in invoice.lines.iter().enumerate() {
+        if line.id.trim().is_empty() {
+            report.push(Finding::fatal(
+                "BR-21",
+                Path::at_term(Group::Line, i, BtId(126)),
+                "Each Invoice line shall have an Invoice line identifier (BT-126)",
+            ));
+        }
+    }
+}
+
+fn br_25(invoice: &Invoice, report: &mut Report) {
+    for (i, line) in invoice.lines.iter().enumerate() {
+        if line.name.trim().is_empty() {
+            report.push(Finding::fatal(
+                "BR-25",
+                Path::at_term(Group::Line, i, BtId(153)),
+                "Each Invoice line shall have an Item name (BT-153)",
+            ));
+        }
+    }
+}
+
 fn br_02(invoice: &Invoice, report: &mut Report) {
     if invoice.number.trim().is_empty() {
         report.push(Finding::fatal(
@@ -196,11 +281,60 @@ pub static ALL: &[Rule] = &[
         eval: |_i, _r| {},
     },
     Rule {
+        id: "BR-01",
+        severity: Severity::Fatal,
+        text: "An Invoice shall have a Specification identifier (BT-24).",
+        source: Source::Both,
+        eval: br_01,
+    },
+    Rule {
         id: "BR-02",
         severity: Severity::Fatal,
         text: "Invoice number (BT-1) shall be present.",
         source: Source::Both,
         eval: br_02,
+    },
+    Rule {
+        id: "BR-03",
+        severity: Severity::Fatal,
+        text: "An Invoice shall have an Invoice issue date (BT-2).",
+        source: Source::Both,
+        eval: br_03,
+    },
+    Rule {
+        id: "BR-04",
+        severity: Severity::Fatal,
+        text: "An Invoice shall have an Invoice type code (BT-3).",
+        source: Source::Both,
+        eval: br_04,
+    },
+    Rule {
+        id: "BR-09",
+        severity: Severity::Fatal,
+        text: "The Seller postal address shall contain a Seller country code (BT-40).",
+        source: Source::Both,
+        eval: br_09,
+    },
+    Rule {
+        id: "BR-11",
+        severity: Severity::Fatal,
+        text: "The Buyer postal address shall contain a Buyer country code (BT-55).",
+        source: Source::Both,
+        eval: br_11,
+    },
+    Rule {
+        id: "BR-21",
+        severity: Severity::Fatal,
+        text: "Each Invoice line shall have an Invoice line identifier (BT-126).",
+        source: Source::Both,
+        eval: br_21,
+    },
+    Rule {
+        id: "BR-25",
+        severity: Severity::Fatal,
+        text: "Each Invoice line shall have an Item name (BT-153).",
+        source: Source::Both,
+        eval: br_25,
     },
     Rule {
         id: "BR-05",

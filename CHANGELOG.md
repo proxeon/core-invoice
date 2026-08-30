@@ -47,6 +47,7 @@ down here**, not that there are none.
 - PINT-MY: `IBR-02-MY` / `IBR-03-MY` / `IBR-04-MY` on BRN and TIN fields;
   categories restricted to SA/SE/HVG/LVG/TTX/E/O. `wire_scheme()` maps SST to
   TaxScheme `VAT` (never `SST` on the wire).
+- Presence: BR-01, BR-03, BR-04, BR-09, BR-11, BR-21, BR-25.
 
 ## [0.1.0] — 2026-08-30
 
