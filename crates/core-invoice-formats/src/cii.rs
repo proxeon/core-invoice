@@ -1,6 +1,9 @@
 //! UN/CEFACT CII D16B. Three-part envelope; line items **before** header
 //! agreement/delivery/settlement. Dates are format `102` (YYYYMMDD).
 //! Not a UBL wrapper.
+//!
+//! Subset for EN 16931 and Peppol BIS. `Profile::Pint` (international) may emit
+//! the same envelope. **PINT-MY is UBL-only.**
 
 use crate::FormatError;
 use core_invoice::kind::DocumentKind;
@@ -18,7 +21,11 @@ const NS_RAM: &str =
     "urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100";
 const NS_UDT: &str = "urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100";
 
-pub fn write(invoice: &Invoice) -> Result<String, FormatError> {
+/// Unchecked CII serialisation. Does not prove. Production write is crate
+/// [`write_validated`](crate::write_validated).
+///
+/// `Profile::Pint` (international) is allowed to emit this subset. PINT-MY is not.
+pub fn write_unchecked(invoice: &Invoice) -> Result<String, FormatError> {
     // PINT-MY is UBL-only; CII is EN/Peppol (and later ZUGFeRD extract).
     if invoice.profile == Profile::PintMy {
         return Err(FormatError::CiiNotForProfile);
@@ -474,7 +481,7 @@ mod tests {
 
     #[test]
     fn lines_come_before_header_in_the_transaction() {
-        let xml = write(&sample()).unwrap();
+        let xml = write_unchecked(&sample()).unwrap();
         let line_at = xml.find("IncludedSupplyChainTradeLineItem").unwrap();
         let header_at = xml.find("ApplicableHeaderTradeAgreement").unwrap();
         assert!(line_at < header_at, "CII D16B puts lines before header");
@@ -485,7 +492,7 @@ mod tests {
     #[test]
     fn round_trip_cii() {
         let inv = sample();
-        let xml = write(&inv).unwrap();
+        let xml = write_unchecked(&inv).unwrap();
         let back = read(&xml).unwrap();
         assert_eq!(back.number, "INV-CII");
         assert_eq!(back.currency, "EUR");

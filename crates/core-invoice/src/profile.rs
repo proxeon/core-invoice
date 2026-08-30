@@ -66,6 +66,15 @@ impl Profile {
         }
     }
 
+    /// BT-23 / ProfileID required by this profile. EN 16931 has none (omit, do not invent).
+    pub fn process_id(self) -> Option<&'static str> {
+        match self {
+            Self::PeppolBis3 => Some("urn:fdc:peppol.eu:2017:poacc:billing:01:1.0"),
+            Self::Pint | Self::PintMy => Some("urn:peppol:bis:billing"),
+            Self::En16931 => None,
+        }
+    }
+
     /// Tax systems this profile accepts.
     pub fn tax_systems(self) -> &'static [TaxSystem] {
         match self {
@@ -172,11 +181,22 @@ mod tests {
             ProfileLookup::WrongProcess
         );
         assert_eq!(
+            Profile::for_specification_id(
+                "urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:selfbilling:3.0"
+            ),
+            ProfileLookup::WrongProcess
+        );
+        assert_eq!(
             Profile::for_specification_id("urn:example:painting"),
             ProfileLookup::Unknown
         );
         assert!(!Profile::PintMy.is_conformant_cius());
         assert!(Profile::PeppolBis3.is_conformant_cius());
+        assert_eq!(
+            Profile::PeppolBis3.process_id(),
+            Some("urn:fdc:peppol.eu:2017:poacc:billing:01:1.0")
+        );
+        assert_eq!(Profile::En16931.process_id(), None);
         assert!(Profile::En16931.edition().is_implemented());
         assert!(!Edition::En2026.is_implemented());
     }

@@ -17,8 +17,6 @@ const NS_INV: &str = "urn:oasis:names:specification:ubl:schema:xsd:Invoice-2";
 const NS_CN: &str = "urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2";
 const NS_CAC: &str = "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2";
 const NS_CBC: &str = "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2";
-const PEPPOL_PROFILE_ID: &str = "urn:fdc:peppol.eu:2017:poacc:billing:01:1.0";
-const PINT_PROFILE_ID: &str = "urn:peppol:bis:billing";
 
 pub fn sniff(xml: &str) -> Result<DocumentKind, FormatError> {
     if has_dtd(xml) {
@@ -36,11 +34,16 @@ pub fn sniff(xml: &str) -> Result<DocumentKind, FormatError> {
     }
 }
 
+/// Production UBL write. Stamps BT-24 / BT-23 from `P` before serialising.
 pub fn write_validated<P: ProfileMarker>(proof: &Validated<P>) -> String {
-    write(proof.invoice())
+    let mut invoice = proof.invoice().clone();
+    // BT-24 and BT-23 come from the proved profile, not leftover fields on Invoice.
+    invoice.stamp_profile(P::profile());
+    write_unchecked(&invoice)
 }
 
-pub fn write(invoice: &Invoice) -> String {
+/// Unchecked UBL serialisation. Does not prove. Production write is [`write_validated`].
+pub fn write_unchecked(invoice: &Invoice) -> String {
     let credit = invoice.kind == DocumentKind::CreditNote;
     let (root, xmlns, type_tag, line_tag, qty_tag) = if credit {
         (
@@ -72,10 +75,9 @@ pub fn write(invoice: &Invoice) -> String {
     ));
     s.push('\n');
     leaf(&mut s, 1, "CustomizationID", spec, None);
-    match invoice.profile {
-        Profile::PeppolBis3 => leaf(&mut s, 1, "ProfileID", PEPPOL_PROFILE_ID, None),
-        Profile::Pint | Profile::PintMy => leaf(&mut s, 1, "ProfileID", PINT_PROFILE_ID, None),
-        Profile::En16931 => {}
+    // BT-23 / ProfileID: Peppol `…billing:01:1.0`; PINT `urn:peppol:bis:billing`; EN omits.
+    if let Some(id) = invoice.profile.process_id() {
+        leaf(&mut s, 1, "ProfileID", id, None);
     }
     leaf(&mut s, 1, "ID", &invoice.number, None);
     if let Some(d) = invoice.issue_date {
@@ -874,7 +876,7 @@ mod tests {
     #[test]
     fn round_trip_keeps_model_fields() {
         let inv = sample();
-        let xml = write(&inv);
+        let xml = write_unchecked(&inv);
         assert!(xml.contains("IssueDate"));
         assert!(xml.contains("InvoiceTypeCode"));
         assert!(xml.contains("EndpointID"));
@@ -912,7 +914,7 @@ mod tests {
         let mut inv = sample();
         inv.kind = DocumentKind::CreditNote;
         inv.type_code = Some(Code::new("381"));
-        let xml = write(&inv);
+        let xml = write_unchecked(&inv);
         assert!(xml.contains("<CreditNote "));
         assert!(xml.contains("CreditNoteTypeCode"));
         assert!(xml.contains("CreditNoteLine"));
@@ -948,7 +950,7 @@ mod tests {
             TaxCategory::sst("SA", Decimal::from(10)),
         )];
         reconcile(&mut inv).unwrap();
-        let xml = write(&inv);
+        let xml = write_unchecked(&inv);
         assert!(!xml.contains(">SST<"), "{xml}");
         assert!(xml.contains("schemeID=\"GST\""));
         assert!(xml.contains("schemeID=\"0230\""));

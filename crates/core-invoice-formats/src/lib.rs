@@ -2,7 +2,10 @@
 //!
 //! Conversion goes through the semantic model, not tag-by-tag.
 
-use core_invoice::{Invoice, Profile, Report};
+use core_invoice::{
+    En16931Marker, Invoice, PeppolBis3Marker, PintMarker, PintMyMarker, Profile, ProfileMarker,
+    Report, Validated,
+};
 
 pub mod cii;
 pub mod ubl;
@@ -50,23 +53,65 @@ impl Syntax {
     }
 }
 
-pub fn write(invoice: &Invoice, syntax: Syntax) -> Result<String, FormatError> {
+/// Unchecked serialisation. Does **not** prove the invoice.
+///
+/// CLI convert and any production write must use [`write_validated`].
+pub fn write_unchecked(invoice: &Invoice, syntax: Syntax) -> Result<String, FormatError> {
     match syntax {
-        Syntax::Ubl => Ok(ubl::write(invoice)),
-        Syntax::Cii => cii::write(invoice),
+        Syntax::Ubl => Ok(ubl::write_unchecked(invoice)),
+        Syntax::Cii => cii::write_unchecked(invoice),
     }
 }
 
-pub fn write_validated<P: core_invoice::ProfileMarker>(
-    proof: &core_invoice::Validated<P>,
+/// Production write. Stamps BT-24 / BT-23 from `P`, then serialises.
+pub fn write_validated<P: ProfileMarker>(
+    proof: &Validated<P>,
     syntax: Syntax,
 ) -> Result<String, FormatError> {
-    write(proof.invoice(), syntax)
+    let mut invoice = proof.invoice().clone();
+    // BT-24 and BT-23 come from the proved profile, not leftover fields on Invoice.
+    invoice.stamp_profile(P::profile());
+    write_unchecked(&invoice, syntax)
 }
 
+/// Read, prove against the parsed profile (or `forced`), then [`write_validated`].
 pub fn convert(xml: &str, to: Syntax) -> Result<String, FormatError> {
-    let invoice = read(xml)?;
-    write(&invoice, to)
+    convert_with_profile(xml, to, None)
+}
+
+/// Like [`convert`], but a named profile forces that rule set (“would this pass as Peppol?”).
+pub fn convert_with_profile(
+    xml: &str,
+    to: Syntax,
+    forced: Option<Profile>,
+) -> Result<String, FormatError> {
+    let mut invoice = read(xml)?;
+    if let Some(profile) = forced {
+        invoice.profile = profile;
+    }
+    convert_invoice(invoice, to)
+}
+
+fn convert_invoice(invoice: Invoice, to: Syntax) -> Result<String, FormatError> {
+    // PINT-MY is UBL-only; refuse the syntax before proving so a broken MY
+    // invoice is still “wrong syntax” (exit 2), not “invalid document” (exit 1).
+    if to == Syntax::Cii && invoice.profile == Profile::PintMy {
+        return Err(FormatError::CiiNotForProfile);
+    }
+    // Convert must not emit a document that would fail validate on the same profile.
+    match invoice.profile {
+        Profile::En16931 => prove_write::<En16931Marker>(invoice, to),
+        Profile::PeppolBis3 => prove_write::<PeppolBis3Marker>(invoice, to),
+        Profile::Pint => prove_write::<PintMarker>(invoice, to),
+        Profile::PintMy => prove_write::<PintMyMarker>(invoice, to),
+    }
+}
+
+fn prove_write<P: ProfileMarker>(invoice: Invoice, syntax: Syntax) -> Result<String, FormatError> {
+    match Validated::<P>::new(invoice) {
+        Ok(proof) => write_validated(&proof, syntax),
+        Err(rejected) => Err(FormatError::Semantic(SemanticReject(rejected.1))),
+    }
 }
 
 pub fn read(xml: &str) -> Result<Invoice, FormatError> {
@@ -128,7 +173,9 @@ mod tests {
     #[test]
     fn ubl_converts_to_real_cii() {
         let ubl = r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"><cbc:CustomizationID>urn:cen.eu:en16931:2017</cbc:CustomizationID><cbc:ID>1</cbc:ID><cbc:IssueDate>2026-01-15</cbc:IssueDate><cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode><cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode><cac:LegalMonetaryTotal><cbc:PayableAmount currencyID="EUR">0</cbc:PayableAmount></cac:LegalMonetaryTotal></Invoice>"#;
-        let cii = convert(ubl, Syntax::Cii).unwrap();
+        // Unchecked path: this skeleton would fail prove (missing parties, lines).
+        let invoice = read(ubl).unwrap();
+        let cii = write_unchecked(&invoice, Syntax::Cii).unwrap();
         assert!(cii.contains("CrossIndustryInvoice"));
         assert!(cii.contains("SupplyChainTradeTransaction"));
         assert!(!cii.contains("<Invoice "));

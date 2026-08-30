@@ -282,6 +282,17 @@ impl Invoice {
         }
     }
 
+    /// BT-24 and BT-23 come from the proved profile, not leftover fields on Invoice.
+    ///
+    /// EN 16931 has no required ProfileID: BT-23 is left as-is (the UBL writer omits it).
+    pub fn stamp_profile(&mut self, profile: Profile) {
+        self.profile = profile;
+        self.specification_id = Some(profile.specification_id().into());
+        if let Some(bt23) = profile.process_id() {
+            self.business_process = Some(bt23.into());
+        }
+    }
+
     pub fn line_net_sum(&self) -> Option<Amount> {
         self.lines
             .iter()

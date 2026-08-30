@@ -8,7 +8,7 @@ fn bin() -> Command {
 }
 
 fn peppol_xml() -> String {
-    core_invoice_formats::write(
+    core_invoice_formats::write_unchecked(
         &core_invoice_fixtures::peppol_vat(),
         core_invoice_formats::Syntax::Ubl,
     )
@@ -64,7 +64,8 @@ fn valid_peppol_is_0() {
 fn empty_number_is_1_on_stdout() {
     let mut inv = core_invoice_fixtures::peppol_vat();
     inv.number.clear();
-    let xml = core_invoice_formats::write(&inv, core_invoice_formats::Syntax::Ubl).unwrap();
+    let xml =
+        core_invoice_formats::write_unchecked(&inv, core_invoice_formats::Syntax::Ubl).unwrap();
     let path = write_tmp("empty", &xml);
     let out = bin()
         .args(["validate", path.to_str().unwrap()])
@@ -101,7 +102,7 @@ fn diff_identical_is_0_different_is_1() {
     other.number = "OTHER".into();
     let p2 = write_tmp(
         "other",
-        &core_invoice_formats::write(&other, core_invoice_formats::Syntax::Ubl).unwrap(),
+        &core_invoice_formats::write_unchecked(&other, core_invoice_formats::Syntax::Ubl).unwrap(),
     );
     let status = bin()
         .args(["diff", path.to_str().unwrap(), p2.to_str().unwrap()])
@@ -119,8 +120,87 @@ fn rules_json_lists_br_co_16() {
 }
 
 #[test]
+fn convert_empty_number_is_1_without_xml() {
+    let mut inv = core_invoice_fixtures::peppol_vat();
+    inv.number.clear();
+    let xml =
+        core_invoice_formats::write_unchecked(&inv, core_invoice_formats::Syntax::Ubl).unwrap();
+    let path = write_tmp("empty-cvt", &xml);
+    let out = bin()
+        .args(["convert", path.to_str().unwrap(), "--to", "ubl"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(!stdout.contains("<Invoice"), "{stdout}");
+    assert!(!stdout.contains("CrossIndustryInvoice"), "{stdout}");
+    assert!(stdout.contains("BR-02"), "{stdout}");
+}
+
+#[test]
+fn convert_valid_peppol_to_ubl_is_0() {
+    let path = write_tmp("ok-cvt", &peppol_xml());
+    let out = bin()
+        .args(["convert", path.to_str().unwrap(), "--to", "ubl"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("<Invoice"));
+    assert!(stdout.contains(core_invoice::Profile::PEPPOL_BIS3_PREFIX));
+}
+
+#[test]
+fn convert_pint_my_self_billing_is_1_without_xml() {
+    convert_self_billing_is_1("urn:peppol:pint:selfbilling-1@my-1", "sb-my");
+}
+
+#[test]
+fn convert_peppol_self_billing_is_1_without_xml() {
+    convert_self_billing_is_1(
+        "urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:selfbilling:3.0",
+        "sb-peppol",
+    );
+}
+
+fn convert_self_billing_is_1(customization: &str, name: &str) {
+    let xml = peppol_xml().replace(
+        core_invoice::Profile::PeppolBis3.specification_id(),
+        customization,
+    );
+    let path = write_tmp(name, &xml);
+    let out = bin()
+        .args(["convert", path.to_str().unwrap(), "--to", "ubl"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(!stdout.contains("<Invoice"), "{stdout}");
+    assert!(!stdout.contains("CrossIndustryInvoice"), "{stdout}");
+    assert!(stdout.contains("CORE-PROCESS-01"), "{stdout}");
+}
+
+#[test]
 fn convert_pint_my_to_cii_is_2() {
-    let xml = core_invoice_formats::write(
+    let xml = core_invoice_formats::write_unchecked(
         &core_invoice_fixtures::pint_my_sst(),
         core_invoice_formats::Syntax::Ubl,
     )

@@ -91,11 +91,12 @@ pub fn peppol_vat() -> Invoice {
 mod tests {
     use super::*;
     use core_invoice::validate;
-    use core_invoice_formats::{Syntax, read, write};
+    use core_invoice::{PeppolBis3Marker, Validated};
+    use core_invoice_formats::{Syntax, read, write_unchecked, write_validated};
 
     #[test]
     fn pint_my_round_trip_ubl_keeps_profile() {
-        let xml = write(&pint_my_sst(), Syntax::Ubl).unwrap();
+        let xml = write_unchecked(&pint_my_sst(), Syntax::Ubl).unwrap();
         let back = read(&xml).unwrap();
         assert_eq!(back.profile, Profile::PintMy);
         assert_eq!(back.seller.tax_id, None);
@@ -112,7 +113,7 @@ mod tests {
 
     #[test]
     fn cii_write_is_three_part_d16b_for_en_peppol() {
-        let xml = write(&peppol_vat(), Syntax::Cii).unwrap();
+        let xml = write_unchecked(&peppol_vat(), Syntax::Cii).unwrap();
         assert!(xml.contains("CrossIndustryInvoice"));
         let line = xml.find("IncludedSupplyChainTradeLineItem").unwrap();
         let header = xml.find("ApplicableHeaderTradeAgreement").unwrap();
@@ -122,7 +123,7 @@ mod tests {
 
     #[test]
     fn pint_my_cii_is_refused() {
-        let err = write(&pint_my_sst(), Syntax::Cii).unwrap_err();
+        let err = write_unchecked(&pint_my_sst(), Syntax::Cii).unwrap_err();
         assert!(
             matches!(err, core_invoice_formats::FormatError::CiiNotForProfile),
             "{err}"
@@ -132,6 +133,17 @@ mod tests {
     #[test]
     fn peppol_vat_is_valid() {
         assert!(validate(&peppol_vat()).ok());
+    }
+
+    #[test]
+    fn write_validated_stamps_peppol_bt24_over_leftover_pint() {
+        let mut inv = peppol_vat();
+        inv.specification_id = Some("urn:peppol:pint:billing-1".into());
+        let proof = Validated::<PeppolBis3Marker>::new(inv).unwrap();
+        let xml = write_validated(&proof, Syntax::Ubl).unwrap();
+        assert!(xml.contains(core_invoice::Profile::PEPPOL_BIS3_PREFIX));
+        assert!(!xml.contains(">urn:peppol:pint:billing-1<"));
+        assert!(xml.contains("urn:fdc:peppol.eu:2017:poacc:billing:01:1.0"));
     }
 
     #[test]

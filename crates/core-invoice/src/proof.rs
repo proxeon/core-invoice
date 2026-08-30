@@ -81,9 +81,19 @@ impl std::error::Error for ProveError {}
 impl<P: ProfileMarker> Validated<P> {
     pub fn new(mut invoice: Invoice) -> Result<Self, Box<(Invoice, Report)>> {
         invoice.profile = P::profile();
-        if invoice.specification_id.is_none() {
-            invoice.specification_id = Some(invoice.profile.specification_id().into());
+        if let Some(id) = invoice.specification_id.as_deref() {
+            // Self-billing (and other) process URNs are not billing. Do not
+            // re-stamp BT-24 as this profile and emit a billing Invoice.
+            if matches!(
+                Profile::for_specification_id(id),
+                crate::profile::ProfileLookup::WrongProcess
+            ) {
+                let report = validate(&invoice);
+                return Err(Box::new((invoice, report)));
+            }
         }
+        // BT-24 and BT-23 come from the proved profile, not leftover fields on Invoice.
+        invoice.stamp_profile(P::profile());
         let report = validate(&invoice);
         if report.ok() {
             Ok(Self {
@@ -208,5 +218,35 @@ mod tests {
         // Pint / PintMy do not implement Underlies<En16931> or Underlies<PeppolBis3>.
         // If they did, the following would compile:
         // fn _pint_to_core(v: Validated<Pint>) -> Validated<En16931> { v.widen() }
+    }
+
+    #[test]
+    fn proved_peppol_overwrites_leftover_pint_bt24() {
+        let mut inv = peppol_ok();
+        inv.specification_id = Some("urn:peppol:pint:billing-1".into());
+        let v = Validated::<PeppolBis3>::new(inv).unwrap();
+        assert!(
+            v.invoice()
+                .specification_id
+                .as_deref()
+                .unwrap()
+                .starts_with(Profile::PEPPOL_BIS3_PREFIX)
+        );
+        assert_eq!(
+            v.invoice().business_process.as_deref(),
+            Profile::PeppolBis3.process_id()
+        );
+    }
+
+    #[test]
+    fn self_billing_cannot_be_proved_as_billing() {
+        let mut inv = peppol_ok();
+        inv.specification_id = Some("urn:peppol:pint:selfbilling-1@my-1".into());
+        let err = Validated::<PeppolBis3>::new(inv).unwrap_err();
+        assert!(
+            err.1.findings.iter().any(|f| f.id == "CORE-PROCESS-01"),
+            "{:?}",
+            err.1
+        );
     }
 }

@@ -1,6 +1,8 @@
 use clap::{Parser, Subcommand, ValueEnum};
 use core_invoice::Profile;
-use core_invoice_formats::{Syntax, convert, diff, validate_xml};
+use core_invoice_formats::{
+    FormatError, SemanticReject, Syntax, convert_with_profile, diff, validate_xml,
+};
 use std::fs;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -30,6 +32,9 @@ enum Command {
         path: PathBuf,
         #[arg(long, value_enum)]
         to: SyntaxArg,
+        /// `auto` reads BT-24 (CustomizationID). A named profile forces that rule set.
+        #[arg(short, long, value_enum, default_value = "auto")]
+        profile: ProfileArg,
     },
     /// Semantic diff of two documents (exit 1 if they differ)
     Diff { left: PathBuf, right: PathBuf },
@@ -115,12 +120,17 @@ fn run() -> Result<ExitCode, String> {
                 Ok(ExitCode::from(1))
             }
         }
-        Command::Convert { path, to } => {
+        Command::Convert { path, to, profile } => {
             let xml = fs::read_to_string(&path).map_err(|e| format!("{path:?}: {e}"))?;
-            match convert(&xml, to.into()) {
+            match convert_with_profile(&xml, to.into(), profile.forced()) {
                 Ok(out) => {
                     print!("{out}");
                     Ok(ExitCode::SUCCESS)
+                }
+                Err(FormatError::Semantic(SemanticReject(report))) => {
+                    // Fatal: findings on stdout like validate; no XML.
+                    print!("{report}");
+                    Ok(ExitCode::from(1))
                 }
                 // FormatError (parse, CiiNotForProfile, …) is not a semantic finding.
                 // CLI contract: unreadable / refused syntax → exit 2 on stderr.

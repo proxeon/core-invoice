@@ -19,7 +19,8 @@ down here**, not that there are none.
 
 ### Changed
 
-- **Honesty (0.1.x skeleton).** Do not treat `validate().ok()` as EN 16931 / Peppol / PINT compliance. Do not treat convert as a legal write path yet: it still serialises invoices that would fail `validate` (proof wiring is the next slice).
+- **Honesty (0.1.x skeleton).** Do not treat `validate().ok()` as EN 16931 / Peppol / PINT compliance.
+- **Convert.** CLI `convert` proves, then `write_validated`. Fatal → exit 1, findings on stdout, empty XML. `write` is renamed `write_unchecked` (tests only). `write_validated` overwrites BT-24 / BT-23 from the proved profile. Self-billing BT-24 cannot be re-stamped as billing (`CORE-PROCESS-01`).
 - **CII (historical, crates.io 0.1.0 / 004 P0).** `convert --to cii` used to wrap UBL in `CrossIndustryInvoice` and was then refused as `CiiNotImplemented`. That wrapper is gone.
 - **CII (current).** Three-part D16B **subset** for EN 16931 and Peppol BIS (lines before header, format 102). Qty, price, payment, allowances, and delivery are not mapped yet. **PINT-MY is UBL-only:** `FormatError::CiiNotForProfile`, CLI exit 2.
 - **Breaking (0.1.x).** `FormatError::CiiNotImplemented` is renamed to `CiiNotForProfile` and is returned when writing CII for PINT-MY.

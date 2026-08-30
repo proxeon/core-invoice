@@ -18,4 +18,4 @@ cargo run -p core-invoice-cli -- diff a.xml b.xml
 cargo run -p core-invoice-cli -- explain BR-05
 ```
 
-`convert --to cii` writes a **subset** D16B envelope for EN/Peppol (qty/price/payment still incomplete). On a **PINT-MY** invoice it exits **2** (`CiiNotForProfile`): PINT-MY is UBL-only. Convert does not yet refuse semantically invalid sources (that is the next slice). Unknown `explain` ids exit **2**.
+`convert` proves first, then writes. Fatal findings: exit **1**, findings on stdout, **no XML**. Unreadable XML / CII refused for PINT-MY: exit **2**. `convert --to cii` writes a **subset** D16B envelope for EN/Peppol (qty/price/payment still incomplete). On a **PINT-MY** invoice it exits **2** (`CiiNotForProfile`): PINT-MY is UBL-only. Unknown `explain` ids exit **2**.
