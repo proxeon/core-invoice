@@ -407,7 +407,9 @@ fn write_allowance(
     if let Some(tax) = a.tax.as_ref() {
         open(s, 2, "TaxCategory");
         leaf(s, 3, "ID", &tax.code, None);
-        leaf(s, 3, "Percent", &tax.percent.to_string(), None);
+        if let Some(p) = tax.percent {
+            leaf(s, 3, "Percent", &p.to_string(), None);
+        }
         open(s, 3, "TaxScheme");
         leaf(
             s,
@@ -511,7 +513,10 @@ fn write_line(
     if !line.tax.code.trim().is_empty() {
         open(s, 3, "ClassifiedTaxCategory");
         leaf(s, 4, "ID", &line.tax.code, None);
-        leaf(s, 4, "Percent", &line.tax.percent.to_string(), None);
+        // TTX (scheme AAL): no IBT-119. Amount is the tax. Do not emit Percent.
+        if let Some(p) = line.tax.percent {
+            leaf(s, 4, "Percent", &p.to_string(), None);
+        }
         open(s, 4, "TaxScheme");
         leaf(
             s,
@@ -640,7 +645,7 @@ fn read_subtotal(
         system: tax.system,
         scheme: wire_scheme(profile, tax.system, &tax.code).to_owned(),
         category: Code::new(tax.code),
-        rate: Some(tax.percent),
+        rate: tax.percent,
         taxable: child_amount(node, "TaxableAmount", malformed, "TaxSubtotal")
             .unwrap_or(Amount::ZERO),
         tax: child_amount(node, "TaxAmount", malformed, "TaxSubtotal").unwrap_or(Amount::ZERO),
@@ -690,7 +695,11 @@ fn read_line(
     let tax = item
         .and_then(|n| child(n, "ClassifiedTaxCategory"))
         .map(|n| read_tax_cat(n, profile))
-        .unwrap_or_else(|| TaxCategory::vat("", Percentage::ZERO));
+        .unwrap_or_else(|| TaxCategory {
+            system: TaxSystem::Vat,
+            code: String::new(),
+            percent: None,
+        });
     let qty_tag = if kind == DocumentKind::CreditNote {
         "CreditedQuantity"
     } else {
@@ -730,8 +739,7 @@ fn read_tax_cat(node: roxmltree::Node<'_, '_>, profile: Profile) -> TaxCategory 
     let code = child_text(node, "ID").unwrap_or_default();
     let percent = child_text(node, "Percent")
         .and_then(|s| Decimal::from_str(&s).ok())
-        .map(Percentage::new)
-        .unwrap_or(Percentage::ZERO);
+        .map(Percentage::new);
     let scheme = child(node, "TaxScheme")
         .and_then(|n| child_text(n, "ID"))
         .unwrap_or_default();

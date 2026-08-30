@@ -134,6 +134,40 @@ mod tests {
     }
 
     #[test]
+    fn sa_plus_ttx_omits_percent_and_uses_aal() {
+        let mut inv = pint_my_sst();
+        inv.lines.push(Line::new(
+            "2",
+            "Tourism",
+            Amount::parse("50.00").unwrap(),
+            core_invoice::tax::TaxCategory::ttx(),
+        ));
+        let _ = reconcile(&mut inv);
+        let xml = write_unchecked(&inv, Syntax::Ubl).unwrap();
+        assert!(
+            xml.contains("schemeID=\"AAL\"") || xml.contains(">AAL<"),
+            "{xml}"
+        );
+        assert!(!xml.contains(">SST<"));
+        let ttx_block = xml
+            .split("TaxSubtotal")
+            .find(|s| s.contains(">TTX<"))
+            .unwrap_or("");
+        assert!(
+            !ttx_block.contains("<cbc:Percent"),
+            "TTX subtotal must not emit Percent: {ttx_block}"
+        );
+        let back = read(&xml).unwrap();
+        let ttx = back
+            .tax_breakdown
+            .iter()
+            .find(|r| r.category.as_str() == "TTX")
+            .expect("TTX row");
+        assert!(ttx.rate.is_none());
+        assert_eq!(ttx.scheme, "AAL");
+    }
+
+    #[test]
     fn write_validated_stamps_peppol_bt24_over_leftover_pint() {
         let mut inv = peppol_vat();
         inv.specification_id = Some("urn:peppol:pint:billing-1".into());

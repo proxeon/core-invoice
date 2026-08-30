@@ -188,13 +188,9 @@ fn write_line(s: &mut String, line: &Line, invoice: &Invoice) {
         None,
     );
     leaf_ram(s, 5, "CategoryCode", &line.tax.code, None);
-    leaf_ram(
-        s,
-        5,
-        "RateApplicablePercent",
-        &line.tax.percent.to_string(),
-        None,
-    );
+    if let Some(p) = line.tax.percent {
+        leaf_ram(s, 5, "RateApplicablePercent", &p.to_string(), None);
+    }
     s.push_str("        </ram:ApplicableTradeTax>\n");
     s.push_str("        <ram:SpecifiedTradeSettlementLineMonetarySummation>\n");
     amount_ram(s, 5, "LineTotalAmount", line.net, &invoice.currency);
@@ -322,8 +318,7 @@ fn read_line(
             let code = child_text(n, "CategoryCode").unwrap_or_default();
             let percent = child_text(n, "RateApplicablePercent")
                 .and_then(|s| Decimal::from_str(&s).ok())
-                .map(Percentage::new)
-                .unwrap_or(Percentage::ZERO);
+                .map(Percentage::new);
             let scheme = child_text(n, "TypeCode").unwrap_or_default();
             let system = if profile == Profile::PintMy && core_invoice::pint_my_category(&code) {
                 TaxSystem::Sst
@@ -336,7 +331,11 @@ fn read_line(
                 percent,
             }
         })
-        .unwrap_or_else(|| TaxCategory::vat("", Percentage::ZERO));
+        .unwrap_or_else(|| TaxCategory {
+            system: TaxSystem::Sst,
+            code: String::new(),
+            percent: None,
+        });
     Some(Line::new(id, name, net, tax))
 }
 

@@ -19,7 +19,7 @@ impl TaxSystem {
 
     pub fn parse(s: &str) -> Option<Self> {
         match s.trim().to_ascii_uppercase().as_str() {
-            "VAT" | "VAT/CGST" => Some(Self::Vat),
+            "VAT" => Some(Self::Vat),
             "GST" => Some(Self::Gst),
             "SST" | "SALES" | "SERVICE" => Some(Self::Sst),
             "CONSUMPTION" | "CT" => Some(Self::Consumption),
@@ -29,11 +29,14 @@ impl TaxSystem {
 }
 
 /// A tax category on a line or breakdown (rate + system).
+///
+/// `percent` is `None` when the family has no IBT-119 (EN `O`, PINT-MY TTX).
+/// Zero is a stated 0 % (EN `Z`), not an absent rate.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaxCategory {
     pub system: TaxSystem,
     pub code: String,
-    pub percent: crate::numeric::Percentage,
+    pub percent: Option<crate::numeric::Percentage>,
 }
 
 impl TaxCategory {
@@ -41,7 +44,7 @@ impl TaxCategory {
         Self {
             system: TaxSystem::Vat,
             code: code.into(),
-            percent: percent.into(),
+            percent: Some(percent.into()),
         }
     }
 
@@ -49,7 +52,7 @@ impl TaxCategory {
         Self {
             system: TaxSystem::Sst,
             code: code.into(),
-            percent: percent.into(),
+            percent: Some(percent.into()),
         }
     }
 
@@ -57,7 +60,25 @@ impl TaxCategory {
         Self {
             system: TaxSystem::Gst,
             code: code.into(),
-            percent: percent.into(),
+            percent: Some(percent.into()),
+        }
+    }
+
+    /// EN / PINT `O`: no rate on the line.
+    pub fn out_of_scope() -> Self {
+        Self {
+            system: TaxSystem::Vat,
+            code: "O".into(),
+            percent: None,
+        }
+    }
+
+    /// PINT-MY TTX: amount-only, scheme AAL, no Percent.
+    pub fn ttx() -> Self {
+        Self {
+            system: TaxSystem::Sst,
+            code: "TTX".into(),
+            percent: None,
         }
     }
 }
@@ -84,4 +105,15 @@ pub fn wire_scheme(
 
 pub fn pint_my_category(code: &str) -> bool {
     matches!(code, "SA" | "SE" | "HVG" | "LVG" | "TTX" | "E" | "O")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn vat_cgst_is_not_vat() {
+        assert_eq!(TaxSystem::parse("VAT/CGST"), None);
+        assert_eq!(TaxSystem::parse("VAT"), Some(TaxSystem::Vat));
+    }
 }

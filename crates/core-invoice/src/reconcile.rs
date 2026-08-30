@@ -263,7 +263,7 @@ struct ContentRow<'a> {
     path: Path,
     system: TaxSystem,
     category: &'a str,
-    percent: Percentage,
+    percent: Option<Percentage>,
     net: InvoiceAmount,
     is_allowance: bool,
 }
@@ -286,7 +286,7 @@ fn content(inv: &Invoice) -> Vec<ContentRow<'_>> {
             path: Path::at_term(Group::DocumentAllowance, i, BtId(92)),
             system: tax.map(|t| t.system).unwrap_or(TaxSystem::Vat),
             category: tax.map(|t| t.code.as_str()).unwrap_or(""),
-            percent: tax.map(|t| t.percent).unwrap_or(Percentage::ZERO),
+            percent: tax.and_then(|t| t.percent),
             net: a.amount,
             is_allowance: true,
         });
@@ -297,7 +297,7 @@ fn content(inv: &Invoice) -> Vec<ContentRow<'_>> {
             path: Path::at_term(Group::DocumentCharge, i, BtId(99)),
             system: tax.map(|t| t.system).unwrap_or(TaxSystem::Vat),
             category: tax.map(|t| t.code.as_str()).unwrap_or(""),
-            percent: tax.map(|t| t.percent).unwrap_or(Percentage::ZERO),
+            percent: tax.and_then(|t| t.percent),
             net: c.amount,
             is_allowance: false,
         });
@@ -308,13 +308,16 @@ fn content(inv: &Invoice) -> Vec<ContentRow<'_>> {
 fn group_key(inv: &Invoice, row: &ContentRow<'_>) -> Result<GroupKey, ReconcileError> {
     let scheme = wire_scheme(inv.profile, row.system, row.category).to_owned();
     let rate = if crate::category::grouped_by_rate(inv.profile, row.category) {
-        if needs_rate(row.category) && row.percent.is_zero() && !zero_tax_family(row.category) {
+        if needs_rate(row.category)
+            && row.percent.is_none_or(Percentage::is_zero)
+            && !zero_tax_family(row.category)
+        {
             return Err(ReconcileError::MissingRate {
                 at: row.path,
                 category: row.category.to_owned(),
             });
         }
-        Some(row.percent)
+        row.percent
     } else if row.category.eq_ignore_ascii_case("O") || row.category.eq_ignore_ascii_case("TTX") {
         None
     } else {
@@ -331,21 +334,50 @@ fn group_key(inv: &Invoice, row: &ContentRow<'_>) -> Result<GroupKey, ReconcileE
 fn needs_rate(category: &str) -> bool {
     matches!(
         category,
-        "S" | "L" | "M" | "B" | "SA" | "HVG" | "LVG" | "s" | "l" | "m" | "b" | "sa" | "hvg" | "lvg"
+        "S" | "L"
+            | "M"
+            | "B"
+            | "SA"
+            | "SE"
+            | "HVG"
+            | "LVG"
+            | "s"
+            | "l"
+            | "m"
+            | "b"
+            | "sa"
+            | "se"
+            | "hvg"
+            | "lvg"
     )
 }
 
 fn zero_tax_family(category: &str) -> bool {
+    // PINT-MY SE is service tax (rated). It is not EN category E / zero-rated Z.
     matches!(
         category,
-        "Z" | "E" | "AE" | "K" | "G" | "O" | "SE" | "z" | "e" | "ae" | "k" | "g" | "o" | "se"
+        "Z" | "E" | "AE" | "K" | "G" | "O" | "z" | "e" | "ae" | "k" | "g" | "o"
     )
 }
 
 fn forbids_exemption(category: &str) -> bool {
     matches!(
         category,
-        "S" | "Z" | "L" | "M" | "SA" | "HVG" | "LVG" | "s" | "z" | "l" | "m" | "sa" | "hvg" | "lvg"
+        "S" | "Z"
+            | "L"
+            | "M"
+            | "SA"
+            | "SE"
+            | "HVG"
+            | "LVG"
+            | "s"
+            | "z"
+            | "l"
+            | "m"
+            | "sa"
+            | "se"
+            | "hvg"
+            | "lvg"
     )
 }
 
@@ -354,6 +386,22 @@ fn same_group(inv: &Invoice, row: &ContentRow<'_>, key: &GroupKey) -> bool {
         return false;
     };
     k == *key
+}
+
+/// ALIGNED-IBRP-*-08-MY uses this same content (lines + charges − allowances). Exact, no slack.
+pub(crate) fn taxable_for_breakdown(
+    inv: &Invoice,
+    row: &TaxBreakdown,
+) -> Result<InvoiceAmount, ReconcileError> {
+    taxable_for(
+        inv,
+        &GroupKey {
+            scheme: row.scheme.clone(),
+            category: row.category.as_str().to_owned(),
+            rate: row.rate,
+            system: row.system,
+        },
+    )
 }
 
 fn taxable_for(inv: &Invoice, key: &GroupKey) -> Result<InvoiceAmount, ReconcileError> {
@@ -569,7 +617,7 @@ mod tests {
                 "2",
                 "Exempt",
                 amt("40.00"),
-                TaxCategory::sst("SE", Decimal::from(0)),
+                TaxCategory::sst("SE", Decimal::from(8)),
             ),
         ];
         reconcile(&mut inv).unwrap();
@@ -582,7 +630,7 @@ mod tests {
         assert!(
             inv.tax_breakdown
                 .iter()
-                .any(|r| r.category.as_str() == "SE" && r.tax == amt("0.00"))
+                .any(|r| r.category.as_str() == "SE" && r.tax == amt("3.20"))
         );
         assert!(validate(&inv).ok(), "{}", validate(&inv));
     }
@@ -594,7 +642,7 @@ mod tests {
             "1",
             "Out",
             amt("10.00"),
-            TaxCategory::vat("O", Decimal::from(0)),
+            TaxCategory::out_of_scope(),
         )];
         reconcile(&mut inv).unwrap();
         assert_eq!(inv.tax_breakdown.len(), 1);

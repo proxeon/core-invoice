@@ -231,17 +231,22 @@ fn check_rate_line(inv: &Invoice, report: &mut Report, p: CategoryProfile, id: &
         let rate = if p.category == VatCategory::OutOfScope {
             None
         } else {
-            Some(line.tax.percent)
+            line.tax.percent
         };
         if !rate_ok(p.rate, rate) && p.category != VatCategory::OutOfScope {
-            if !rate_ok(p.rate, Some(line.tax.percent)) {
+            if !rate_ok(p.rate, line.tax.percent) {
                 report.push(Finding::fatal(
                     id,
                     Path::at_term(Group::Line, i, BtId(152)),
-                    format!("BT-152 rate {} is not valid for {}", line.tax.percent, code),
+                    format!(
+                        "BT-152 rate {:?} is not valid for {}",
+                        line.tax.percent, code
+                    ),
                 ));
             }
-        } else if p.category == VatCategory::OutOfScope && line.tax.percent.is_positive() {
+        } else if p.category == VatCategory::OutOfScope
+            && line.tax.percent.is_some_and(Percentage::is_positive)
+        {
             report.push(Finding::fatal(
                 id,
                 Path::at_term(Group::Line, i, BtId(152)),
@@ -304,7 +309,7 @@ fn line_matches(
     move |t: &crate::tax::TaxCategory| {
         t.system == TaxSystem::Vat
             && t.code.eq_ignore_ascii_case(cat.code())
-            && (!grouped || Some(t.percent) == entry_rate)
+            && (!grouped || t.percent == entry_rate)
     }
 }
 
@@ -476,23 +481,18 @@ fn check_my_taxable(inv: &Invoice, report: &mut Report, code: &str, id: &'static
         .enumerate()
         .filter(|(_, e)| e.category.as_str().eq_ignore_ascii_case(code))
     {
-        let expected = InvoiceAmount::checked_sum(
-            inv.lines
-                .iter()
-                .filter(|l| {
-                    l.tax.code.eq_ignore_ascii_case(code)
-                        && (e.rate.is_none() || Some(l.tax.percent) == e.rate)
-                })
-                .map(|l| l.net),
-        );
-        let Some(expected) = expected else {
+        // ALIGNED-IBRP-*-08-MY: exact IBT-116 vs lines + charges − allowances (same as reconcile).
+        let Ok(expected) = crate::reconcile::taxable_for_breakdown(inv, e) else {
             continue;
         };
         if e.taxable != expected {
             report.push(Finding::fatal(
                 id,
                 Path::at_term(Group::TaxBreakdown, i, BtId(116)),
-                format!("IBT-116 {} ≠ Σ lines {expected}", e.taxable),
+                format!(
+                    "IBT-116 {} ≠ Σ lines + charges − allowances {expected}",
+                    e.taxable
+                ),
             ));
         }
     }
@@ -677,11 +677,17 @@ fn my_sa_09(i: &Invoice, r: &mut Report) {
 fn my_sa_10(i: &Invoice, r: &mut Report) {
     check_my_no_exemption(i, r, "SA", "ALIGNED-IBRP-SA-10-MY");
 }
+fn my_se_01(i: &Invoice, r: &mut Report) {
+    check_my_groups(i, r, "SE", "ALIGNED-IBRP-SE-01-MY");
+}
 fn my_se_08(i: &Invoice, r: &mut Report) {
     check_my_taxable(i, r, "SE", "ALIGNED-IBRP-SE-08-MY");
 }
 fn my_se_09(i: &Invoice, r: &mut Report) {
     check_my_tax(i, r, "SE", "ALIGNED-IBRP-SE-09-MY", true);
+}
+fn my_se_10(i: &Invoice, r: &mut Report) {
+    check_my_no_exemption(i, r, "SE", "ALIGNED-IBRP-SE-10-MY");
 }
 fn my_hvg_08(i: &Invoice, r: &mut Report) {
     check_my_taxable(i, r, "HVG", "ALIGNED-IBRP-HVG-08-MY");
@@ -906,14 +912,24 @@ pub static RULES: &[Rule] = &[
         my_sa_10,
     ),
     my(
+        "ALIGNED-IBRP-SE-01-MY",
+        "PINT-MY SE: at least one IBG-23 group.",
+        my_se_01,
+    ),
+    my(
         "ALIGNED-IBRP-SE-08-MY",
-        "PINT-MY SE: IBT-116 = Σ SE lines.",
+        "PINT-MY SE: IBT-116 = Σ SE lines + charges − allowances.",
         my_se_08,
     ),
     my(
         "ALIGNED-IBRP-SE-09-MY",
         "PINT-MY SE: tax from rate.",
         my_se_09,
+    ),
+    my(
+        "ALIGNED-IBRP-SE-10-MY",
+        "PINT-MY SE: exemption reason forbidden.",
+        my_se_10,
     ),
     my(
         "ALIGNED-IBRP-HVG-08-MY",

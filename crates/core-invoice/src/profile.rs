@@ -84,12 +84,14 @@ impl Profile {
     pub fn tax_systems(self) -> &'static [TaxSystem] {
         match self {
             Self::En16931 | Self::PeppolBis3 => &[TaxSystem::Vat],
-            Self::Pint | Self::PintMy => &[
+            Self::Pint => &[
                 TaxSystem::Vat,
                 TaxSystem::Gst,
                 TaxSystem::Sst,
                 TaxSystem::Consumption,
             ],
+            // SST in memory; wire TaxScheme is VAT / AAL. GST is Pint, not PintMy.
+            Self::PintMy => &[TaxSystem::Sst],
             Self::Unknown => &[],
         }
     }
