@@ -130,9 +130,9 @@ pub struct Line {
     pub period: Option<Period>,
     pub allowances: Vec<LineAllowanceCharge>,
     pub charges: Vec<LineAllowanceCharge>,
-    /// BT-155 standard item identification (often GTIN).
+    /// BT-157 Item standard identifier (often GTIN). UBL `StandardItemIdentification`; scheme ICD (BR-64 / BR-CL-21). Not BT-155.
     pub standard_id: Option<Identifier>,
-    /// BT-157 item identifier + BT-156/BT-158 scheme.
+    /// BT-155 Seller's item identifier. UBL `SellersItemIdentification`. Not BT-156, not BT-157.
     pub item_id: Option<Identifier>,
     /// BT-159 item origin country (BR-CL-15), not BT-80.
     pub origin_country: Option<Code>,

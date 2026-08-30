@@ -417,7 +417,7 @@ pub static RULES: &[Rule] = &[
     ),
     r(
         "BR-CL-23",
-        "Unit codes MUST be coded using UNECE Rec 20 / Rec 21 (subset).",
+        "Unit codes MUST be coded using UNECE Rec 20 (generated list). Rec 21 is not generated.",
         br_cl_23,
     ),
     r(

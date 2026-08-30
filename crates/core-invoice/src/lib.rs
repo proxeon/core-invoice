@@ -201,6 +201,15 @@ mod tests {
             report.findings.iter().any(|f| f.id == "PINT-TAX"),
             "{report}"
         );
+        let text = explain("PINT-TAX").expect("PINT-TAX is registered");
+        assert!(
+            text.contains("PINT-MY: SST only"),
+            "{text}"
+        );
+        assert!(
+            !text.contains("PINT-MY: VAT, GST"),
+            "{text}"
+        );
     }
 
     #[test]

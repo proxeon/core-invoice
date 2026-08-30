@@ -404,6 +404,7 @@ fn br_co_04(invoice: &Invoice, report: &mut Report) {
     }
 }
 
+// PINT-TAX: sibling profiles; PintMy.tax_systems is SST only (wire TaxScheme VAT/AAL).
 fn pint_tax(invoice: &Invoice, report: &mut Report) {
     if matches!(invoice.profile, crate::profile::Profile::Unknown) {
         return;
@@ -1022,7 +1023,8 @@ pub static ALL: &[Rule] = &[
     Rule {
         id: "PINT-TAX",
         severity: Severity::Fatal,
-        text: "Tax system on a line must be allowed by the profile. EN 16931 / Peppol BIS 3.0: VAT only. PINT / PINT-MY: VAT, GST, SST, consumption.",
+        // PINT-TAX: sibling profiles; PintMy.tax_systems is SST only.
+        text: "Tax system on a line must be allowed by the profile. EN 16931 / Peppol BIS 3.0: VAT only. PINT: VAT, GST, SST, consumption. PINT-MY: SST only.",
         source: Source::Crate,
         eval: pint_tax,
     },

@@ -26,13 +26,13 @@ down here**, not that there are none.
 - **Breaking (0.1.x).** `Invoice.payable` / `tax_total` fields removed; they are views of `DocumentTotals`. BR-CO-18 fires without reconcile. BR-53: BT-6 ⇔ BT-111, never derived.
 - **Table 2.** BT-7/8 tax point, BT-11…19 document refs (BT-13 is purchase order, not BG-3), line period BG-26, line A/C BG-27/28 (already in BT-131), item ids BT-155…159. Peppol R003 is BT-10 or BT-13. R120 includes line charges − allowances.
 - **UBL.** Invoice/CreditNote child order (DueDate before type on Invoice; none on CreditNote and reported). Notes `#CODE#` round-trip. PaymentMeans `@name` is BT-82. Credit transfer IBAN/BIC, card, mandate. Dual TaxTotal BT-110/BT-111. Attachments. PINT-MY TIN scheme GST.
-- **Peppol extras** run only via `Profile::extra_rules` (not CORE). R010 buyer / R020 seller EndpointID (artefact ids). P0100 type list. R005/R055/R061. VATEX P0104–P0111. Official `base-example.xml` is loaded from `refers/` when present.
-- **Presence.** BR-08/10 address group; BR-22 quantity; BR-26 unit; BR-27 net price. PINT-MY Z01/Z03–Z08 overlay BR-CL-16. `validate --format json`. convert `-o`. CII writes qty/price. `docs/UNCOVERED.md` lists remaining catalogue ids.
+- **Peppol extras** run only via `Profile::extra_rules` (not CORE): R001/R003/R004/R007, R010 buyer / R020 seller EndpointID (artefact ids), R002, R005/R055/R061, R041/R042, R046 exact, R054, R101, R110/R111, R120 ±0.02 inclusive, R130, P0100/P0101/P0112, VATEX P0104–P0111, CL001–CL003/CL006/CL008, F001, COMMON-R040 (GLN). Official `base-example.xml` is loaded from `refers/` when present. They do not run on EN core or PINT-MY.
+- **Presence.** BR-08/10 address group; BR-22 quantity (BT-129); BR-23 unit (BT-130); BR-26 net price present (BT-146); BR-27 net price not negative; BR-28 gross not negative (BT-148). PINT-MY Z01/Z03–Z08 overlay BR-CL-16. `validate --format json`. convert `-o`. CII writes qty/price. `docs/UNCOVERED.md` lists remaining catalogue ids.
 - **Convert.** CLI `convert` proves, then `write_validated`. Fatal → exit 1, findings on stdout, empty XML. `write` is renamed `write_unchecked` (tests only). `write_validated` overwrites BT-24 / BT-23 from the proved profile. Self-billing BT-24 cannot be re-stamped as billing (`CORE-PROCESS-01`).
 - **CII (historical, crates.io 0.1.0 / 004 P0).** `convert --to cii` used to wrap UBL in `CrossIndustryInvoice` and was then refused as `CiiNotImplemented`. That wrapper is gone.
 - **CII (current).** Three-part D16B **subset** for EN 16931 and Peppol BIS (lines before header, format 102). Qty, price, payment means, document A/C, and delivery date/address are mapped. Remaining CII drops are named in the cross-syntax test. **PINT-MY is UBL-only:** `FormatError::CiiNotForProfile`, CLI exit 2.
 - **Lists.** ISO 4217 / 3166, EAS, UNCL 1001/4461/5189/7161/2005/7143, Rec 20, MIME generated from `refers/` genericode (`task lists`). `XXX` stays allowed.
-- **Peppol.** Remaining extras: R002, R041/R042, R054, R101, R110/R111, R130, CL001–CL003/CL006/CL008, F001, P0101, P0112, COMMON-R040 (GLN).
+- **Docs.** `Line.item_id` is BT-155 (`SellersItemIdentification`); `Line.standard_id` is BT-157 (`StandardItemIdentification`). PINT-TAX text: PintMy is SST only. Fixtures corpus path is `refers/` (not `/spec/`).
 - **Families.** BR-S-03/04/06/07 are RateContext allowance/charge, not aliases of BR-S-02/05. BR-O-11 groups vs BR-O-12 lines. BR-DEC-* explainable constant-pass.
 - **CLI.** `validate` batch paths, stdin `-`, `--quiet`. `rules --profile peppol`. `inspect` prints unmapped. `profiles` prints artefact pins.
 - **C ABI.** `core_invoice_validate`, convert, diff, version. Python ctypes wrapper.
@@ -68,8 +68,8 @@ down here**, not that there are none.
 - Presence: BR-01, BR-03, BR-04, BR-09, BR-11, BR-21, BR-25.
 - CII D16B three-part **subset** (lines before header, format 102). Not a UBL
   wrapper. `--to cii` is enabled for EN/Peppol only; PINT-MY is refused.
-- Peppol extra_rules: R001/R003/R004/R007, R120 ±0.02 inclusive, R046 exact.
-  They do not run on EN core or PINT-MY.
+- Peppol extra_rules slot (historical Added): R001/R003/R004/R007, R120, R046.
+  The full extra_rules set is under Changed.
 - CLI: `rules --format json`, `inspect` (no verdict), `profiles`. `diff`
   exits 1 when documents differ. Process tests cover 0/1/2.
 - C ABI snippet in `core-invoice-sys`. CI: fmt, clippy `-D warnings`, tests,
@@ -78,11 +78,10 @@ down here**, not that there are none.
   no first-tag-wins, no invented EUR/XX/S. DTD refused. Writer emits IssueDate,
   type code, EndpointID, TaxSubtotal, LegalMonetaryTotal children, quantity/price.
   PINT-MY TaxScheme is `VAT` (never `SST`). `write_validated` stamps from a proof.
-- Code lists (hand-curated subsets): `BR-CL-01` UNTDID 1001 split by
-  `DocumentKind`, `BR-CL-04` ISO 4217 (not length-3; `XXX` allowed),
-  `BR-CL-14` ISO 3166, `BR-CL-17`/`BR-CL-18` UNCL 5305 on VAT profiles only.
+- Code lists were hand-curated subsets at 0.1.0 / meaning-engine (historical).
+  Current lists are generated from `refers/` genericode (`task lists`; Rec 20, not Rec 21).
   Artefact pins `validation-1.3.16` / Peppol `v3.0.20` / PINT-MY `1.3.0`.
-  `task spec` fetches into gitignored `/spec/`.
+  `task spec` fetches into gitignored `refers/`.
 - `Validated<P>` proof type. `Check::without` cannot `prove`. Peppol proof may
   widen to EN 16931 (CIUS); Pint/PintMy do not.
 - Category families: real `BR-S-*` / `BR-Z-*` / `BR-E-*` / `BR-AE-*` /
