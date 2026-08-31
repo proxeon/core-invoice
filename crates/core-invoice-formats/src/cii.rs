@@ -242,9 +242,22 @@ pub fn read(xml: &str) -> Result<Read, FormatError> {
             }
         }
     }
+    const MAPPED_TX: &[&str] = &[
+        "IncludedSupplyChainTradeLineItem",
+        "ApplicableHeaderTradeAgreement",
+        "ApplicableHeaderTradeDelivery",
+        "ApplicableHeaderTradeSettlement",
+    ];
+    let unmapped = tx
+        .children()
+        .filter(|n| n.is_element())
+        .map(local)
+        .filter(|name| !MAPPED_TX.contains(name))
+        .map(|name| format!("SupplyChainTradeTransaction/{name}"))
+        .collect();
     Ok(Read {
         invoice,
-        unmapped: Vec::new(),
+        unmapped,
         malformed,
     })
 }

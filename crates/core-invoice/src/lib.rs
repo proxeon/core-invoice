@@ -202,14 +202,8 @@ mod tests {
             "{report}"
         );
         let text = explain("PINT-TAX").expect("PINT-TAX is registered");
-        assert!(
-            text.contains("PINT-MY: SST only"),
-            "{text}"
-        );
-        assert!(
-            !text.contains("PINT-MY: VAT, GST"),
-            "{text}"
-        );
+        assert!(text.contains("PINT-MY: SST only"), "{text}");
+        assert!(!text.contains("PINT-MY: VAT, GST"), "{text}");
     }
 
     #[test]

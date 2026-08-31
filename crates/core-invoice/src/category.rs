@@ -816,10 +816,6 @@ vat_row!(br_ag_08, "BR-AG-08", CeutaMelilla, check_taxable);
 vat_row!(br_ag_09, "BR-AG-09", CeutaMelilla, check_tax);
 vat_row!(br_ag_10, "BR-AG-10", CeutaMelilla, check_exemption);
 
-fn br_b_01(inv: &Invoice, report: &mut Report) {
-    check_groups(inv, report, profile(VatCategory::SplitPayment), "BR-B-01");
-}
-
 fn br_s_03(inv: &Invoice, report: &mut Report) {
     check_identifiers_in(
         inv,
@@ -855,6 +851,168 @@ fn br_s_07(inv: &Invoice, report: &mut Report) {
         "BR-S-07",
         RateContext::Charge,
     );
+}
+
+macro_rules! family_ac {
+    ($cat:expr, $f03:ident, $f04:ident, $f06:ident, $f07:ident, $i03:literal, $i04:literal, $i06:literal, $i07:literal) => {
+        fn $f03(inv: &Invoice, report: &mut Report) {
+            check_identifiers_in(inv, report, profile($cat), $i03, RateContext::Allowance);
+        }
+        fn $f04(inv: &Invoice, report: &mut Report) {
+            check_identifiers_in(inv, report, profile($cat), $i04, RateContext::Charge);
+        }
+        fn $f06(inv: &Invoice, report: &mut Report) {
+            check_rate_ac(inv, report, profile($cat), $i06, RateContext::Allowance);
+        }
+        fn $f07(inv: &Invoice, report: &mut Report) {
+            check_rate_ac(inv, report, profile($cat), $i07, RateContext::Charge);
+        }
+    };
+}
+
+family_ac!(
+    VatCategory::ZeroRated,
+    br_z_03,
+    br_z_04,
+    br_z_06,
+    br_z_07,
+    "BR-Z-03",
+    "BR-Z-04",
+    "BR-Z-06",
+    "BR-Z-07"
+);
+family_ac!(
+    VatCategory::Exempt,
+    br_e_03,
+    br_e_04,
+    br_e_06,
+    br_e_07,
+    "BR-E-03",
+    "BR-E-04",
+    "BR-E-06",
+    "BR-E-07"
+);
+family_ac!(
+    VatCategory::ReverseCharge,
+    br_ae_03,
+    br_ae_04,
+    br_ae_06,
+    br_ae_07,
+    "BR-AE-03",
+    "BR-AE-04",
+    "BR-AE-06",
+    "BR-AE-07"
+);
+family_ac!(
+    VatCategory::IntraCommunity,
+    br_ic_03,
+    br_ic_04,
+    br_ic_06,
+    br_ic_07,
+    "BR-IC-03",
+    "BR-IC-04",
+    "BR-IC-06",
+    "BR-IC-07"
+);
+family_ac!(
+    VatCategory::Export,
+    br_g_03,
+    br_g_04,
+    br_g_06,
+    br_g_07,
+    "BR-G-03",
+    "BR-G-04",
+    "BR-G-06",
+    "BR-G-07"
+);
+family_ac!(
+    VatCategory::OutOfScope,
+    br_o_03,
+    br_o_04,
+    br_o_06,
+    br_o_07,
+    "BR-O-03",
+    "BR-O-04",
+    "BR-O-06",
+    "BR-O-07"
+);
+family_ac!(
+    VatCategory::CanaryIslands,
+    br_af_03,
+    br_af_04,
+    br_af_06,
+    br_af_07,
+    "BR-AF-03",
+    "BR-AF-04",
+    "BR-AF-06",
+    "BR-AF-07"
+);
+family_ac!(
+    VatCategory::CeutaMelilla,
+    br_ag_03,
+    br_ag_04,
+    br_ag_06,
+    br_ag_07,
+    "BR-AG-03",
+    "BR-AG-04",
+    "BR-AG-06",
+    "BR-AG-07"
+);
+
+fn br_ic_11(inv: &Invoice, report: &mut Report) {
+    // BR-IC-11: intra-community invoices need BT-72 or BG-14 dates.
+    if !vat_families_apply(inv) || !uses_category(inv, VatCategory::IntraCommunity) {
+        return;
+    }
+    let has_delivery = inv.delivery.as_ref().and_then(|d| d.date).is_some();
+    let has_period = inv
+        .period
+        .as_ref()
+        .is_some_and(|p| p.start.is_some() || p.end.is_some());
+    if !has_delivery && !has_period {
+        report.push(Finding::fatal(
+            "BR-IC-11",
+            Path::term(BtId(72)),
+            "Intra-community: actual delivery date (BT-72) or invoicing period (BG-14) shall not be blank",
+        ));
+    }
+}
+
+fn br_ic_12(inv: &Invoice, report: &mut Report) {
+    // BR-IC-12: intra-community deliver-to country (BT-80) shall not be blank.
+    if !vat_families_apply(inv) || !uses_category(inv, VatCategory::IntraCommunity) {
+        return;
+    }
+    let country = inv
+        .delivery
+        .as_ref()
+        .and_then(|d| d.address.as_ref())
+        .and_then(|a| a.country.as_ref())
+        .map(|c| c.as_str().trim())
+        .unwrap_or("");
+    if country.is_empty() {
+        report.push(Finding::fatal(
+            "BR-IC-12",
+            Path::term(BtId(80)),
+            "Intra-community: deliver-to country (BT-80) shall not be blank",
+        ));
+    }
+}
+
+fn br_b_01(inv: &Invoice, report: &mut Report) {
+    // BR-B-01: split payment (B) shall be a domestic Italian invoice.
+    if !vat_families_apply(inv) || !uses_category(inv, VatCategory::SplitPayment) {
+        return;
+    }
+    let seller_it = inv.seller.country().eq_ignore_ascii_case("IT");
+    let buyer_it = inv.buyer.country().eq_ignore_ascii_case("IT");
+    if !(seller_it && buyer_it) {
+        report.push(Finding::fatal(
+            "BR-B-01",
+            Path::term(BtId(118)),
+            "Split payment (B) shall be a domestic Italian invoice",
+        ));
+    }
 }
 
 fn my_sa_01(i: &Invoice, r: &mut Report) {
@@ -898,6 +1056,123 @@ fn my_e_09(i: &Invoice, r: &mut Report) {
 }
 fn my_ttx_09(i: &Invoice, r: &mut Report) {
     check_my_tax(i, r, "TTX", "ALIGNED-IBRP-TTX-09-MY", false);
+}
+fn my_hvg_10(i: &Invoice, r: &mut Report) {
+    check_my_no_exemption(i, r, "HVG", "ALIGNED-IBRP-HVG-10-MY");
+}
+fn my_lvg_10(i: &Invoice, r: &mut Report) {
+    check_my_no_exemption(i, r, "LVG", "ALIGNED-IBRP-LVG-10-MY");
+}
+fn my_e_05(inv: &Invoice, report: &mut Report) {
+    if !my_families_apply(inv) {
+        return;
+    }
+    for (i, line) in inv.lines.iter().enumerate() {
+        if line.tax.code.eq_ignore_ascii_case("E")
+            && line
+                .tax
+                .percent
+                .is_some_and(|p| p.as_percent() != Decimal::ZERO)
+        {
+            report.push(Finding::fatal(
+                "ALIGNED-IBRP-E-05-MY",
+                Path::at_term(Group::Line, i, BtId(152)),
+                "PINT-MY E line rate MUST be 0",
+            ));
+        }
+    }
+}
+fn my_e_08(i: &Invoice, r: &mut Report) {
+    check_my_taxable(i, r, "E", "ALIGNED-IBRP-E-08-MY");
+}
+fn my_o_09(i: &Invoice, r: &mut Report) {
+    check_my_tax(i, r, "O", "ALIGNED-IBRP-O-09-MY", false);
+}
+fn my_ttx_08(inv: &Invoice, report: &mut Report) {
+    if !my_families_apply(inv) {
+        return;
+    }
+    for (i, e) in inv.tax_breakdown.iter().enumerate() {
+        let aal =
+            e.scheme.eq_ignore_ascii_case("AAL") || e.category.as_str().eq_ignore_ascii_case("TTX");
+        if aal && e.rate.is_some() {
+            report.push(Finding::fatal(
+                "ALIGNED-IBRP-TTX-08-MY",
+                Path::at_term(Group::TaxBreakdown, i, BtId(119)),
+                "TTX/AAL MUST NOT include a tax percentage",
+            ));
+        }
+    }
+}
+fn my_002(inv: &Invoice, report: &mut Report) {
+    if !my_families_apply(inv) {
+        return;
+    }
+    // Writer stamps process_id(); empty in-memory BT-23 is not this id. Wrong present value is.
+    let Some(p) = inv
+        .business_process
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    else {
+        return;
+    };
+    if !p.starts_with("urn:peppol:bis:billing") {
+        report.push(Finding::fatal(
+            "ALIGNED-IBRP-002",
+            Path::term(BtId(23)),
+            "PINT-MY BT-23 must be urn:peppol:bis:billing",
+        ));
+    }
+}
+fn my_046(_inv: &Invoice, _report: &mut Report) {
+    // ALIGNED-IBRP-046: IBT-117 is InvoiceAmount on TaxBreakdown; type-retired. explain works.
+}
+fn my_047(inv: &Invoice, report: &mut Report) {
+    if !my_families_apply(inv) {
+        return;
+    }
+    for (i, e) in inv.tax_breakdown.iter().enumerate() {
+        if e.category.as_str().trim().is_empty() {
+            report.push(Finding::fatal(
+                "ALIGNED-IBRP-047",
+                Path::at_term(Group::TaxBreakdown, i, BtId(118)),
+                "Each IBG-23 must have a category code",
+            ));
+        }
+        if e.scheme.eq_ignore_ascii_case("AAL") && !e.category.as_str().eq_ignore_ascii_case("TTX")
+        {
+            report.push(Finding::fatal(
+                "ALIGNED-IBRP-047",
+                Path::at_term(Group::TaxBreakdown, i, BtId(118)),
+                "AAL subtotals must be category TTX",
+            ));
+        }
+    }
+}
+fn my_048(inv: &Invoice, report: &mut Report) {
+    if !my_families_apply(inv) {
+        return;
+    }
+    for (i, e) in inv.tax_breakdown.iter().enumerate() {
+        let ttx =
+            e.scheme.eq_ignore_ascii_case("AAL") || e.category.as_str().eq_ignore_ascii_case("TTX");
+        let o = e.category.as_str().eq_ignore_ascii_case("O");
+        if ttx && e.rate.is_some() {
+            report.push(Finding::fatal(
+                "ALIGNED-IBRP-048",
+                Path::at_term(Group::TaxBreakdown, i, BtId(119)),
+                "AAL/TTX must not have a rate",
+            ));
+        }
+        if !ttx && !o && e.rate.is_none() {
+            report.push(Finding::fatal(
+                "ALIGNED-IBRP-048",
+                Path::at_term(Group::TaxBreakdown, i, BtId(119)),
+                "VAT subtotals must have a rate except O",
+            ));
+        }
+    }
 }
 
 const fn r(id: &'static str, text: &'static str, eval: fn(&Invoice, &mut Report)) -> Rule {
@@ -982,7 +1257,19 @@ pub static RULES: &[Rule] = &[
         br_z_01,
     ),
     r("BR-Z-02", "Zero-rated VAT: seller tax identifier.", br_z_02),
+    r(
+        "BR-Z-03",
+        "Zero-rated VAT: identifier on document allowance.",
+        br_z_03,
+    ),
+    r(
+        "BR-Z-04",
+        "Zero-rated VAT: identifier on document charge.",
+        br_z_04,
+    ),
     r("BR-Z-05", "Zero-rated VAT: rate = 0.", br_z_05),
+    r("BR-Z-06", "Zero-rated VAT: allowance rate.", br_z_06),
+    r("BR-Z-07", "Zero-rated VAT: charge rate.", br_z_07),
     r("BR-Z-08", "Zero-rated VAT: BT-116 group sum.", br_z_08),
     r("BR-Z-09", "Zero-rated VAT: BT-117 = 0.", br_z_09),
     r(
@@ -992,7 +1279,19 @@ pub static RULES: &[Rule] = &[
     ),
     r("BR-E-01", "Exempt VAT: exactly one BG-23 group.", br_e_01),
     r("BR-E-02", "Exempt VAT: seller tax identifier.", br_e_02),
+    r(
+        "BR-E-03",
+        "Exempt VAT: identifier on document allowance.",
+        br_e_03,
+    ),
+    r(
+        "BR-E-04",
+        "Exempt VAT: identifier on document charge.",
+        br_e_04,
+    ),
     r("BR-E-05", "Exempt VAT: rate = 0.", br_e_05),
+    r("BR-E-06", "Exempt VAT: allowance rate.", br_e_06),
+    r("BR-E-07", "Exempt VAT: charge rate.", br_e_07),
     r("BR-E-08", "Exempt VAT: BT-116 group sum.", br_e_08),
     r("BR-E-09", "Exempt VAT: BT-117 = 0.", br_e_09),
     r("BR-E-10", "Exempt VAT: exemption reason required.", br_e_10),
@@ -1006,7 +1305,19 @@ pub static RULES: &[Rule] = &[
         "Reverse charge: seller and buyer identifiers.",
         br_ae_02,
     ),
+    r(
+        "BR-AE-03",
+        "Reverse charge: identifier on document allowance.",
+        br_ae_03,
+    ),
+    r(
+        "BR-AE-04",
+        "Reverse charge: identifier on document charge.",
+        br_ae_04,
+    ),
     r("BR-AE-05", "Reverse charge: rate = 0.", br_ae_05),
+    r("BR-AE-06", "Reverse charge: allowance rate.", br_ae_06),
+    r("BR-AE-07", "Reverse charge: charge rate.", br_ae_07),
     r("BR-AE-08", "Reverse charge: BT-116 group sum.", br_ae_08),
     r("BR-AE-09", "Reverse charge: BT-117 = 0.", br_ae_09),
     r(
@@ -1024,7 +1335,29 @@ pub static RULES: &[Rule] = &[
         "Intra-community: seller VAT and buyer VAT.",
         br_ic_02,
     ),
+    r(
+        "BR-IC-03",
+        "Intra-community: identifier on document allowance.",
+        br_ic_03,
+    ),
+    r(
+        "BR-IC-04",
+        "Intra-community: identifier on document charge.",
+        br_ic_04,
+    ),
     r("BR-IC-05", "Intra-community: rate = 0.", br_ic_05),
+    r("BR-IC-06", "Intra-community: allowance rate.", br_ic_06),
+    r("BR-IC-07", "Intra-community: charge rate.", br_ic_07),
+    r(
+        "BR-IC-11",
+        "Intra-community: actual delivery date (BT-72) or invoicing period (BG-14).",
+        br_ic_11,
+    ),
+    r(
+        "BR-IC-12",
+        "Intra-community: deliver-to country (BT-80).",
+        br_ic_12,
+    ),
     r("BR-IC-08", "Intra-community: BT-116 group sum.", br_ic_08),
     r("BR-IC-09", "Intra-community: BT-117 = 0.", br_ic_09),
     r(
@@ -1038,7 +1371,15 @@ pub static RULES: &[Rule] = &[
         "Export: seller VAT identifier (BT-31 or BT-63).",
         br_g_02,
     ),
+    r(
+        "BR-G-03",
+        "Export: identifier on document allowance.",
+        br_g_03,
+    ),
+    r("BR-G-04", "Export: identifier on document charge.", br_g_04),
     r("BR-G-05", "Export: rate = 0.", br_g_05),
+    r("BR-G-06", "Export: allowance rate.", br_g_06),
+    r("BR-G-07", "Export: charge rate.", br_g_07),
     r("BR-G-08", "Export: BT-116 group sum.", br_g_08),
     r("BR-G-09", "Export: BT-117 = 0.", br_g_09),
     r("BR-G-10", "Export: exemption reason required.", br_g_10),
@@ -1048,7 +1389,19 @@ pub static RULES: &[Rule] = &[
         "Out of scope: VAT identifiers shall not be present.",
         br_o_02,
     ),
+    r(
+        "BR-O-03",
+        "Out of scope: identifier on document allowance.",
+        br_o_03,
+    ),
+    r(
+        "BR-O-04",
+        "Out of scope: identifier on document charge.",
+        br_o_04,
+    ),
     r("BR-O-05", "Out of scope: rate absent.", br_o_05),
+    r("BR-O-06", "Out of scope: allowance rate.", br_o_06),
+    r("BR-O-07", "Out of scope: charge rate.", br_o_07),
     r("BR-O-08", "Out of scope: BT-116 group sum.", br_o_08),
     r("BR-O-09", "Out of scope: BT-117 = 0.", br_o_09),
     r(
@@ -1078,19 +1431,35 @@ pub static RULES: &[Rule] = &[
     ),
     r("BR-AF-01", "IGIC: at least one BG-23 group.", br_af_01),
     r("BR-AF-02", "IGIC: seller tax identifier.", br_af_02),
+    r(
+        "BR-AF-03",
+        "IGIC: identifier on document allowance.",
+        br_af_03,
+    ),
+    r("BR-AF-04", "IGIC: identifier on document charge.", br_af_04),
     r("BR-AF-05", "IGIC: rate ≥ 0.", br_af_05),
+    r("BR-AF-06", "IGIC: allowance rate.", br_af_06),
+    r("BR-AF-07", "IGIC: charge rate.", br_af_07),
     r("BR-AF-08", "IGIC: BT-116 group sum.", br_af_08),
     r("BR-AF-09", "IGIC: derived tax.", br_af_09),
     r("BR-AF-10", "IGIC: exemption reason forbidden.", br_af_10),
     r("BR-AG-01", "IPSI: at least one BG-23 group.", br_ag_01),
     r("BR-AG-02", "IPSI: seller tax identifier.", br_ag_02),
+    r(
+        "BR-AG-03",
+        "IPSI: identifier on document allowance.",
+        br_ag_03,
+    ),
+    r("BR-AG-04", "IPSI: identifier on document charge.", br_ag_04),
     r("BR-AG-05", "IPSI: rate ≥ 0.", br_ag_05),
+    r("BR-AG-06", "IPSI: allowance rate.", br_ag_06),
+    r("BR-AG-07", "IPSI: charge rate.", br_ag_07),
     r("BR-AG-08", "IPSI: BT-116 group sum.", br_ag_08),
     r("BR-AG-09", "IPSI: derived tax.", br_ag_09),
     r("BR-AG-10", "IPSI: exemption reason forbidden.", br_ag_10),
     r(
         "BR-B-01",
-        "Split payment: at least one BG-23 group.",
+        "Split payment (B) shall be a domestic Italian invoice.",
         br_b_01,
     ),
     r(
@@ -1169,6 +1538,48 @@ pub static RULES: &[Rule] = &[
         "PINT-MY O is exclusive.",
         check_my_o_exclusive,
     ),
+    my(
+        "ALIGNED-IBRP-002",
+        "PINT-MY BT-23 must be urn:peppol:bis:billing.",
+        my_002,
+    ),
+    my("ALIGNED-IBRP-046", "Each IBG-23 must have IBT-117.", my_046),
+    my(
+        "ALIGNED-IBRP-047",
+        "VAT subtotals need a category; AAL subtotals must be TTX.",
+        my_047,
+    ),
+    my(
+        "ALIGNED-IBRP-048",
+        "VAT subtotals must have a rate except O; TTX/AAL must not.",
+        my_048,
+    ),
+    my(
+        "ALIGNED-IBRP-HVG-10-MY",
+        "PINT-MY HVG: exemption reason forbidden.",
+        my_hvg_10,
+    ),
+    my(
+        "ALIGNED-IBRP-LVG-10-MY",
+        "PINT-MY LVG: exemption reason forbidden.",
+        my_lvg_10,
+    ),
+    my(
+        "ALIGNED-IBRP-TTX-08-MY",
+        "TTX/AAL MUST NOT include a tax percentage.",
+        my_ttx_08,
+    ),
+    my(
+        "ALIGNED-IBRP-E-05-MY",
+        "PINT-MY E line rate MUST be 0.",
+        my_e_05,
+    ),
+    my(
+        "ALIGNED-IBRP-E-08-MY",
+        "PINT-MY E: IBT-116 group sum.",
+        my_e_08,
+    ),
+    my("ALIGNED-IBRP-O-09-MY", "PINT-MY O: tax = 0.", my_o_09),
 ];
 
 /// PINT GST subset (not invented): S, Z, AA, O, plus SG SR on Pint only.

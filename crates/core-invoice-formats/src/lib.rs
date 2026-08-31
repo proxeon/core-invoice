@@ -334,6 +334,9 @@ mod tests {
         let _ = read("<");
         let _ = read("<<<<<<<<");
         let _ = read(&"a".repeat(100));
+        let _ = read("<!DOCTYPE foo [<!ENTITY x SYSTEM 'file:///etc/passwd'>]><Invoice/>");
+        let _ = read(&format!("<Invoice>{}</Invoice>", "x".repeat(200_000)));
+        let _ = read(&"<a>".repeat(80));
     }
 
     #[test]

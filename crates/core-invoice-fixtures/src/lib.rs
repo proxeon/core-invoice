@@ -265,6 +265,25 @@ mod tests {
     }
 
     #[test]
+    fn official_cen_cii_example1_when_refers_present() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../refers/en16931/cii/examples/CII_example1.xml");
+        if !path.exists() {
+            if std::env::var("CORE_INVOICE_REQUIRE_SPEC").ok().as_deref() == Some("1") {
+                panic!("missing {}", path.display());
+            }
+            return;
+        }
+        let xml = std::fs::read_to_string(&path).unwrap();
+        let traced = core_invoice_formats::read_with_trace(&xml).unwrap();
+        assert_eq!(traced.invoice.kind, core_invoice::DocumentKind::Invoice);
+        assert!(
+            !xml.contains("<Invoice "),
+            "CII example must not be a UBL wrapper"
+        );
+    }
+
+    #[test]
     fn official_en16931_example_when_refers_present() {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../refers/en16931/ubl/examples/ubl-tc434-example1.xml");

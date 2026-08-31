@@ -200,6 +200,321 @@ fn br_24(_invoice: &Invoice, _report: &mut Report) {
     // BR-24: Line.net is not Option (BT-131); type-retired. explain still works.
 }
 
+fn br_17(invoice: &Invoice, report: &mut Report) {
+    // BR-17: Payee name (BT-59) if BG-10 present.
+    if let Some(p) = invoice.payee.as_ref()
+        && p.name.trim().is_empty()
+    {
+        report.push(Finding::fatal(
+            "BR-17",
+            Path::term(BtId(59)),
+            "Payee name (BT-59) shall be provided if Payee (BG-10) is used",
+        ));
+    }
+}
+
+fn br_18(invoice: &Invoice, report: &mut Report) {
+    if let Some(tr) = invoice.tax_representative.as_ref()
+        && tr.name.trim().is_empty()
+    {
+        report.push(Finding::fatal(
+            "BR-18",
+            Path::term(BtId(62)),
+            "Seller tax representative name (BT-62) shall be provided if BG-11 is used",
+        ));
+    }
+}
+
+fn br_20(invoice: &Invoice, report: &mut Report) {
+    if let Some(tr) = invoice.tax_representative.as_ref() {
+        let cc = tr
+            .address
+            .as_ref()
+            .and_then(|a| a.country.as_ref())
+            .map(|c| c.as_str().trim())
+            .unwrap_or("");
+        if cc.is_empty() {
+            report.push(Finding::fatal(
+                "BR-20",
+                Path::term(BtId(69)),
+                "Tax representative country (BT-69) shall be provided if BG-11 is used",
+            ));
+        }
+    }
+}
+
+fn br_56(invoice: &Invoice, report: &mut Report) {
+    if let Some(tr) = invoice.tax_representative.as_ref()
+        && tr.vat_identifier.is_none()
+    {
+        report.push(Finding::fatal(
+            "BR-56",
+            Path::term(BtId(63)),
+            "Seller tax representative VAT identifier (BT-63) shall be provided if BG-11 is used",
+        ));
+    }
+}
+
+fn br_29(invoice: &Invoice, report: &mut Report) {
+    if let Some(p) = invoice.period.as_ref()
+        && let (Some(s), Some(e)) = (p.start, p.end)
+        && e < s
+    {
+        report.push(Finding::fatal(
+            "BR-29",
+            Path::term(BtId(74)),
+            "Invoicing period end date shall be on or after start date",
+        ));
+    }
+}
+
+fn br_30(invoice: &Invoice, report: &mut Report) {
+    for (i, line) in invoice.lines.iter().enumerate() {
+        if let Some(p) = line.period.as_ref()
+            && let (Some(s), Some(e)) = (p.start, p.end)
+            && e < s
+        {
+            report.push(Finding::fatal(
+                "BR-30",
+                Path::at_term(Group::Line, i, BtId(135)),
+                "Invoice line period end date shall be on or after start date",
+            ));
+        }
+    }
+}
+
+fn br_52(invoice: &Invoice, report: &mut Report) {
+    for (i, d) in invoice.supporting_documents.iter().enumerate() {
+        if d.id.as_str().trim().is_empty() {
+            report.push(Finding::fatal(
+                "BR-52",
+                Path::at_term(Group::Attachment, i, BtId(122)),
+                "Each additional supporting document shall contain a reference (BT-122)",
+            ));
+        }
+    }
+}
+
+fn br_54(invoice: &Invoice, report: &mut Report) {
+    for (i, line) in invoice.lines.iter().enumerate() {
+        for a in &line.attributes {
+            if a.name.trim().is_empty() || a.value.trim().is_empty() {
+                report.push(Finding::fatal(
+                    "BR-54",
+                    Path::at_term(Group::Line, i, BtId(160)),
+                    "Each item attribute (BG-32) shall contain name (BT-160) and value (BT-161)",
+                ));
+            }
+        }
+    }
+}
+
+fn br_55(invoice: &Invoice, report: &mut Report) {
+    for (i, p) in invoice.preceding.iter().enumerate() {
+        if p.reference.as_str().trim().is_empty() {
+            report.push(Finding::fatal(
+                "BR-55",
+                Path::at_term(Group::Document, i, BtId(25)),
+                "Each preceding invoice reference (BG-3) shall contain BT-25",
+            ));
+        }
+    }
+}
+
+fn br_57(invoice: &Invoice, report: &mut Report) {
+    let Some(d) = invoice.delivery.as_ref() else {
+        return;
+    };
+    let Some(addr) = d.address.as_ref() else {
+        return;
+    };
+    let cc = addr
+        .country
+        .as_ref()
+        .map(|c| c.as_str().trim())
+        .unwrap_or("");
+    if cc.is_empty() {
+        report.push(Finding::fatal(
+            "BR-57",
+            Path::term(BtId(80)),
+            "Each deliver-to address (BG-15) shall contain country (BT-80)",
+        ));
+    }
+}
+
+fn br_62(invoice: &Invoice, report: &mut Report) {
+    if let Some(ep) = invoice.seller.electronic_address.as_ref()
+        && ep.scheme.as_deref().unwrap_or("").trim().is_empty()
+    {
+        report.push(Finding::fatal(
+            "BR-62",
+            Path::group_term(Group::Seller, BtId(34)),
+            "Seller electronic address (BT-34) shall have a scheme",
+        ));
+    }
+}
+
+fn br_63(invoice: &Invoice, report: &mut Report) {
+    if let Some(ep) = invoice.buyer.electronic_address.as_ref()
+        && ep.scheme.as_deref().unwrap_or("").trim().is_empty()
+    {
+        report.push(Finding::fatal(
+            "BR-63",
+            Path::group_term(Group::Buyer, BtId(49)),
+            "Buyer electronic address (BT-49) shall have a scheme",
+        ));
+    }
+}
+
+fn br_64(invoice: &Invoice, report: &mut Report) {
+    for (i, line) in invoice.lines.iter().enumerate() {
+        if let Some(id) = line.standard_id.as_ref()
+            && id.scheme.as_deref().unwrap_or("").trim().is_empty()
+        {
+            report.push(Finding::fatal(
+                "BR-64",
+                Path::at_term(Group::Line, i, BtId(157)),
+                "Item standard identifier (BT-157) shall have a scheme",
+            ));
+        }
+    }
+}
+
+fn br_65(invoice: &Invoice, report: &mut Report) {
+    for (i, line) in invoice.lines.iter().enumerate() {
+        for cl in &line.classifications {
+            if cl.scheme.as_deref().unwrap_or("").trim().is_empty() {
+                report.push(Finding::fatal(
+                    "BR-65",
+                    Path::at_term(Group::Line, i, BtId(158)),
+                    "Item classification identifier (BT-158) shall have a scheme (listID)",
+                ));
+            }
+        }
+    }
+}
+
+fn br_co_09(invoice: &Invoice, report: &mut Report) {
+    // BR-CO-09: VAT ids have ISO 3166 prefix (Greece EL). Must not run on PINT-MY TIN.
+    if invoice.profile == crate::profile::Profile::PintMy {
+        return;
+    }
+    let ids = [
+        invoice.seller.vat_identifier.as_ref(),
+        invoice.buyer.vat_identifier.as_ref(),
+        invoice
+            .tax_representative
+            .as_ref()
+            .and_then(|t| t.vat_identifier.as_ref()),
+    ];
+    for id in ids.into_iter().flatten() {
+        let v = id.value.trim();
+        if v.len() < 2 {
+            report.push(Finding::fatal(
+                "BR-CO-09",
+                Path::term(BtId(31)),
+                "VAT identifier shall have an ISO 3166-1 alpha-2 prefix (Greece EL)",
+            ));
+            continue;
+        }
+        let prefix = &v[..2];
+        let ok = prefix.eq_ignore_ascii_case("EL") || crate::codes::country(prefix);
+        if !ok {
+            report.push(Finding::fatal(
+                "BR-CO-09",
+                Path::term(BtId(31)),
+                "VAT identifier shall have an ISO 3166-1 alpha-2 prefix (Greece EL)",
+            ));
+        }
+    }
+}
+
+fn br_co_19(invoice: &Invoice, report: &mut Report) {
+    if let Some(p) = invoice.period.as_ref()
+        && p.start.is_none()
+        && p.end.is_none()
+        && invoice.tax_point_code.is_none()
+    {
+        report.push(Finding::fatal(
+            "BR-CO-19",
+            Path::term(BtId(73)),
+            "If invoicing period (BG-14) is used, start or end shall be present",
+        ));
+    }
+}
+
+fn br_co_20(invoice: &Invoice, report: &mut Report) {
+    for (i, line) in invoice.lines.iter().enumerate() {
+        if let Some(p) = line.period.as_ref()
+            && p.start.is_none()
+            && p.end.is_none()
+        {
+            report.push(Finding::fatal(
+                "BR-CO-20",
+                Path::at_term(Group::Line, i, BtId(134)),
+                "If invoice line period (BG-26) is used, start or end shall be present",
+            ));
+        }
+    }
+}
+
+fn reason_or_code(reason: Option<&str>, code: Option<&crate::code::Code>) -> bool {
+    reason.is_some_and(|s| !s.trim().is_empty())
+        || code.is_some_and(|c| !c.as_str().trim().is_empty())
+}
+
+fn br_co_21(invoice: &Invoice, report: &mut Report) {
+    for (i, a) in invoice.document_allowances.iter().enumerate() {
+        if !reason_or_code(a.reason.as_deref(), a.reason_code.as_ref()) {
+            report.push(Finding::fatal(
+                "BR-CO-21",
+                Path::at_term(Group::DocumentAllowance, i, BtId(97)),
+                "Document level allowance shall have a reason or reason code",
+            ));
+        }
+    }
+}
+
+fn br_co_22(invoice: &Invoice, report: &mut Report) {
+    for (i, a) in invoice.document_charges.iter().enumerate() {
+        if !reason_or_code(a.reason.as_deref(), a.reason_code.as_ref()) {
+            report.push(Finding::fatal(
+                "BR-CO-22",
+                Path::at_term(Group::DocumentCharge, i, BtId(104)),
+                "Document level charge shall have a reason or reason code",
+            ));
+        }
+    }
+}
+
+fn br_co_23(invoice: &Invoice, report: &mut Report) {
+    for (i, line) in invoice.lines.iter().enumerate() {
+        for a in &line.allowances {
+            if !reason_or_code(a.reason.as_deref(), a.reason_code.as_ref()) {
+                report.push(Finding::fatal(
+                    "BR-CO-23",
+                    Path::at_term(Group::Line, i, BtId(139)),
+                    "Invoice line allowance shall have a reason or reason code",
+                ));
+            }
+        }
+    }
+}
+
+fn br_co_24(invoice: &Invoice, report: &mut Report) {
+    for (i, line) in invoice.lines.iter().enumerate() {
+        for a in &line.charges {
+            if !reason_or_code(a.reason.as_deref(), a.reason_code.as_ref()) {
+                report.push(Finding::fatal(
+                    "BR-CO-24",
+                    Path::at_term(Group::Line, i, BtId(144)),
+                    "Invoice line charge shall have a reason or reason code",
+                ));
+            }
+        }
+    }
+}
+
 fn br_26(invoice: &Invoice, report: &mut Report) {
     // BR-26: Item net price (BT-146) present (UBL Schematron).
     for (i, line) in invoice.lines.iter().enumerate() {
@@ -914,6 +1229,153 @@ pub static ALL: &[Rule] = &[
         text: "An invoice should never include a full card primary account number (BT-87).",
         source: Source::Both,
         eval: br_51,
+    },
+    Rule {
+        id: "BR-17",
+        severity: Severity::Fatal,
+        text: "Payee name (BT-59) shall be provided if Payee (BG-10) is used.",
+        source: Source::Both,
+        eval: br_17,
+    },
+    Rule {
+        id: "BR-18",
+        severity: Severity::Fatal,
+        text: "Seller tax representative name (BT-62) shall be provided if BG-11 is used.",
+        source: Source::Both,
+        eval: br_18,
+    },
+    Rule {
+        id: "BR-20",
+        severity: Severity::Fatal,
+        text: "Tax representative country (BT-69) shall be provided if BG-11 is used.",
+        source: Source::Both,
+        eval: br_20,
+    },
+    Rule {
+        id: "BR-56",
+        severity: Severity::Fatal,
+        text: "Seller tax representative VAT identifier (BT-63) shall be provided if BG-11 is used.",
+        source: Source::Both,
+        eval: br_56,
+    },
+    Rule {
+        id: "BR-29",
+        severity: Severity::Fatal,
+        text: "Invoicing period end date shall be on or after start date.",
+        source: Source::Both,
+        eval: br_29,
+    },
+    Rule {
+        id: "BR-30",
+        severity: Severity::Fatal,
+        text: "Invoice line period end date shall be on or after start date.",
+        source: Source::Both,
+        eval: br_30,
+    },
+    Rule {
+        id: "BR-52",
+        severity: Severity::Fatal,
+        text: "Each additional supporting document shall contain a reference (BT-122).",
+        source: Source::Both,
+        eval: br_52,
+    },
+    Rule {
+        id: "BR-54",
+        severity: Severity::Fatal,
+        text: "Each item attribute (BG-32) shall contain name (BT-160) and value (BT-161).",
+        source: Source::Both,
+        eval: br_54,
+    },
+    Rule {
+        id: "BR-55",
+        severity: Severity::Fatal,
+        text: "Each preceding invoice reference (BG-3) shall contain BT-25.",
+        source: Source::Both,
+        eval: br_55,
+    },
+    Rule {
+        id: "BR-57",
+        severity: Severity::Fatal,
+        text: "Each deliver-to address (BG-15) shall contain country (BT-80).",
+        source: Source::Both,
+        eval: br_57,
+    },
+    Rule {
+        id: "BR-62",
+        severity: Severity::Fatal,
+        text: "Seller electronic address (BT-34) shall have a scheme.",
+        source: Source::Both,
+        eval: br_62,
+    },
+    Rule {
+        id: "BR-63",
+        severity: Severity::Fatal,
+        text: "Buyer electronic address (BT-49) shall have a scheme.",
+        source: Source::Both,
+        eval: br_63,
+    },
+    Rule {
+        id: "BR-64",
+        severity: Severity::Fatal,
+        text: "Item standard identifier (BT-157) shall have a scheme.",
+        source: Source::Both,
+        eval: br_64,
+    },
+    Rule {
+        id: "BR-65",
+        severity: Severity::Fatal,
+        text: "Item classification identifier (BT-158) shall have a scheme (listID).",
+        source: Source::Both,
+        eval: br_65,
+    },
+    Rule {
+        id: "BR-CO-09",
+        severity: Severity::Fatal,
+        text: "VAT identifiers shall have an ISO 3166-1 alpha-2 prefix (Greece EL). Not PINT-MY TIN.",
+        source: Source::Both,
+        eval: br_co_09,
+    },
+    Rule {
+        id: "BR-CO-19",
+        severity: Severity::Fatal,
+        text: "If invoicing period (BG-14) is used, start or end shall be present.",
+        source: Source::Both,
+        eval: br_co_19,
+    },
+    Rule {
+        id: "BR-CO-20",
+        severity: Severity::Fatal,
+        text: "If invoice line period (BG-26) is used, start or end shall be present.",
+        source: Source::Both,
+        eval: br_co_20,
+    },
+    Rule {
+        id: "BR-CO-21",
+        severity: Severity::Fatal,
+        text: "Document level allowance shall have a reason or reason code.",
+        source: Source::Both,
+        eval: br_co_21,
+    },
+    Rule {
+        id: "BR-CO-22",
+        severity: Severity::Fatal,
+        text: "Document level charge shall have a reason or reason code.",
+        source: Source::Both,
+        eval: br_co_22,
+    },
+    Rule {
+        id: "BR-CO-23",
+        severity: Severity::Fatal,
+        text: "Invoice line allowance shall have a reason or reason code.",
+        source: Source::Both,
+        eval: br_co_23,
+    },
+    Rule {
+        id: "BR-CO-24",
+        severity: Severity::Fatal,
+        text: "Invoice line charge shall have a reason or reason code.",
+        source: Source::Both,
+        eval: br_co_24,
     },
     Rule {
         id: "BR-CO-03",

@@ -75,6 +75,50 @@ fn validate_json_ok_is_0() {
 }
 
 #[test]
+fn validate_stdin_dash() {
+    let xml = peppol_xml();
+    let mut child = bin()
+        .args(["validate", "--profile", "peppol", "-"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(xml.as_bytes())
+        .unwrap();
+    let out = child.wait_with_output().unwrap();
+    assert_eq!(out.status.code(), Some(0), "{:?}", out);
+}
+
+#[test]
+fn convert_dash_o_writes_file() {
+    let path = write_tmp("conv-in", &peppol_xml());
+    let dest = std::env::temp_dir().join(format!(
+        "core-invoice-cli-conv-out-{}.xml",
+        std::process::id()
+    ));
+    let out = bin()
+        .args([
+            "convert",
+            "--to",
+            "ubl",
+            "-o",
+            dest.to_str().unwrap(),
+            path.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(0), "{:?}", out);
+    assert!(out.stdout.is_empty());
+    assert!(dest.exists());
+    let _ = std::fs::remove_file(dest);
+}
+
+#[test]
 fn valid_peppol_is_0() {
     let path = write_tmp("ok", &peppol_xml());
     let out = bin()

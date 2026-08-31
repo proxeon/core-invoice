@@ -60,7 +60,12 @@ def main() -> int:
         rust_arr("ISO_3166", gc_ids(INV / "ISO3166.gc")),
         # EN 16931 BR-CL-25 also lists letter EAS codes EM AN AQ AS AU.
         rust_arr("EAS", gc_ids(INV / "eas.gc"), extra=["AN", "AQ", "AS", "AU", "EM"]),
-        rust_arr("UNCL_1001_INVOICE", gc_ids(INV / "UNCL1001-inv.gc")),
+        # EN BR-CL-01 includes 326/384 (corrective) and 389 (self-billed). Peppol P0100 still forbids 389.
+        rust_arr(
+            "UNCL_1001_INVOICE",
+            gc_ids(INV / "UNCL1001-inv.gc"),
+            extra=["326", "384", "389"],
+        ),
         rust_arr("UNCL_1001_CREDIT_NOTE", gc_ids(cn_path)),
         # Z01/Z03–Z08 are PINT-MY extras on BT-81, not UNCL 4461 membership for EN/Peppol.
         rust_arr(
@@ -71,6 +76,7 @@ def main() -> int:
         rust_arr("UNCL_7161", gc_ids(INV / "UNCL7161.gc")),
         rust_arr("UNCL_2005", gc_ids(INV / "UNCL2005.gc")),
         rust_arr("UNCL_7143", gc_ids(INV / "UNCL7143.gc")),
+        rust_arr("UNCL_1153", gc_ids(INV / "UNCL1153.gc")),
         rust_arr("ICD", gc_ids(INV / "ICD.gc")),
         rust_arr("REC20", gc_ids(INV / "UNECERec20.gc")),
         rust_arr("MIME", gc_ids(INV / "MimeCode.gc")),

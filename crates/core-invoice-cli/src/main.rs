@@ -276,7 +276,7 @@ fn run() -> Result<ExitCode, String> {
             let a = read_xml(&left)?;
             let b = read_xml(&right)?;
             let out = diff(&a, &b).map_err(|e| e.to_string())?;
-            println!("{out}");
+            write_stdout(&format!("{out}\n"))?;
             if out == "no semantic difference" {
                 Ok(ExitCode::SUCCESS)
             } else {
@@ -285,7 +285,7 @@ fn run() -> Result<ExitCode, String> {
         }
         Command::Explain { id } => match core_invoice::explain(&id) {
             Some(text) => {
-                println!("{text}");
+                write_stdout(&format!("{text}\n"))?;
                 Ok(ExitCode::SUCCESS)
             }
             None => {

@@ -53,6 +53,9 @@ pub fn mime(code: &str) -> bool {
 pub fn icd(code: &str) -> bool {
     lists::ICD.contains(&code)
 }
+pub fn uncl_1153(code: &str) -> bool {
+    listed(lists::UNCL_1153, code)
+}
 pub fn pint_my_taxcat(code: &str) -> bool {
     listed(lists::PINT_MY_TAXCAT, code)
 }
@@ -238,6 +241,140 @@ fn br_cl_24(inv: &Invoice, report: &mut Report) {
                 format!("mime {} is not in the subset", att.mime),
             ));
         }
+    }
+}
+
+fn br_cl_07(inv: &Invoice, report: &mut Report) {
+    // BR-CL-07: BT-18 / BT-128 scheme (when present) is UNTDID 1153, not ICD.
+    if let Some(scheme) = inv
+        .invoiced_object
+        .as_ref()
+        .and_then(|id| id.scheme.as_deref())
+        && !uncl_1153(scheme)
+    {
+        report.push(Finding::fatal(
+            "BR-CL-07",
+            Path::term(BtId(18)),
+            format!("object identifier scheme {scheme} is not UNTDID 1153"),
+        ));
+    }
+    for (i, line) in inv.lines.iter().enumerate() {
+        let Some(scheme) = line
+            .invoiced_object
+            .as_ref()
+            .and_then(|id| id.scheme.as_deref())
+        else {
+            continue;
+        };
+        if !uncl_1153(scheme) {
+            report.push(Finding::fatal(
+                "BR-CL-07",
+                Path::at_term(Group::Line, i, BtId(128)),
+                format!("object identifier scheme {scheme} is not UNTDID 1153"),
+            ));
+        }
+    }
+}
+
+fn br_cl_10(inv: &Invoice, report: &mut Report) {
+    // BR-CL-10: PartyIdentification scheme is ISO 6523 ICD. SEPA allowed on seller/payee.
+    let parties = [
+        (&inv.seller.identifiers[..], Group::Seller, 29u16, true),
+        (&inv.buyer.identifiers[..], Group::Buyer, 46u16, false),
+    ];
+    for (ids, group, bt, sepa_ok) in parties {
+        for id in ids {
+            let Some(scheme) = id.scheme.as_deref() else {
+                continue;
+            };
+            let ok = icd(scheme) || (sepa_ok && scheme.eq_ignore_ascii_case("SEPA"));
+            if !ok {
+                report.push(Finding::fatal(
+                    "BR-CL-10",
+                    Path::group_term(group, BtId(bt)),
+                    format!("identifier scheme {scheme} is not ISO 6523 ICD"),
+                ));
+            }
+        }
+    }
+    if let Some(payee) = inv.payee.as_ref()
+        && let Some(id) = payee.identifier.as_ref()
+        && let Some(scheme) = id.scheme.as_deref()
+        && !(icd(scheme) || scheme.eq_ignore_ascii_case("SEPA"))
+    {
+        report.push(Finding::fatal(
+            "BR-CL-10",
+            Path::term(BtId(60)),
+            format!("payee identifier scheme {scheme} is not ISO 6523 ICD"),
+        ));
+    }
+}
+
+fn br_cl_11(inv: &Invoice, report: &mut Report) {
+    // BR-CL-11: CompanyID scheme is ICD when present. Unschemed (PINT-MY BRN) does not fire.
+    for (reg, group, bt) in [
+        (inv.seller.legal_registration.as_ref(), Group::Seller, 30u16),
+        (inv.buyer.legal_registration.as_ref(), Group::Buyer, 47u16),
+        (
+            inv.payee
+                .as_ref()
+                .and_then(|p| p.legal_registration.as_ref()),
+            Group::Seller,
+            61u16,
+        ),
+    ] {
+        let Some(id) = reg else {
+            continue;
+        };
+        let Some(scheme) = id.scheme.as_deref() else {
+            continue;
+        };
+        if !icd(scheme) {
+            report.push(Finding::fatal(
+                "BR-CL-11",
+                Path::group_term(group, BtId(bt)),
+                format!("legal registration scheme {scheme} is not ISO 6523 ICD"),
+            ));
+        }
+    }
+}
+
+fn br_cl_21(inv: &Invoice, report: &mut Report) {
+    // BR-CL-21: BT-157 StandardItemIdentification scheme is ICD. Not BT-155 item_id.
+    for (i, line) in inv.lines.iter().enumerate() {
+        let Some(scheme) = line
+            .standard_id
+            .as_ref()
+            .and_then(|id| id.scheme.as_deref())
+        else {
+            continue;
+        };
+        if !icd(scheme) {
+            report.push(Finding::fatal(
+                "BR-CL-21",
+                Path::at_term(Group::Line, i, BtId(157)),
+                format!("BT-157 scheme {scheme} is not ISO 6523 ICD"),
+            ));
+        }
+    }
+}
+
+fn br_cl_26(inv: &Invoice, report: &mut Report) {
+    // BR-CL-26: DeliveryLocation/ID scheme is ICD.
+    let Some(scheme) = inv
+        .delivery
+        .as_ref()
+        .and_then(|d| d.location_id.as_ref())
+        .and_then(|id| id.scheme.as_deref())
+    else {
+        return;
+    };
+    if !icd(scheme) {
+        report.push(Finding::fatal(
+            "BR-CL-26",
+            Path::term(BtId(71)),
+            format!("deliver-to location scheme {scheme} is not ISO 6523 ICD"),
+        ));
     }
 }
 
@@ -430,6 +567,31 @@ pub static RULES: &[Rule] = &[
         "Electronic address scheme MUST be from EAS (subset).",
         br_cl_25,
     ),
+    r(
+        "BR-CL-07",
+        "Object identifier identification scheme (BT-18 / BT-128) MUST be coded using UNTDID 1153.",
+        br_cl_07,
+    ),
+    r(
+        "BR-CL-10",
+        "Party identifier scheme MUST be ISO 6523 ICD (SEPA allowed on seller/payee).",
+        br_cl_10,
+    ),
+    r(
+        "BR-CL-11",
+        "Legal registration identifier scheme MUST be ISO 6523 ICD when present.",
+        br_cl_11,
+    ),
+    r(
+        "BR-CL-21",
+        "Item standard identifier scheme (BT-157) MUST be ISO 6523 ICD.",
+        br_cl_21,
+    ),
+    r(
+        "BR-CL-26",
+        "Deliver-to location identifier scheme MUST be ISO 6523 ICD.",
+        br_cl_26,
+    ),
 ];
 
 #[cfg(test)]
@@ -504,5 +666,75 @@ mod tests {
         assert_eq!(ARTEFACT_VERSION, "validation-1.3.16");
         assert_eq!(PEPPOL_BIS_VERSION, "v3.0.20");
         assert_eq!(PINT_MY_VERSION, "1.3.0");
+    }
+
+    #[test]
+    fn br_cl_07_rejects_non_1153_scheme() {
+        let mut inv = Invoice::blank(
+            Profile::En16931,
+            "1",
+            "EUR",
+            Party::new("S", "DE"),
+            Party::new("B", "FR"),
+        );
+        inv.invoiced_object = Some(crate::identifier::Identifier::schemed("X", "NOPE"));
+        let report = validate(&inv);
+        assert!(
+            report.findings.iter().any(|f| f.id == "BR-CL-07"),
+            "{report}"
+        );
+    }
+
+    #[test]
+    fn br_cl_21_binds_standard_id_not_item_id() {
+        let mut inv = Invoice::blank(
+            Profile::En16931,
+            "1",
+            "EUR",
+            Party::new("S", "DE"),
+            Party::new("B", "FR"),
+        );
+        let mut line = crate::invoice::Line::new(
+            "1",
+            "A",
+            crate::amount::InvoiceAmount::parse("1.00").unwrap(),
+            crate::tax::TaxCategory::vat("S", rust_decimal::Decimal::from(19)),
+        );
+        line.item_id = Some(crate::identifier::Identifier::schemed("SKU", "FOO"));
+        line.standard_id = Some(crate::identifier::Identifier::schemed("GTIN", "FOO"));
+        inv.lines = vec![line];
+        let report = validate(&inv);
+        assert!(
+            report.findings.iter().any(|f| f.id == "BR-CL-21"),
+            "{report}"
+        );
+    }
+
+    #[test]
+    fn invoice_326_is_not_br_cl_01() {
+        let mut inv = Invoice::blank(
+            Profile::PeppolBis3,
+            "1",
+            "EUR",
+            {
+                let mut p = Party::new("S", "DE");
+                p.electronic_address = Some(crate::identifier::Identifier::schemed("1", "0088"));
+                p
+            },
+            {
+                let mut p = Party::new("B", "DE");
+                p.electronic_address = Some(crate::identifier::Identifier::schemed("2", "0088"));
+                p
+            },
+        );
+        inv.issue_date = crate::date::Date::parse("2026-01-15").ok();
+        inv.type_code = Some(crate::code::Code::new("326"));
+        inv.specification_id = Some(Profile::PEPPOL_BIS3_PREFIX.into());
+        inv.business_process = Some("urn:fdc:peppol.eu:2017:poacc:billing:01:1.0".into());
+        let report = validate(&inv);
+        assert!(
+            report.findings.iter().all(|f| f.id != "BR-CL-01"),
+            "{report}"
+        );
     }
 }

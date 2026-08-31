@@ -21,6 +21,11 @@ down here**, not that there are none.
 
 - Line BT-132 (`order_line`), BT-133 (`accounting_reference`), BT-156 (`buyer_id`), BG-32 (`attributes` BT-160/161). UBL read/write. CII still named-dropped.
 - `IBR-CL-05-MY` (BT-6 ⇒ MYR). `explain BR-24` (type-retired BT-131).
+- BR-CL-07/10/11/21/26 bound to UNTDID 1153 / ICD. Generated `UNCL_1153`. EN type list includes 326/384/389 (Peppol P0100 still forbids 389).
+- VAT family `-03/-04/-06/-07` rows beyond S; BR-IC-11/12; BR-B-01 is Italian-domestic.
+- PINT-MY zip leftovers: ALIGNED-IBRP-002, 046–048, HVG/LVG-10, TTX-08, E-05/08, O-09.
+- Presence/co-occurrence: BR-17/18/20/29/30/52/54/55/56/57/62–65, BR-CO-09/19–24.
+- CII `Read.unmapped` lists unmapped `SupplyChainTradeTransaction` children. Official CEN CII example test when `refers/` present.
 
 ### Changed
 
