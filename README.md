@@ -1,8 +1,8 @@
 # core-invoice
 
-**0.2.x is a development engine. Do not validate legal invoices with it yet.**
+Fatal ids are comparable to pinned ConnectingEurope EN 16931 `validation-1.3.16` and PINT-MY 1.3.0 Schematron as evidenced by `task svrl` (Saxon-HE, or Docker Compose Java when the host has no JDK). Peppol BIS v3.0.20 in `refers/` is `.sch` (no compiled XSLT). `validate().ok()` is still **not** ConnectingEurope / OpenPEPPOL / IRBM Valid.
 
-`validate --profile pint-my` is PINT-MY Schematron-shaped (Peppol PINT-MY 1.3.0). It is **not** IRBM Valid / MyInvois submit. This crate never talks to LHDN.
+`validate --profile pint-my` is PINT-MY Schematron-shaped. It is **not** IRBM Valid / MyInvois submit. This crate never talks to LHDN, a Peppol AP, or an accounting UI.
 
 Destination: a memory-safe library that implements Europe’s e-invoice meaning
 (EN 16931) and Peppol PINT — including SST/GST, not only VAT — so software can

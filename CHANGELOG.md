@@ -6,8 +6,8 @@ one version and one entry per release.
 
 The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-Before 1.0, a minor bump may break: the promise is that a break is **written
-down here**, not that there are none.
+From 1.0, breaking changes are a major bump. The promise is that a break is
+**written down here**.
 
 [`core-invoice`]: https://crates.io/crates/core-invoice
 [`core-invoice-formats`]: https://crates.io/crates/core-invoice-formats
@@ -17,9 +17,17 @@ down here**, not that there are none.
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-09-03
+
+Fatal ids comparable to pinned ConnectingEurope EN 16931 `validation-1.3.16` and PINT-MY Billing 1.3.0 as evidenced by `task svrl` (Saxon-HE 10.9, or Docker Compose `eclipse-temurin:21-jre` when the host has no JDK). Peppol BIS v3.0.20 pin is Schematron (`.sch`), not compiled XSLT. CII is a named D16B subset for EN/Peppol; PINT-MY is UBL-only.
+
+Not IRBM Valid / MyInvois submit. No LHDN, Peppol AP, or Books.
+
+Leftovers that stay listed in `docs/UNCOVERED.md`: Peppol syntax extras R006/R008/R043/R044/R053/R080/R100/CL007 (constant-pass `explain`); Pint GST helper (PINT 1.1.2 zip has no official XML); COMMON-R048 not registered (commented out in the artefact).
+
 ### Added
 
-- SVRL oracle runs ConnectingEurope XSLT via Docker Compose Java (`eclipse-temurin:21-jre` + Saxon-HE 10.9) when the host has no JDK. Official EN examples, BR-03 mutant, PINT-MY SA, and SST-as-EN three-way compare.
+- SVRL oracle: official EN examples, BR-03 mutant, PINT-MY SA, SST-as-EN three-way. Docker Compose Java fallback.
 - BR-CL-03 (`@currencyID` ISO 4217 wire walk), BR-CL-08 (UNCL 4451 from EN Schematron). Peppol COMMON-R041–R047/R049/R050/R052/R053 ICD checksums; R051 `@currencyID` = BT-5 except BT-111.
 - Remaining CEN presence/CO: BR-12…15, BR-19, BR-31–33, BR-36–38, BR-41–50, BR-61, BR-CO-26 (skipped on Pint/PintMy).
 - Named CII drop list `CII_DROPPED`; UBL↔CII model diff must stay inside it.
@@ -147,6 +155,7 @@ PINT-MY as profiles.
 - **`core-invoice-sys`** — C ABI `core_invoice_validate_ubl` and
   `include/core_invoice.h`.
 
-[Unreleased]: https://github.com/proxeon/core-invoice/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/proxeon/core-invoice/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/proxeon/core-invoice/compare/v0.2.0...v1.0.0
 [0.2.0]: https://github.com/proxeon/core-invoice/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/proxeon/core-invoice/releases/tag/v0.1.0

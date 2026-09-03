@@ -48,6 +48,12 @@ jobs:
         run: bash refers/fetch.sh
       - name: official samples
         run: cargo test --workspace -- official_
+      - name: svrl oracle
+        env:
+          SVRL_ORACLE: "1"
+        run: |
+          python3 xtask/svrl_oracle.py --self-test
+          python3 xtask/svrl_oracle.py
 
   deny:
     runs-on: ubuntu-latest

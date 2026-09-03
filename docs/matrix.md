@@ -1,6 +1,6 @@
 # Rule matrix
 
-Ids **we** emit. Not ConnectingEurope / OpenPEPPOL / IRBM Valid. Not a legal validator.
+Ids **we** emit. Comparable Fatal sets are `task svrl`, not this table. Not IRBM Valid.
 
 CORE runs on every profile. Extra rules are `Profile::extra_rules`.
 

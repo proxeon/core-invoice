@@ -11,7 +11,7 @@ use std::process::ExitCode;
 #[command(
     name = "core-invoice",
     version,
-    about = "EN 16931 + Peppol PINT, offline. 0.2.x is a development engine, not a legal validator. CII is a D16B subset for EN/Peppol; PINT-MY is UBL-only."
+    about = "EN 16931 + Peppol PINT, offline. Fatal ids comparable to pinned Schematron (task svrl). Not IRBM Valid. CII is a D16B subset for EN/Peppol; PINT-MY is UBL-only."
 )]
 struct Cli {
     #[command(subcommand)]
