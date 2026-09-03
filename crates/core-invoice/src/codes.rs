@@ -56,6 +56,9 @@ pub fn icd(code: &str) -> bool {
 pub fn uncl_1153(code: &str) -> bool {
     listed(lists::UNCL_1153, code)
 }
+pub fn uncl_4451(code: &str) -> bool {
+    listed(lists::UNCL_4451, code)
+}
 pub fn pint_my_taxcat(code: &str) -> bool {
     listed(lists::PINT_MY_TAXCAT, code)
 }
@@ -92,6 +95,26 @@ fn br_cl_01(inv: &Invoice, report: &mut Report) {
                 code, inv.kind
             ),
         ));
+    }
+}
+
+fn br_cl_03(_inv: &Invoice, _report: &mut Report) {
+    // BR-CL-03: @currencyID ∈ ISO 4217. Wire-only; formats::validate_xml walks attributes.
+}
+
+fn br_cl_08(inv: &Invoice, report: &mut Report) {
+    // BR-CL-08: BT-21 note subject, restriction of UNTDID 4451. Absent subject does not fire.
+    for (i, n) in inv.notes.iter().enumerate() {
+        let Some(code) = n.subject.as_ref() else {
+            continue;
+        };
+        if !uncl_4451(code.as_str()) {
+            report.push(Finding::fatal(
+                "BR-CL-08",
+                Path::at_term(Group::Document, i, BtId(21)),
+                format!("note subject {code} is not in UNTDID 4451 (EN restriction)"),
+            ));
+        }
     }
 }
 
@@ -493,9 +516,19 @@ pub static RULES: &[Rule] = &[
         br_cl_01,
     ),
     r(
+        "BR-CL-03",
+        "currencyID MUST be coded using ISO 4217 alpha-3 (wire @currencyID).",
+        br_cl_03,
+    ),
+    r(
         "BR-CL-04",
         "Invoice currency code MUST be coded using ISO 4217 alpha-3.",
         br_cl_04,
+    ),
+    r(
+        "BR-CL-08",
+        "Invoice note subject code (BT-21) MUST be coded using UNCL 4451.",
+        br_cl_08,
     ),
     r(
         "BR-CL-05",
@@ -598,6 +631,7 @@ pub static RULES: &[Rule] = &[
 mod tests {
     use super::*;
     use crate::invoice::{Invoice, Party};
+    use crate::rules::explain;
     use crate::validate;
 
     #[test]
@@ -634,6 +668,32 @@ mod tests {
             report.findings.iter().all(|f| f.id != "BR-CL-04"),
             "{report}"
         );
+    }
+
+    #[test]
+    fn br_cl_08_note_subject_4451() {
+        let mut inv = Invoice::blank(
+            Profile::En16931,
+            "1",
+            "EUR",
+            Party::new("S", "DE"),
+            Party::new("B", "FR"),
+        );
+        inv.notes.push(crate::invoice::InvoiceNote {
+            subject: Some(crate::code::Code::new("NOPE")),
+            text: "x".into(),
+        });
+        let report = validate(&inv);
+        assert!(
+            report.findings.iter().any(|f| f.id == "BR-CL-08"),
+            "{report}"
+        );
+        inv.notes[0].subject = Some(crate::code::Code::new("AAA"));
+        assert!(validate(&inv).findings.iter().all(|f| f.id != "BR-CL-08"));
+        inv.notes[0].subject = None;
+        assert!(validate(&inv).findings.iter().all(|f| f.id != "BR-CL-08"));
+        assert!(explain("BR-CL-08").unwrap().contains("4451"));
+        assert!(explain("BR-CL-03").unwrap().contains("currencyID"));
     }
 
     #[test]

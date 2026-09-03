@@ -4,14 +4,13 @@ Every `catalogue()` id is either exercised by a `#[test]` or listed here with a 
 
 ## Code lists (generated; remaining holes)
 
-- BR-CL-08 invoice note subject UNCL 4451 (BT-21) — no 4451 genericode in `refers/` PINT-MY zip. Owner: P10.03.
-- BR-CL-03 `@currencyID` on wire amounts — model amounts inherit `Invoice.currency`; Peppol R051 same reason (constant-pass extra_rule).
+- none of BR-CL-03 / BR-CL-08: BR-CL-03 is a formats wire walk (`@currencyID` ∈ ISO 4217). BR-CL-08 uses UNCL 4451 extracted from EN UBL preprocessed Schematron (no `.gc` in the PINT-MY zip).
 
 ## Peppol extra_rules not modelled (syntax-only or Option-at-most-one)
 
-R006/R008/R043/R044/R051/R053/R080/R100/CL007 are **registered constant-pass** so `explain` works; they do not walk XML. Remaining:
+R006/R008/R043/R044/R053/R080/R100/CL007 are **registered constant-pass** so `explain` works; they do not walk XML. R051 is a formats wire walk (`@currencyID` = BT-5 except BT-111).
 
-- PEPPOL-COMMON-R041–R053 — ICD checksums besides GLN (R040 shipped). Owner: P11.09.
+COMMON-R040–R050/R052/R053 ICD checksums evaluate (R048 is commented out in the artefact — not registered). R044–R047/R052/R053 are **warning**.
 
 ## VAT family rows still only for S-03/04/06/07
 
@@ -39,7 +38,7 @@ Family A/C rows and IC-11/12: now in catalogue.
 
 Presence evals registered: BR-12…15, 17–20, 29–33, 36–38, 41–50, 52, 54–57, 61–65. BR-31/36/41/43/45/46 are type-retired (`explain` works).
 
-CL not bound: BR-CL-03, BR-CL-08.
+CL bound: BR-CL-03 (wire), BR-CL-08 (BT-21).
 
 CO registered: BR-CO-09/19–24/26 (CO-26 skipped on Pint/PintMy; EN/Peppol require BT-29/30/31).
 

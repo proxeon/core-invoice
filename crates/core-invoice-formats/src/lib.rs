@@ -160,8 +160,62 @@ pub fn validate_xml(xml: &str, profile: Option<Profile>) -> Result<Report, Forma
         invoice.profile = profile;
     }
     let mut report = core_invoice::validate(&invoice);
+    apply_wire_currency_lists(xml, &invoice, &mut report);
     report.profile_slug = invoice.profile.slug();
     Ok(report)
+}
+
+/// BR-CL-03: @currencyID ∈ ISO 4217. Peppol R051: @currencyID = BT-5 except BT-111.
+fn apply_wire_currency_lists(xml: &str, invoice: &Invoice, report: &mut Report) {
+    let Ok(doc) = roxmltree::Document::parse(xml) else {
+        return;
+    };
+    walk_currency(doc.root_element(), invoice, report);
+}
+
+fn walk_currency(node: roxmltree::Node<'_, '_>, invoice: &Invoice, report: &mut Report) {
+    if node.is_element()
+        && let Some(cid) = node.attribute("currencyID")
+    {
+        let cid = cid.trim();
+        if !cid.is_empty() && !core_invoice::is_currency(cid) {
+            report.push(core_invoice::Finding::fatal(
+                "BR-CL-03",
+                core_invoice::Path::term(core_invoice::BtId(5)),
+                format!("currencyID {cid} is not an ISO 4217 alpha-3 code"),
+            ));
+        }
+        if invoice.profile == Profile::PeppolBis3
+            && !cid.is_empty()
+            && cid != invoice.currency
+            && !is_bt111_tax_amount(node)
+        {
+            report.push(core_invoice::Finding::fatal(
+                "PEPPOL-EN16931-R051",
+                core_invoice::Path::term(core_invoice::BtId(5)),
+                format!(
+                    "currencyID {cid} must equal invoice currency {}",
+                    invoice.currency
+                ),
+            ));
+        }
+    }
+    for child in node.children() {
+        walk_currency(child, invoice, report);
+    }
+}
+
+fn is_bt111_tax_amount(node: roxmltree::Node<'_, '_>) -> bool {
+    if node.tag_name().name() != "TaxAmount" {
+        return false;
+    }
+    let Some(parent) = node.parent() else {
+        return false;
+    };
+    parent.tag_name().name() == "TaxTotal"
+        && !parent
+            .children()
+            .any(|n| n.is_element() && n.tag_name().name() == "TaxSubtotal")
 }
 
 pub fn diff(left_xml: &str, right_xml: &str) -> Result<String, FormatError> {
@@ -531,6 +585,29 @@ mod tests {
         assert_eq!(
             inv.lines[0].price.as_ref().unwrap().net.to_string(),
             "10000.1234"
+        );
+    }
+
+    #[test]
+    fn wire_currencyid_not_iso4217_is_br_cl_03() {
+        let xml = r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"><cbc:CustomizationID>urn:cen.eu:en16931:2017</cbc:CustomizationID><cbc:ID>1</cbc:ID><cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode><cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode><cac:LegalMonetaryTotal><cbc:PayableAmount currencyID="US$">1.00</cbc:PayableAmount></cac:LegalMonetaryTotal></Invoice>"#;
+        let report = validate_xml(xml, Some(Profile::En16931)).unwrap();
+        assert!(
+            report.findings.iter().any(|f| f.id == "BR-CL-03"),
+            "{report}"
+        );
+    }
+
+    #[test]
+    fn peppol_mixed_currencyid_is_r051() {
+        let xml = r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"><cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0</cbc:CustomizationID><cbc:ID>1</cbc:ID><cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode><cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode><cac:LegalMonetaryTotal><cbc:PayableAmount currencyID="USD">1.00</cbc:PayableAmount></cac:LegalMonetaryTotal></Invoice>"#;
+        let report = validate_xml(xml, Some(Profile::PeppolBis3)).unwrap();
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|f| f.id == "PEPPOL-EN16931-R051"),
+            "{report}"
         );
     }
 

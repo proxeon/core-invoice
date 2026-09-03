@@ -720,28 +720,261 @@ fn gln_ok(s: &str) -> bool {
     digits[n - 1] == check
 }
 
-fn common_r040(inv: &Invoice, report: &mut Report) {
+/// ICD-schemed ids: EndpointID, PartyIdentification, CompanyID (legal registration).
+fn peppol_scheme_ids(inv: &Invoice) -> Vec<(String, String, Path, bool)> {
+    let mut out = Vec::new();
+    let mut push = |id: &crate::identifier::Identifier, path: Path, endpoint: bool| {
+        let Some(scheme) = id.scheme.as_deref() else {
+            return;
+        };
+        out.push((scheme.to_owned(), id.value.clone(), path, endpoint));
+    };
+    for (party, group, ep_bt, ident_bt, legal_bt) in [
+        (&inv.seller, Group::Seller, 34u16, 29u16, 30u16),
+        (&inv.buyer, Group::Buyer, 49u16, 46u16, 47u16),
+    ] {
+        if let Some(ep) = party.electronic_address.as_ref() {
+            push(ep, Path::group_term(group, BtId(ep_bt)), true);
+        }
+        for id in &party.identifiers {
+            push(id, Path::group_term(group, BtId(ident_bt)), false);
+        }
+        if let Some(id) = party.legal_registration.as_ref() {
+            push(id, Path::group_term(group, BtId(legal_bt)), false);
+        }
+    }
+    if let Some(p) = inv.payee.as_ref() {
+        if let Some(id) = p.identifier.as_ref() {
+            push(id, Path::term(BtId(60)), false);
+        }
+        if let Some(id) = p.legal_registration.as_ref() {
+            push(id, Path::term(BtId(61)), false);
+        }
+    }
+    out
+}
+
+fn norwegian_mod11(s: &str) -> bool {
+    let s = s.trim();
+    if s.len() != 9 || !s.bytes().all(|b| b.is_ascii_digit()) {
+        return false;
+    }
+    if s.parse::<u64>().unwrap_or(0) == 0 {
+        return false;
+    }
+    let digits: Vec<u32> = s.bytes().map(|b| u32::from(b - b'0')).collect();
+    let mut sum = 0u32;
+    for (i, d) in digits[..8].iter().rev().enumerate() {
+        sum += d * ((i as u32 % 6) + 2);
+    }
+    let check = (11 - (sum % 11)) % 11;
+    digits[8] == check
+}
+
+fn belgian_mod97(s: &str) -> bool {
+    let s = s.trim();
+    if s.len() != 10 || !s.bytes().all(|b| b.is_ascii_digit()) {
+        return false;
+    }
+    let body: u32 = s[..8].parse().unwrap_or(0);
+    let chk: u32 = s[8..].parse().unwrap_or(0);
+    chk == 97 - (body % 97)
+}
+
+fn swedish_orgnr(s: &str) -> bool {
+    let s = s.trim();
+    if s.len() != 10 || !s.bytes().all(|b| b.is_ascii_digit()) {
+        return false;
+    }
+    let main = &s[..9];
+    let mut sum = 0u32;
+    for pos in 1..=9 {
+        let ch = u32::from(main.as_bytes()[9 - pos] - b'0');
+        if pos % 2 == 1 {
+            let d = ch * 2;
+            sum += (d % 10) + (d / 10);
+        } else {
+            sum += ch;
+        }
+    }
+    let check = (10 - (sum % 10)) % 10;
+    u32::from(s.as_bytes()[9] - b'0') == check
+}
+
+fn australian_abn(s: &str) -> bool {
+    let s = s.trim();
+    if s.len() != 11 || !s.bytes().all(|b| b.is_ascii_digit()) {
+        return false;
+    }
+    let w = [10u32, 1, 3, 5, 7, 9, 11, 13, 15, 17, 19];
+    let mut digits: Vec<u32> = s.bytes().map(|b| u32::from(b - b'0')).collect();
+    digits[0] = digits[0].saturating_sub(1);
+    let sum: u32 = digits.iter().zip(w).map(|(d, wt)| d * wt).sum();
+    sum % 89 == 0
+}
+
+fn danish_cvr(s: &str) -> bool {
+    let s = s.trim();
+    let b = s.as_bytes();
+    (s.len() == 10 && b[..2] == *b"DK" && b[2..].iter().all(|c| c.is_ascii_digit()))
+        || (s.len() == 8 && b.iter().all(|c| c.is_ascii_digit()))
+}
+
+fn italian_ipa(s: &str) -> bool {
+    let s = s.trim();
+    s.len() == 6 && s.bytes().all(|b| b.is_ascii_alphanumeric())
+}
+
+fn italian_cf(s: &str) -> bool {
+    let s = s.trim();
+    if s.len() == 11 {
+        return s.bytes().all(|b| b.is_ascii_digit());
+    }
+    if s.len() != 16 {
+        return false;
+    }
+    let b = s.as_bytes();
+    b[..6].iter().all(|c| c.is_ascii_alphabetic())
+        && b[6..8].iter().all(|c| c.is_ascii_digit())
+        && b[8].is_ascii_alphabetic()
+        && b[9..11].iter().all(|c| c.is_ascii_digit())
+        && b[14].is_ascii_digit()
+        && b[15].is_ascii_alphabetic()
+}
+
+fn common_checksums(inv: &Invoice, report: &mut Report) {
     if !peppol_only(inv) {
         return;
     }
-    for (party, group, bt) in [
-        (&inv.seller, Group::Seller, 34u16),
-        (&inv.buyer, Group::Buyer, 49u16),
-    ] {
-        let Some(ep) = party.electronic_address.as_ref() else {
-            continue;
-        };
-        if ep.scheme.as_deref() != Some("0088") {
-            continue;
-        }
-        if !gln_ok(&ep.value) {
-            report.push(Finding::fatal(
-                "PEPPOL-COMMON-R040",
-                Path::group_term(group, BtId(bt)),
-                "GLN must have a valid format according to GS1 rules",
-            ));
+    for (scheme, value, path, endpoint) in peppol_scheme_ids(inv) {
+        match scheme.as_str() {
+            "0088" => {
+                if !gln_ok(&value) {
+                    report.push(Finding::fatal(
+                        "PEPPOL-COMMON-R040",
+                        path,
+                        "GLN must have a valid format according to GS1 rules",
+                    ));
+                }
+            }
+            "0192" => {
+                if !norwegian_mod11(&value) {
+                    report.push(Finding::fatal(
+                        "PEPPOL-COMMON-R041",
+                        path,
+                        "Norwegian organization number MUST be stated in the correct format",
+                    ));
+                }
+            }
+            "0184" => {
+                if !danish_cvr(&value) {
+                    report.push(Finding::fatal(
+                        "PEPPOL-COMMON-R042",
+                        path,
+                        "Danish organization number (CVR) MUST be stated in the correct format",
+                    ));
+                }
+            }
+            "0208" => {
+                if !belgian_mod97(&value) {
+                    report.push(Finding::fatal(
+                        "PEPPOL-COMMON-R043",
+                        path,
+                        "Belgian enterprise number MUST be stated in the correct format",
+                    ));
+                }
+            }
+            "0007" => {
+                if !swedish_orgnr(&value) {
+                    report.push(Finding::fatal(
+                        "PEPPOL-COMMON-R049",
+                        path,
+                        "Swedish organization number MUST be stated in the correct format",
+                    ));
+                }
+            }
+            "0151" => {
+                if !australian_abn(&value) {
+                    report.push(Finding::fatal(
+                        "PEPPOL-COMMON-R050",
+                        path,
+                        "Australian Business Number (ABN) MUST be stated in the correct format",
+                    ));
+                }
+            }
+            "0201" => {
+                if !italian_ipa(&value) {
+                    report.push(Finding::warning(
+                        "PEPPOL-COMMON-R044",
+                        path,
+                        "IPA Code must be stated in the correct format",
+                    ));
+                }
+            }
+            "0210" => {
+                if !italian_cf(&value) {
+                    report.push(Finding::warning(
+                        "PEPPOL-COMMON-R045",
+                        path,
+                        "Tax Code (Codice Fiscale) must be stated in the correct format",
+                    ));
+                }
+            }
+            "9907" if endpoint => {
+                if !italian_cf(&value) {
+                    report.push(Finding::warning(
+                        "PEPPOL-COMMON-R046",
+                        path,
+                        "Tax Code (Codice Fiscale) must be stated in the correct format",
+                    ));
+                }
+            }
+            "0211" => {
+                // u:checkPIVAseIT: non-IT prefix passes; IT + 11-digit PIVA is a checksum (not implemented as Fatal).
+                if value.len() >= 2
+                    && value[..2].eq_ignore_ascii_case("IT")
+                    && !(value.len() == 13 && value[2..].bytes().all(|b| b.is_ascii_digit()))
+                {
+                    report.push(Finding::warning(
+                        "PEPPOL-COMMON-R047",
+                        path,
+                        "Italian VAT Code (Partita Iva) must be stated in the correct format",
+                    ));
+                }
+            }
+            "0096" => {
+                if !(value.len() == 10 && value.bytes().all(|b| b.is_ascii_digit())) {
+                    report.push(Finding::warning(
+                        "PEPPOL-COMMON-R052",
+                        path,
+                        "Danish chamber of commerce number (P) MUST be stated in the correct format",
+                    ));
+                }
+            }
+            "0198" => {
+                let ok = value.len() == 10
+                    && value.as_bytes()[..2] == *b"DK"
+                    && value.as_bytes()[2..].iter().all(|c| c.is_ascii_digit());
+                if !ok {
+                    report.push(Finding::warning(
+                        "PEPPOL-COMMON-R053",
+                        path,
+                        "Danish ERSTORG number (SE) MUST be stated in the correct format",
+                    ));
+                }
+            }
+            _ => {}
         }
     }
+}
+
+fn common_r040(inv: &Invoice, report: &mut Report) {
+    // COMMON-R040 eval walks every ICD-schemed slot and emits R040–R053 by scheme.
+    common_checksums(inv, report);
+}
+
+fn common_id_explain(_inv: &Invoice, _report: &mut Report) {
+    // Explain-only. Evaluation is common_checksums (R040 extra_rule).
 }
 
 fn r121(inv: &Invoice, report: &mut Report) {
@@ -965,6 +1198,61 @@ pub static RULES: &[Rule] = &[
         "PEPPOL-COMMON-R040",
         "GLN (EAS 0088) must have a valid GS1 check digit.",
         common_r040,
+    ),
+    r(
+        "PEPPOL-COMMON-R041",
+        "Norwegian organization number (0192) MUST be 9 digits with mod11.",
+        common_id_explain,
+    ),
+    r(
+        "PEPPOL-COMMON-R042",
+        "Danish organization number (0184) MUST be 8 digits or DK+8 digits.",
+        common_id_explain,
+    ),
+    r(
+        "PEPPOL-COMMON-R043",
+        "Belgian enterprise number (0208) MUST be 10 digits with mod97.",
+        common_id_explain,
+    ),
+    r(
+        "PEPPOL-COMMON-R044",
+        "IPA Code (0201) must be 6 alphanumeric characters (warning).",
+        common_id_explain,
+    ),
+    r(
+        "PEPPOL-COMMON-R045",
+        "Italian tax code (0210) must be 11 digits or 16-char CF (warning).",
+        common_id_explain,
+    ),
+    r(
+        "PEPPOL-COMMON-R046",
+        "Italian tax code on EndpointID 9907 (warning).",
+        common_id_explain,
+    ),
+    r(
+        "PEPPOL-COMMON-R047",
+        "Italian VAT Code on 0211 (warning).",
+        common_id_explain,
+    ),
+    r(
+        "PEPPOL-COMMON-R049",
+        "Swedish organization number (0007) MUST be 10 digits with Luhn.",
+        common_id_explain,
+    ),
+    r(
+        "PEPPOL-COMMON-R050",
+        "Australian Business Number (0151) MUST be 11 digits with ABN checksum.",
+        common_id_explain,
+    ),
+    r(
+        "PEPPOL-COMMON-R052",
+        "Danish chamber of commerce number (0096) MUST be 10 digits (warning).",
+        common_id_explain,
+    ),
+    r(
+        "PEPPOL-COMMON-R053",
+        "Danish ERSTORG number (0198) MUST be DK+8 digits (warning).",
+        common_id_explain,
     ),
     r(
         "PEPPOL-EN16931-R006",
@@ -1363,6 +1651,67 @@ mod tests {
             report.findings.iter().any(|f| f.id == "PEPPOL-COMMON-R040"),
             "{report}"
         );
+    }
+
+    #[test]
+    fn common_icd_checksums_fatal() {
+        assert!(norwegian_mod11("123456785"));
+        assert!(!norwegian_mod11("123456780"));
+        assert!(belgian_mod97("0123456749"));
+        assert!(!belgian_mod97("0123456740"));
+        assert!(swedish_orgnr("5566778899"));
+        assert!(!swedish_orgnr("5566778890"));
+        assert!(australian_abn("51824753556"));
+        assert!(!australian_abn("51824753550"));
+        assert!(danish_cvr("DK12345678"));
+        assert!(danish_cvr("12345678"));
+        assert!(!danish_cvr("123"));
+        let mut inv = peppol();
+        inv.seller
+            .identifiers
+            .push(Identifier::schemed("123456780", "0192"));
+        let report = validate(&inv);
+        assert!(
+            report.findings.iter().any(|f| f.id == "PEPPOL-COMMON-R041"),
+            "{report}"
+        );
+        inv.seller.identifiers = vec![Identifier::schemed("123456785", "0192")];
+        assert!(
+            validate(&inv)
+                .findings
+                .iter()
+                .all(|f| f.id != "PEPPOL-COMMON-R041")
+        );
+        inv.seller.identifiers = vec![Identifier::schemed("51824753550", "0151")];
+        assert!(
+            validate(&inv)
+                .findings
+                .iter()
+                .any(|f| f.id == "PEPPOL-COMMON-R050")
+        );
+        assert!(
+            crate::explain("PEPPOL-COMMON-R041")
+                .unwrap()
+                .contains("0192")
+        );
+        assert!(
+            crate::explain("PEPPOL-COMMON-R049")
+                .unwrap()
+                .contains("0007")
+        );
+        assert!(
+            crate::explain("PEPPOL-COMMON-R043")
+                .unwrap()
+                .contains("0208")
+        );
+        assert!(crate::explain("PEPPOL-COMMON-R042").is_some());
+        assert!(crate::explain("PEPPOL-COMMON-R044").is_some());
+        assert!(crate::explain("PEPPOL-COMMON-R045").is_some());
+        assert!(crate::explain("PEPPOL-COMMON-R046").is_some());
+        assert!(crate::explain("PEPPOL-COMMON-R047").is_some());
+        assert!(crate::explain("PEPPOL-COMMON-R052").is_some());
+        assert!(crate::explain("PEPPOL-COMMON-R053").is_some());
+        assert!(crate::explain("PEPPOL-COMMON-R050").is_some());
     }
 
     #[test]

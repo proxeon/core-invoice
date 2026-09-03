@@ -33,6 +33,24 @@ def gc_ids(path: Path) -> list[str]:
     return ids
 
 
+def uncl_4451_from_en_sch() -> list[str]:
+    """BR-CL-08 restriction of UNTDID 4451, from EN UBL preprocessed Schematron (no .gc in zip)."""
+    sch = (
+        ROOT
+        / "refers/en16931/ubl/schematron/preprocessed/EN16931-UBL-validation-preprocessed.sch"
+    )
+    if not sch.is_file():
+        return ["AAA", "ZZZ"]
+    text = sch.read_text(encoding="utf-8")
+    i = text.find('id="BR-CL-08"')
+    j = text.find("</assert>", i)
+    chunk = text[i:j]
+    p = chunk.find("contains(' ")
+    inner = chunk[p + len("contains(' ") :]
+    q = inner.find(" '")
+    return inner[:q].split()
+
+
 def rust_arr(name: str, ids: list[str], extra: list[str] | None = None) -> str:
     seen = set(ids)
     if extra:
@@ -77,6 +95,7 @@ def main() -> int:
         rust_arr("UNCL_2005", gc_ids(INV / "UNCL2005.gc")),
         rust_arr("UNCL_7143", gc_ids(INV / "UNCL7143.gc")),
         rust_arr("UNCL_1153", gc_ids(INV / "UNCL1153.gc")),
+        rust_arr("UNCL_4451", uncl_4451_from_en_sch()),
         rust_arr("ICD", gc_ids(INV / "ICD.gc")),
         rust_arr("REC20", gc_ids(INV / "UNECERec20.gc")),
         rust_arr("MIME", gc_ids(INV / "MimeCode.gc")),

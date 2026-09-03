@@ -220,7 +220,9 @@ CORE runs on every profile. Extra rules are `Profile::extra_rules`.
 | ALIGNED-IBRP-E-08-MY | CORE | CORE | CORE | CORE |
 | ALIGNED-IBRP-O-09-MY | CORE | CORE | CORE | CORE |
 | BR-CL-01 | CORE | CORE | CORE | CORE |
+| BR-CL-03 | CORE | CORE | CORE | CORE |
 | BR-CL-04 | CORE | CORE | CORE | CORE |
+| BR-CL-08 | CORE | CORE | CORE | CORE |
 | BR-CL-05 | CORE | CORE | CORE | CORE |
 | BR-CL-14 | CORE | CORE | CORE | CORE |
 | BR-CL-06 | CORE | CORE | CORE | CORE |
@@ -300,6 +302,17 @@ CORE runs on every profile. Extra rules are `Profile::extra_rules`.
 | PEPPOL-EN16931-P0101 | — | extra | — | — |
 | PEPPOL-EN16931-P0112 | — | extra | — | — |
 | PEPPOL-COMMON-R040 | — | extra | — | — |
+| PEPPOL-COMMON-R041 | — | extra | — | — |
+| PEPPOL-COMMON-R042 | — | extra | — | — |
+| PEPPOL-COMMON-R043 | — | extra | — | — |
+| PEPPOL-COMMON-R044 | — | extra | — | — |
+| PEPPOL-COMMON-R045 | — | extra | — | — |
+| PEPPOL-COMMON-R046 | — | extra | — | — |
+| PEPPOL-COMMON-R047 | — | extra | — | — |
+| PEPPOL-COMMON-R049 | — | extra | — | — |
+| PEPPOL-COMMON-R050 | — | extra | — | — |
+| PEPPOL-COMMON-R052 | — | extra | — | — |
+| PEPPOL-COMMON-R053 | — | extra | — | — |
 | PEPPOL-EN16931-R006 | — | extra | — | — |
 | PEPPOL-EN16931-R008 | — | extra | — | — |
 | PEPPOL-EN16931-R043 | — | extra | — | — |
