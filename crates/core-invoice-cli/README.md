@@ -1,6 +1,6 @@
 # core-invoice-cli
 
-Offline binary `core-invoice`. No network. Fatal ids comparable to pinned ConnectingEurope / PINT-MY Schematron (`task svrl`). Not IRBM Valid. `inspect` prints fields, not a valid/invalid verdict.
+Offline binary `core-invoice`. No network. **0.2.x is a development engine. Do not validate legal invoices with it yet.** `inspect` prints fields, not a valid/invalid verdict.
 
 | Exit | Meaning |
 |---|---|

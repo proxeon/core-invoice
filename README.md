@@ -1,6 +1,8 @@
 # core-invoice
 
-Fatal ids are comparable to pinned ConnectingEurope EN 16931 `validation-1.3.16` and PINT-MY 1.3.0 Schematron as evidenced by `task svrl` (Saxon-HE, or Docker Compose Java when the host has no JDK). Peppol BIS v3.0.20 in `refers/` is `.sch` (no compiled XSLT). `validate().ok()` is still **not** ConnectingEurope / OpenPEPPOL / IRBM Valid.
+**0.2.x is a development engine. Do not validate legal invoices with it yet.**
+
+Fatal ids can be compared to pinned ConnectingEurope EN 16931 `validation-1.3.16` and PINT-MY 1.3.0 Schematron via `task svrl` (Saxon-HE, or Docker Compose Java when the host has no JDK). Peppol BIS v3.0.20 in `refers/` is `.sch` (no compiled XSLT). `validate().ok()` is **not** ConnectingEurope / OpenPEPPOL / IRBM Valid.
 
 `validate --profile pint-my` is PINT-MY Schematron-shaped. It is **not** IRBM Valid / MyInvois submit. This crate never talks to LHDN, a Peppol AP, or an accounting UI.
 

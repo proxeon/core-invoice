@@ -6,8 +6,8 @@ one version and one entry per release.
 
 The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-From 1.0, breaking changes are a major bump. The promise is that a break is
-**written down here**.
+Before 1.0, a minor bump may break: the promise is that a break is **written
+down here**, not that there are none.
 
 [`core-invoice`]: https://crates.io/crates/core-invoice
 [`core-invoice-formats`]: https://crates.io/crates/core-invoice-formats
@@ -16,14 +16,6 @@ From 1.0, breaking changes are a major bump. The promise is that a break is
 [`core-invoice-sys`]: https://crates.io/crates/core-invoice-sys
 
 ## [Unreleased]
-
-## [1.0.0] — 2026-09-03
-
-Fatal ids comparable to pinned ConnectingEurope EN 16931 `validation-1.3.16` and PINT-MY Billing 1.3.0 as evidenced by `task svrl` (Saxon-HE 10.9, or Docker Compose `eclipse-temurin:21-jre` when the host has no JDK). Peppol BIS v3.0.20 pin is Schematron (`.sch`), not compiled XSLT. CII is a named D16B subset for EN/Peppol; PINT-MY is UBL-only.
-
-Not IRBM Valid / MyInvois submit. No LHDN, Peppol AP, or Books.
-
-Leftovers that stay listed in `docs/UNCOVERED.md`: Peppol syntax extras R006/R008/R043/R044/R053/R080/R100/CL007 (constant-pass `explain`); Pint GST helper (PINT 1.1.2 zip has no official XML); COMMON-R048 not registered (commented out in the artefact).
 
 ### Added
 
@@ -155,7 +147,6 @@ PINT-MY as profiles.
 - **`core-invoice-sys`** — C ABI `core_invoice_validate_ubl` and
   `include/core_invoice.h`.
 
-[Unreleased]: https://github.com/proxeon/core-invoice/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/proxeon/core-invoice/compare/v0.2.0...v1.0.0
+[Unreleased]: https://github.com/proxeon/core-invoice/compare/v0.2.0...HEAD
 [0.2.0]: https://github.com/proxeon/core-invoice/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/proxeon/core-invoice/releases/tag/v0.1.0
