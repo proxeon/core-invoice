@@ -29,7 +29,7 @@ enum Command {
         profile: ProfileArg,
         #[arg(long, value_enum, default_value = "text")]
         format: RulesFormat,
-        /// No stdout on success. Invalid findings still print unless combined with json (json still on stdout).
+        /// No stdout on success. Invalid findings still print (text or JSON).
         #[arg(short, long)]
         quiet: bool,
     },
@@ -251,6 +251,9 @@ fn run() -> Result<ExitCode, String> {
                 }
                 for m in &traced.malformed {
                     eprintln!("malformed: {m}");
+                }
+                for d in core_invoice_formats::write_drops(&traced.invoice, to.into()) {
+                    eprintln!("dropped: {d}");
                 }
             }
             match convert_with_profile(&xml, to.into(), profile.forced()) {

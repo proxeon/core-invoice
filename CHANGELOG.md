@@ -19,6 +19,10 @@ down here**, not that there are none.
 
 ### Added
 
+- Remaining CEN presence/CO: BR-12…15, BR-19, BR-31–33, BR-36–38, BR-41–50, BR-61, BR-CO-26 (skipped on Pint/PintMy).
+- Named CII drop list `CII_DROPPED`; UBL↔CII model diff must stay inside it.
+- `docs/matrix.md` generated from `catalogue()` × profile.
+- cargo-fuzz target on `formats::read` (local). `task tracked` greps `crates/` for TODO/FIXME.
 - Line BT-132 (`order_line`), BT-133 (`accounting_reference`), BT-156 (`buyer_id`), BG-32 (`attributes` BT-160/161). UBL read/write. CII still named-dropped.
 - `IBR-CL-05-MY` (BT-6 ⇒ MYR). `explain BR-24` (type-retired BT-131).
 - BR-CL-07/10/11/21/26 bound to UNTDID 1153 / ICD. Generated `UNCL_1153`. EN type list includes 326/384/389 (Peppol P0100 still forbids 389).
@@ -29,6 +33,9 @@ down here**, not that there are none.
 
 ### Changed
 
+- `Invoice::payable()` / `tax_total()` return `Option` — absent BG-22 is not 0.00.
+- UBL `LegalMonetaryTotal` child order matches XSD `MonetaryTotalType`. Price BT-147/148 round-trip as unit amounts. Unparseable dates and duplicate singletons are reported. Nested Item/Party unknowns appear in `unmapped`. CreditNote DueDate omit is named (`write_drops`).
+- CII: TypeCode credit-note set (not 381-only); `@format` not 102 is malformed; one PaymentMeans per IBAN; missing line tax is not SST; notes Content round-trips; delivery ShipTo before ActualDelivery; settlement tax before allowance/charge.
 - BR-23 fires when unit is absent even if quantity is absent (artefact `@unitCode` independent of qty).
 - Peppol R061 also applies to means code 59, not only 49 / DirectDebit.
 - CLI `inspect` uses the document element, not a `CrossIndustryInvoice` substring.

@@ -1,4 +1,7 @@
-"""Python bindings over the core-invoice C ABI (ctypes). Not a second parser."""
+"""Python bindings over the core-invoice C ABI (ctypes). Not a second parser.
+
+1.0 Python surface is ``validate_xml`` only; convert, diff, and version are C/CLI.
+"""
 
 from __future__ import annotations
 
@@ -39,10 +42,13 @@ def _lib():
     return _LIB
 
 
-def validate_xml(xml: str, profile: str | None = None) -> int:
-    """Return 0 valid, 1 invalid, 2 unreadable / bad args. Same as the CLI."""
+def validate_xml(xml: str, profile: str | None = None) -> tuple[int, str]:
+    """Return ``(code, message)``.
+
+    *code* is 0 valid, 1 invalid, 2 unreadable / bad args (same as the CLI).
+    *message* is the C error buffer (findings or parse error); empty on success.
+    """
     buf = ctypes.create_string_buffer(4096)
     prof = None if profile is None else profile.encode("utf-8")
-    return int(
-        _lib().core_invoice_validate(xml.encode("utf-8"), prof, buf, 4096)
-    )
+    code = int(_lib().core_invoice_validate(xml.encode("utf-8"), prof, buf, 4096))
+    return code, buf.value.decode("utf-8", errors="replace")

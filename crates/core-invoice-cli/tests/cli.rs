@@ -91,7 +91,7 @@ fn validate_stdin_dash() {
         .write_all(xml.as_bytes())
         .unwrap();
     let out = child.wait_with_output().unwrap();
-    assert_eq!(out.status.code(), Some(0), "{:?}", out);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
 }
 
 #[test]
@@ -112,7 +112,7 @@ fn convert_dash_o_writes_file() {
         ])
         .output()
         .unwrap();
-    assert_eq!(out.status.code(), Some(0), "{:?}", out);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
     assert!(out.stdout.is_empty());
     assert!(dest.exists());
     let _ = std::fs::remove_file(dest);
@@ -360,7 +360,7 @@ fn validate_quiet_ok_is_silent() {
         .output()
         .unwrap();
     assert_eq!(out.status.code(), Some(0));
-    assert!(out.stdout.is_empty(), "{:?}", out.stdout);
+    assert!(out.stdout.is_empty());
 }
 
 #[test]
@@ -385,6 +385,78 @@ fn rules_en16931_does_not_list_peppol_r010() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("BR-CO-16"));
     assert!(!stdout.contains("PEPPOL-EN16931-R010"), "{stdout}");
+}
+
+#[test]
+fn validate_quiet_json_still_prints_json() {
+    let path = write_tmp("quiet-json", &peppol_xml());
+    let out = bin()
+        .args([
+            "validate",
+            "--quiet",
+            "--format",
+            "json",
+            "--profile",
+            "peppol",
+            path.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(0));
+    // `--quiet` suppresses stdout on success even with `--format json`.
+    // Invalid reports still print JSON (`!report.ok()`).
+    assert!(out.stdout.is_empty());
+}
+
+#[test]
+fn convert_peppol_to_cii_is_0() {
+    let path = write_tmp("ok-cii", &peppol_xml());
+    let out = bin()
+        .args(["convert", path.to_str().unwrap(), "--to", "cii"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("CrossIndustryInvoice"), "{stdout}");
+    assert!(!stdout.contains("<Invoice "), "{stdout}");
+}
+
+#[test]
+fn inspect_cii_shows_syntax() {
+    let xml = core_invoice_formats::write_unchecked(
+        &core_invoice_fixtures::peppol_vat(),
+        core_invoice_formats::Syntax::Cii,
+    )
+    .unwrap();
+    let path = write_tmp("insp-cii", &xml);
+    let out = bin()
+        .args(["inspect", path.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("syntax=cii"), "{stdout}");
+    assert!(!stdout.contains("valid ("), "{stdout}");
+}
+
+#[test]
+fn inspect_pint_my_cii_is_readable() {
+    let xml = r#"<?xml version="1.0"?><rsm:CrossIndustryInvoice xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100"><rsm:ExchangedDocumentContext xmlns:ram="urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100"><ram:GuidelineSpecifiedDocumentContextParameter><ram:ID>urn:peppol:pint:billing-1@my-1</ram:ID></ram:GuidelineSpecifiedDocumentContextParameter></rsm:ExchangedDocumentContext><rsm:ExchangedDocument xmlns:ram="urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100"><ram:ID>1</ram:ID><ram:TypeCode>380</ram:TypeCode></rsm:ExchangedDocument><rsm:SupplyChainTradeTransaction/></rsm:CrossIndustryInvoice>"#;
+    let path = write_tmp("insp-my-cii", xml);
+    let out = bin()
+        .args(["inspect", path.to_str().unwrap()])
+        .output()
+        .unwrap();
+    // Inspect reads; CII of a PintMy BT-24 is readable as CII (convert refuses write).
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("syntax=cii"), "{stdout}");
 }
 
 #[test]

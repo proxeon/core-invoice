@@ -7,6 +7,7 @@ members = [
     "crates/core-invoice-fixtures",
     "crates/core-invoice-sys",
 ]
+exclude = ["fuzz"]
 
 [workspace.package]
 version = "0.2.0"

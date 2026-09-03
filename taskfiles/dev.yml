@@ -68,3 +68,17 @@ tasks:
     cmds:
       - python3 xtask/svrl_oracle.py --self-test
       - python3 xtask/svrl_oracle.py
+
+  tracked:
+    desc: Fail if product crates contain TODO/FIXME/unimplemented!
+    cmds:
+      - |
+        if grep -RInE 'TODO|FIXME|unimplemented!' crates --include='*.rs'; then
+          echo "product source still has TODO/FIXME/unimplemented!" >&2
+          exit 1
+        fi
+
+  fuzz:
+    desc: Local cargo-fuzz target on formats::read (not default CI)
+    cmds:
+      - echo "cargo +nightly fuzz run formats_read  (see fuzz/)"

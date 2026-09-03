@@ -11,8 +11,8 @@ use core_invoice::kind::DocumentKind;
 use core_invoice::numeric::Percentage;
 use core_invoice::tax::{TaxCategory, TaxSystem, wire_scheme};
 use core_invoice::{
-    Amount, Code, Date, DocumentTotals, Identifier, Invoice, InvoiceAmount, Line, Party, Profile,
-    ProfileLookup, TaxBreakdown,
+    Amount, Code, Date, DocumentTotals, Identifier, Invoice, InvoiceAmount, InvoiceNote, Line,
+    Party, Profile, ProfileLookup, TaxBreakdown,
 };
 use rust_decimal::Decimal;
 use std::str::FromStr;
@@ -35,13 +35,7 @@ pub fn write_unchecked(invoice: &Invoice) -> Result<String, FormatError> {
         .specification_id
         .as_deref()
         .unwrap_or_else(|| invoice.profile.specification_id());
-    let type_code = invoice.type_code.as_ref().map(Code::as_str).unwrap_or(
-        if invoice.kind == DocumentKind::CreditNote {
-            "381"
-        } else {
-            "380"
-        },
-    );
+    let type_code = invoice.type_code.as_ref().map(Code::as_str);
     let mut s = String::new();
     s.push_str(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
     s.push('\n');
@@ -61,7 +55,10 @@ pub fn write_unchecked(invoice: &Invoice) -> Result<String, FormatError> {
     s.push_str("  </rsm:ExchangedDocumentContext>\n");
     s.push_str("  <rsm:ExchangedDocument>\n");
     leaf_ram(&mut s, 2, "ID", &invoice.number, None);
-    leaf_ram(&mut s, 2, "TypeCode", type_code, None);
+    // Emit BT-3. Do not invent 380/381 when the type code is missing.
+    if let Some(code) = type_code {
+        leaf_ram(&mut s, 2, "TypeCode", code, None);
+    }
     if let Some(d) = invoice.issue_date {
         s.push_str("    <ram:IssueDateTime>\n");
         s.push_str(&format!(
@@ -73,6 +70,9 @@ pub fn write_unchecked(invoice: &Invoice) -> Result<String, FormatError> {
     for n in &invoice.notes {
         s.push_str("    <ram:IncludedNote>\n");
         leaf_ram(&mut s, 3, "Content", &n.text, None);
+        if let Some(subj) = n.subject.as_ref() {
+            leaf_ram(&mut s, 3, "SubjectCode", subj.as_str(), None);
+        }
         s.push_str("    </ram:IncludedNote>\n");
     }
     s.push_str("  </rsm:ExchangedDocument>\n");
@@ -90,8 +90,9 @@ pub fn write_unchecked(invoice: &Invoice) -> Result<String, FormatError> {
         leaf_ram(&mut s, 3, "InvoiceCurrencyCode", &invoice.currency, None);
     }
     write_payment(&mut s, invoice);
-    write_doc_ac(&mut s, invoice);
+    // HeaderTradeSettlementType: PaymentMeans, ApplicableTradeTax, then AllowanceCharge.
     write_tax(&mut s, invoice);
+    write_doc_ac(&mut s, invoice);
     write_totals(&mut s, invoice);
     s.push_str("    </ram:ApplicableHeaderTradeSettlement>\n");
     s.push_str("  </rsm:SupplyChainTradeTransaction>\n");
@@ -101,6 +102,7 @@ pub fn write_unchecked(invoice: &Invoice) -> Result<String, FormatError> {
 
 pub fn read(xml: &str) -> Result<Read, FormatError> {
     xml::refuse_dtd(xml)?;
+    xml::refuse_oversize(xml)?;
     xml::refuse_depth(xml)?;
     let doc = roxmltree::Document::parse(xml)
         .map_err(|e| FormatError::Parse(format!("not well-formed CII: {e}")))?;
@@ -130,8 +132,7 @@ pub fn read(xml: &str) -> Result<Read, FormatError> {
     let issue_date = doc_el
         .and_then(|n| child(n, "IssueDateTime"))
         .and_then(|n| child(n, "DateTimeString"))
-        .and_then(text)
-        .and_then(|s| from_102(&s));
+        .and_then(|n| from_102_node(n, &mut malformed));
     let tx = child(root, "SupplyChainTradeTransaction")
         .ok_or_else(|| FormatError::Parse("missing SupplyChainTradeTransaction".into()))?;
     let agreement = child(tx, "ApplicableHeaderTradeAgreement");
@@ -150,13 +151,26 @@ pub fn read(xml: &str) -> Result<Read, FormatError> {
     let mut invoice = Invoice::blank(profile, number, currency, seller, buyer);
     invoice.specification_id = spec;
     invoice.issue_date = issue_date;
-    invoice.type_code = type_code.map(Code::new);
-    if invoice
-        .type_code
-        .as_ref()
-        .is_some_and(|c| c.as_str() == "381")
-    {
-        invoice.kind = DocumentKind::CreditNote;
+    invoice.type_code = type_code.clone().map(Code::new);
+    match type_code.as_deref() {
+        Some(c) if core_invoice::codes::credit_note_type(c) => {
+            invoice.kind = DocumentKind::CreditNote;
+        }
+        Some(c) if core_invoice::codes::invoice_type(c) => {
+            invoice.kind = DocumentKind::Invoice;
+        }
+        Some(c) => malformed.push(format!("ExchangedDocument/TypeCode: {c}")),
+        None => malformed.push("ExchangedDocument/TypeCode missing".into()),
+    }
+    if let Some(doc_el) = doc_el {
+        invoice.notes = children(doc_el, "IncludedNote")
+            .filter_map(|n| {
+                Some(InvoiceNote {
+                    subject: child_text(n, "SubjectCode").map(Code::new),
+                    text: child_text(n, "Content")?,
+                })
+            })
+            .collect();
     }
     invoice.lines = children(tx, "IncludedSupplyChainTradeLineItem")
         .filter_map(|n| read_line(n, profile, &mut malformed))
@@ -174,8 +188,7 @@ pub fn read(xml: &str) -> Result<Read, FormatError> {
         let date = child(del, "ActualDeliverySupplyChainEvent")
             .and_then(|n| child(n, "OccurrenceDateTime"))
             .and_then(|n| child(n, "DateTimeString"))
-            .and_then(text)
-            .and_then(|s| from_102(&s));
+            .and_then(|n| from_102_node(n, &mut malformed));
         let ship = child(del, "ShipToTradeParty");
         if date.is_some() || ship.is_some() {
             invoice.delivery = Some(core_invoice::Delivery {
@@ -198,25 +211,29 @@ pub fn read(xml: &str) -> Result<Read, FormatError> {
         if let Some(ms) = child(st, "SpecifiedTradeSettlementHeaderMonetarySummation") {
             invoice.totals = Some(read_totals(ms, &mut malformed));
         }
-        if let Some(pm) = child(st, "SpecifiedTradeSettlementPaymentMeans") {
+        let pms: Vec<_> = children(st, "SpecifiedTradeSettlementPaymentMeans").collect();
+        if let Some(first) = pms.first().copied() {
+            let mut accts = Vec::new();
+            for pm in pms {
+                for n in children(pm, "PayeePartyCreditorFinancialAccount") {
+                    let id = child_text(n, "IBANID").or_else(|| child_text(n, "ProprietaryID"));
+                    if let Some(id) = id {
+                        accts.push(core_invoice::CreditTransfer {
+                            account_id: Identifier::new(id),
+                            account_name: child_text(n, "AccountName"),
+                            provider: None,
+                        });
+                    }
+                }
+            }
             invoice.payment = Some(core_invoice::PaymentInstructions {
-                means_code: child_text(pm, "TypeCode").map(Code::new),
+                means_code: child_text(first, "TypeCode").map(Code::new),
                 means_text: None,
                 remittance: None,
-                means: {
-                    let accts: Vec<_> = children(pm, "PayeePartyCreditorFinancialAccount")
-                        .filter_map(|n| child_text(n, "IBANID"))
-                        .map(|iban| core_invoice::CreditTransfer {
-                            account_id: Identifier::new(iban),
-                            account_name: None,
-                            provider: None,
-                        })
-                        .collect();
-                    if accts.is_empty() {
-                        None
-                    } else {
-                        Some(core_invoice::PaymentMeans::CreditTransfer(accts))
-                    }
+                means: if accts.is_empty() {
+                    None
+                } else {
+                    Some(core_invoice::PaymentMeans::CreditTransfer(accts))
                 },
             });
         }
@@ -347,16 +364,7 @@ fn write_delivery(s: &mut String, invoice: &Invoice) {
         return;
     };
     s.push_str("    <ram:ApplicableHeaderTradeDelivery>\n");
-    if let Some(date) = d.date {
-        s.push_str("      <ram:ActualDeliverySupplyChainEvent>\n");
-        s.push_str("        <ram:OccurrenceDateTime>\n");
-        s.push_str(&format!(
-            "          <udt:DateTimeString format=\"102\">{}</udt:DateTimeString>\n",
-            to_102(date)
-        ));
-        s.push_str("        </ram:OccurrenceDateTime>\n");
-        s.push_str("      </ram:ActualDeliverySupplyChainEvent>\n");
-    }
+    // HeaderTradeDeliveryType: ShipToTradeParty before ActualDeliverySupplyChainEvent.
     if let Some(addr) = d.address.as_ref() {
         s.push_str("      <ram:ShipToTradeParty>\n");
         if let Some(n) = d.name.as_deref() {
@@ -369,6 +377,16 @@ fn write_delivery(s: &mut String, invoice: &Invoice) {
         s.push_str("        </ram:PostalTradeAddress>\n");
         s.push_str("      </ram:ShipToTradeParty>\n");
     }
+    if let Some(date) = d.date {
+        s.push_str("      <ram:ActualDeliverySupplyChainEvent>\n");
+        s.push_str("        <ram:OccurrenceDateTime>\n");
+        s.push_str(&format!(
+            "          <udt:DateTimeString format=\"102\">{}</udt:DateTimeString>\n",
+            to_102(date)
+        ));
+        s.push_str("        </ram:OccurrenceDateTime>\n");
+        s.push_str("      </ram:ActualDeliverySupplyChainEvent>\n");
+    }
     s.push_str("    </ram:ApplicableHeaderTradeDelivery>\n");
 }
 
@@ -376,16 +394,25 @@ fn write_payment(s: &mut String, invoice: &Invoice) {
     let Some(pay) = invoice.payment.as_ref() else {
         return;
     };
-    s.push_str("      <ram:SpecifiedTradeSettlementPaymentMeans>\n");
-    if let Some(code) = pay.means_code.as_ref() {
-        leaf_ram(s, 4, "TypeCode", code.as_str(), None);
-    }
-    if let Some(core_invoice::PaymentMeans::CreditTransfer(cts)) = pay.means.as_ref() {
+    if let Some(core_invoice::PaymentMeans::CreditTransfer(cts)) = pay.means.as_ref()
+        && !cts.is_empty()
+    {
+        // One SpecifiedTradeSettlementPaymentMeans per account (IBANID maxOccurs 1).
         for ct in cts {
+            s.push_str("      <ram:SpecifiedTradeSettlementPaymentMeans>\n");
+            if let Some(code) = pay.means_code.as_ref() {
+                leaf_ram(s, 4, "TypeCode", code.as_str(), None);
+            }
             s.push_str("        <ram:PayeePartyCreditorFinancialAccount>\n");
             leaf_ram(s, 5, "IBANID", &ct.account_id.value, None);
             s.push_str("        </ram:PayeePartyCreditorFinancialAccount>\n");
+            s.push_str("      </ram:SpecifiedTradeSettlementPaymentMeans>\n");
         }
+        return;
+    }
+    s.push_str("      <ram:SpecifiedTradeSettlementPaymentMeans>\n");
+    if let Some(code) = pay.means_code.as_ref() {
+        leaf_ram(s, 4, "TypeCode", code.as_str(), None);
     }
     s.push_str("      </ram:SpecifiedTradeSettlementPaymentMeans>\n");
 }
@@ -432,25 +459,24 @@ fn write_tax(s: &mut String, invoice: &Invoice) {
 }
 
 fn write_totals(s: &mut String, invoice: &Invoice) {
+    let Some(t) = invoice.totals.as_ref() else {
+        return;
+    };
     s.push_str("      <ram:SpecifiedTradeSettlementHeaderMonetarySummation>\n");
     let cur = &invoice.currency;
-    if let Some(t) = invoice.totals.as_ref() {
-        if let Some(v) = t.line_net {
-            amount_ram(s, 4, "LineTotalAmount", v, cur);
-        }
-        if let Some(v) = t.without_tax {
-            amount_ram(s, 4, "TaxBasisTotalAmount", v, cur);
-        }
-        if let Some(v) = t.tax_total {
-            amount_ram(s, 4, "TaxTotalAmount", v, cur);
-        }
-        if let Some(v) = t.with_tax {
-            amount_ram(s, 4, "GrandTotalAmount", v, cur);
-        }
-        amount_ram(s, 4, "DuePayableAmount", t.payable, cur);
-    } else {
-        amount_ram(s, 4, "DuePayableAmount", invoice.payable(), cur);
+    if let Some(v) = t.line_net {
+        amount_ram(s, 4, "LineTotalAmount", v, cur);
     }
+    if let Some(v) = t.without_tax {
+        amount_ram(s, 4, "TaxBasisTotalAmount", v, cur);
+    }
+    if let Some(v) = t.tax_total {
+        amount_ram(s, 4, "TaxTotalAmount", v, cur);
+    }
+    if let Some(v) = t.with_tax {
+        amount_ram(s, 4, "GrandTotalAmount", v, cur);
+    }
+    amount_ram(s, 4, "DuePayableAmount", t.payable, cur);
     s.push_str("      </ram:SpecifiedTradeSettlementHeaderMonetarySummation>\n");
 }
 
@@ -513,7 +539,8 @@ fn read_line(
             }
         })
         .unwrap_or_else(|| TaxCategory {
-            system: TaxSystem::Sst,
+            // Missing line tax is empty + BR-CO-04, not invented SST/S.
+            system: TaxSystem::Vat,
             code: String::new(),
             percent: None,
         });
@@ -597,6 +624,19 @@ fn from_102(s: &str) -> Option<Date> {
     let m: u8 = s[4..6].parse().ok()?;
     let d: u8 = s[6..8].parse().ok()?;
     Date::new(y, m, d).ok()
+}
+
+fn from_102_node(node: roxmltree::Node<'_, '_>, malformed: &mut Vec<String>) -> Option<Date> {
+    let s = text(node)?;
+    let format = node.attribute("format").unwrap_or("102");
+    if format != "102" {
+        malformed.push(format!("DateTimeString format={format} (not 102): {s}"));
+        return None;
+    }
+    from_102(&s).or_else(|| {
+        malformed.push(format!("DateTimeString: {s}"));
+        None
+    })
 }
 
 fn local<'a>(node: roxmltree::Node<'a, 'a>) -> &'a str {

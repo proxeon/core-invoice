@@ -1,0 +1,19 @@
+[package]
+name = "core-invoice-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+core-invoice-formats = { path = "../crates/core-invoice-formats" }
+
+[[bin]]
+name = "formats_read"
+path = "fuzz_targets/formats_read.rs"
+test = false
+doc = false
+bench = false

@@ -9,21 +9,33 @@ use crate::payment::PaymentMeans;
 use crate::profile::Profile;
 use crate::tax::{TaxCategory, TaxSystem};
 
+/// Postal address (BG-5/8/12/15). Country is BT-40 / BT-55 / BT-69 / BT-80.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct PostalAddress {
+    /// BT-35 / BT-50 / BT-75 street.
     pub line1: Option<String>,
+    /// BT-36 / BT-51 / BT-76 additional street.
     pub line2: Option<String>,
+    /// BT-162 / BT-163 / BT-164 additional address line.
     pub line3: Option<String>,
+    /// BT-37 / BT-52 / BT-77 city.
     pub city: Option<String>,
+    /// BT-38 / BT-53 / BT-78 post code.
     pub post_code: Option<String>,
+    /// BT-39 / BT-54 / BT-79 subdivision.
     pub subdivision: Option<String>,
+    /// BT-40 / BT-55 / BT-69 / BT-80 country code.
     pub country: Option<Code>,
 }
 
+/// BG-6 / BG-9 contact.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Contact {
+    /// BT-41 / BT-56 contact point.
     pub point: Option<String>,
+    /// BT-42 / BT-57 telephone.
     pub phone: Option<String>,
+    /// BT-43 / BT-58 email.
     pub email: Option<String>,
 }
 
@@ -94,12 +106,18 @@ impl Party {
     }
 }
 
+/// BG-29 item price. BT-146 net; BT-147 discount; BT-148 gross (unit price, not Amount.Type).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Price {
+    /// BT-146 item net price.
     pub net: UnitPriceAmount,
+    /// BT-147 item price discount (`Price/AllowanceCharge/Amount`).
     pub discount: Option<UnitPriceAmount>,
+    /// BT-148 item gross price (`Price/AllowanceCharge/BaseAmount`).
     pub gross: Option<UnitPriceAmount>,
+    /// BT-149 item price base quantity.
     pub base_qty: Option<Quantity>,
+    /// BT-150 item price base quantity unit.
     pub base_unit: Option<Code>,
 }
 
@@ -107,10 +125,15 @@ pub struct Price {
 /// Line A/C already sits in BT-131. Do not add them again in taxable_for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LineAllowanceCharge {
+    /// BT-136 / BT-141 amount.
     pub amount: InvoiceAmount,
+    /// BT-137 / BT-142 base amount.
     pub base: Option<InvoiceAmount>,
+    /// BT-138 / BT-143 percentage.
     pub percent: Option<Percentage>,
+    /// BT-139 / BT-144 reason.
     pub reason: Option<String>,
+    /// BT-140 / BT-145 reason code.
     pub reason_code: Option<Code>,
 }
 
@@ -118,13 +141,21 @@ pub struct LineAllowanceCharge {
 pub struct Line {
     /// BT-126 line identifier, not a GTIN (BT-157).
     pub id: String,
+    /// BT-153 item name.
     pub name: String,
+    /// BT-131 line net amount.
     pub net: Amount,
+    /// BT-151 / BT-152 classified tax category.
     pub tax: TaxCategory,
+    /// BT-129 invoiced quantity.
     pub quantity: Option<Quantity>,
+    /// BT-130 unit of measure.
     pub unit: Option<Code>,
+    /// BG-29 item price.
     pub price: Option<Price>,
+    /// BT-127 line note.
     pub note: Option<String>,
+    /// BT-154 item description.
     pub description: Option<String>,
     /// BG-26 invoicing period (BT-134/BT-135). Not [`Invoice::period`] (BG-14).
     pub period: Option<Period>,
@@ -150,9 +181,9 @@ pub struct Line {
     pub invoiced_object: Option<Identifier>,
     /// UBL DocumentTypeCode on the line DocumentReference. Absent means 130.
     pub invoiced_object_code: Option<Code>,
-    /// Extra ClassifiedTaxCategory after BT-151 (PINT-MY TTX beside HVG/SA on the same line).
+    /// Extra ClassifiedTaxCategory after BT-151 (PINT-MY TTX beside HVG/SA). Not BT-151.
     pub extra_tax: Vec<TaxCategory>,
-    /// Line TaxTotal/cbc:TaxAmount. ALIGNED-IBRP-TTX-09-MY sums this on TTX lines.
+    /// Line `TaxTotal/cbc:TaxAmount`. ALIGNED-IBRP-TTX-09-MY sums this on TTX lines. Not BT-117.
     pub tax_total: Option<InvoiceAmount>,
 }
 
@@ -199,44 +230,65 @@ pub struct ItemAttribute {
     pub value: String,
 }
 
+/// BT-21 / BT-22 invoice note.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InvoiceNote {
+    /// BT-21 note subject code (UNCL 4451).
     pub subject: Option<Code>,
+    /// BT-22 note text.
     pub text: String,
 }
 
+/// BG-3 preceding invoice reference.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PrecedingInvoice {
+    /// BT-25 preceding invoice reference.
     pub reference: DocumentReference,
+    /// BT-26 preceding invoice issue date.
     pub issue_date: Option<Date>,
 }
 
 /// Header invoicing period BG-14 (BT-73/74) or line period BG-26 (BT-134/135).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Period {
+    /// BT-73 / BT-134 start.
     pub start: Option<Date>,
+    /// BT-74 / BT-135 end.
     pub end: Option<Date>,
 }
 
+/// BG-10 payee (if different from seller).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Payee {
+    /// BT-59 payee name.
     pub name: String,
+    /// BT-60 payee identifier.
     pub identifier: Option<Identifier>,
+    /// BT-61 payee legal registration identifier.
     pub legal_registration: Option<Identifier>,
 }
 
+/// BG-11 seller tax representative.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaxRepresentative {
+    /// BT-62 name.
     pub name: String,
+    /// BT-63 VAT identifier.
     pub vat_identifier: Option<Identifier>,
+    /// BG-12 postal address (BT-69 country).
     pub address: Option<PostalAddress>,
 }
 
+/// BG-13 delivery information.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Delivery {
+    /// BT-70 deliver-to party name.
     pub name: Option<String>,
+    /// BT-71 deliver-to location identifier.
     pub location_id: Option<Identifier>,
+    /// BT-72 actual delivery date.
     pub date: Option<Date>,
+    /// BG-15 deliver-to address.
     pub address: Option<PostalAddress>,
 }
 
@@ -253,47 +305,77 @@ pub struct PaymentInstructions {
     pub means: Option<PaymentMeans>,
 }
 
+/// BG-20 / BG-21 document level allowance or charge.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AllowanceCharge {
+    /// BT-92 / BT-99 amount.
     pub amount: InvoiceAmount,
+    /// BT-93 / BT-100 base amount.
     pub base: Option<InvoiceAmount>,
+    /// BT-94 / BT-101 percentage.
     pub percent: Option<Percentage>,
+    /// BT-97 / BT-104 reason.
     pub reason: Option<String>,
+    /// BT-98 / BT-105 reason code.
     pub reason_code: Option<Code>,
+    /// BT-95/96 or BT-102/103 tax category and rate.
     pub tax: Option<TaxCategory>,
 }
 
+/// BG-23 VAT/GST/SST breakdown row.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaxBreakdown {
     pub system: TaxSystem,
     pub scheme: String,
+    /// BT-118 category code.
     pub category: Code,
+    /// BT-119 rate. None for EN `O` and PINT-MY TTX.
     pub rate: Option<Percentage>,
+    /// BT-116 taxable amount.
     pub taxable: InvoiceAmount,
+    /// BT-117 tax amount.
     pub tax: InvoiceAmount,
+    /// BT-120 exemption reason.
     pub exemption_reason: Option<String>,
+    /// BT-121 exemption reason code.
     pub exemption_code: Option<Code>,
 }
 
+/// BG-22 document totals. Absent optional amounts are `None`, not 0.00.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DocumentTotals {
+    /// BT-106 sum of invoice line net amounts.
     pub line_net: Option<InvoiceAmount>,
+    /// BT-107 sum of allowances on document level.
     pub allowance_total: Option<InvoiceAmount>,
+    /// BT-108 sum of charges on document level.
     pub charge_total: Option<InvoiceAmount>,
+    /// BT-109 invoice total amount without VAT.
     pub without_tax: Option<InvoiceAmount>,
+    /// BT-110 invoice total VAT amount.
     pub tax_total: Option<InvoiceAmount>,
+    /// BT-111 invoice total VAT amount in accounting currency.
     pub tax_total_accounting: Option<InvoiceAmount>,
+    /// BT-112 invoice total amount with VAT.
     pub with_tax: Option<InvoiceAmount>,
+    /// BT-113 paid amount.
     pub paid: Option<InvoiceAmount>,
+    /// BT-114 rounding amount.
     pub rounding: Option<InvoiceAmount>,
+    /// BT-115 amount due for payment.
     pub payable: InvoiceAmount,
 }
 
+/// BG-24 additional supporting document.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SupportingDocument {
+    /// BT-122 supporting document reference.
     pub id: DocumentReference,
+    /// BT-123 supporting document description.
     pub description: Option<String>,
+    /// BT-124 external document location.
     pub uri: Option<String>,
+    /// BT-125 attached document.
     pub attachment: Option<Attachment>,
 }
 
@@ -303,17 +385,27 @@ pub struct SupportingDocument {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Invoice {
     pub profile: Profile,
+    /// BT-24 specification identifier.
     pub specification_id: Option<String>,
+    /// Syntax root analogue. Not derived from BT-3.
     pub kind: DocumentKind,
+    /// BT-1 invoice number.
     pub number: String,
+    /// BT-5 invoice currency.
     pub currency: String,
+    /// BT-2 issue date.
     pub issue_date: Option<Date>,
+    /// BT-3 invoice type code.
     pub type_code: Option<Code>,
+    /// BT-6 VAT accounting currency.
     pub tax_currency: Option<Code>,
+    /// BT-9 payment due date.
     pub due_date: Option<Date>,
     /// BT-7 / BT-8. BR-CO-03 when both the date and the code rules apply.
     pub tax_point_date: Option<Date>,
+    /// BT-8 VAT point date code.
     pub tax_point_code: Option<Code>,
+    /// BT-23 business process type.
     pub business_process: Option<String>,
     /// BT-10 buyer reference. Do not overload with BT-13.
     pub buyer_reference: Option<DocumentReference>,
@@ -335,21 +427,37 @@ pub struct Invoice {
     pub invoiced_object: Option<Identifier>,
     /// BT-19 buyer accounting reference.
     pub buyer_accounting: Option<String>,
+    /// BT-20 payment terms.
     pub payment_terms: Option<String>,
+    /// BG-1 notes (BT-21/22).
     pub notes: Vec<InvoiceNote>,
+    /// BG-3 preceding invoice reference.
     pub preceding: Vec<PrecedingInvoice>,
+    /// BG-4 seller.
     pub seller: Party,
+    /// BG-7 buyer.
     pub buyer: Party,
+    /// BG-10 payee.
     pub payee: Option<Payee>,
+    /// BG-11 seller tax representative.
     pub tax_representative: Option<TaxRepresentative>,
+    /// BG-13 delivery.
     pub delivery: Option<Delivery>,
+    /// BG-14 invoicing period.
     pub period: Option<Period>,
+    /// BG-16 payment instructions.
     pub payment: Option<PaymentInstructions>,
+    /// BG-20 document level allowances.
     pub document_allowances: Vec<AllowanceCharge>,
+    /// BG-21 document level charges.
     pub document_charges: Vec<AllowanceCharge>,
+    /// BG-23 VAT/GST/SST breakdown.
     pub tax_breakdown: Vec<TaxBreakdown>,
+    /// BG-22 document totals.
     pub totals: Option<DocumentTotals>,
+    /// BG-24 additional supporting documents.
     pub supporting_documents: Vec<SupportingDocument>,
+    /// BG-25 invoice lines.
     pub lines: Vec<Line>,
 }
 
@@ -403,20 +511,14 @@ impl Invoice {
         }
     }
 
-    /// BT-115 from DocumentTotals. Ghosts on Invoice are not a second identity.
-    pub fn payable(&self) -> Amount {
-        self.totals
-            .as_ref()
-            .map(|t| t.payable)
-            .unwrap_or(Amount::ZERO)
+    /// BT-115 from [`DocumentTotals`]. Absent BG-22 is not 0.00 (BR-CO-16).
+    pub fn payable(&self) -> Option<Amount> {
+        self.totals.as_ref().map(|t| t.payable)
     }
 
-    /// BT-110 from DocumentTotals. Absent totals is not 0.00 for BR-CO-16.
-    pub fn tax_total(&self) -> Amount {
-        self.totals
-            .as_ref()
-            .and_then(|t| t.tax_total)
-            .unwrap_or(Amount::ZERO)
+    /// BT-110 from [`DocumentTotals`]. Absent totals is not 0.00.
+    pub fn tax_total(&self) -> Option<Amount> {
+        self.totals.as_ref().and_then(|t| t.tax_total)
     }
 
     /// BT-24 and BT-23 come from the proved profile, not leftover fields on Invoice.

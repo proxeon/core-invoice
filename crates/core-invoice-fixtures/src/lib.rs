@@ -336,6 +336,12 @@ mod tests {
             "BT-6=BT-5 uses BT-110 for BR-53: {report}"
         );
         assert!(report.ok(), "sample-discount-price: {report}");
+        let inv = read(&xml).unwrap();
+        let price = inv.lines[0].price.as_ref().expect("price");
+        assert!(
+            price.gross.is_some() || price.discount.is_some(),
+            "BT-147/148 should round-trip on sample-discount-price"
+        );
     }
 
     #[test]

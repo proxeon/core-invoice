@@ -170,13 +170,83 @@ pub fn diff(left_xml: &str, right_xml: &str) -> Result<String, FormatError> {
     Ok(diff_invoices(&left, &right))
 }
 
+/// Model paths allowed to differ after UBL↔CII round-trip (D16B subset). Shrink when mapping grows.
+pub const CII_DROPPED: &[&str] = &[
+    "business_process",
+    "seller.endpoint",
+    "buyer.endpoint",
+    "seller.identifiers",
+    "buyer.identifiers",
+    "seller.contact",
+    "buyer.contact",
+    "seller.address",
+    "buyer.address",
+    "notes",
+    "notes.subject",
+    "payee",
+    "tax_representative",
+    "delivery",
+    "payment",
+    "document_allowances",
+    "document_charges",
+    "supporting_documents",
+    "preceding",
+    "purchase_order",
+    "sales_order",
+    "contract",
+    "project",
+    "despatch",
+    "receiving_advice",
+    "tender",
+    "invoiced_object",
+    "buyer_accounting",
+    "buyer_reference",
+    "payment_terms",
+    "tax_point",
+    "due_date",
+    "lines.extra_tax",
+    "lines.tax_total",
+    "lines.allowances",
+    "lines.charges",
+    "lines.attributes",
+    "lines.standard_id",
+    "lines.item_id",
+    "lines.buyer_id",
+    "lines.order_line",
+    "lines.accounting_reference",
+    "lines.origin_country",
+    "lines.classifications",
+    "lines.invoiced_object",
+    "lines.note",
+    "lines.description",
+    "lines.period",
+    "price.discount",
+    "price.gross",
+];
+
+/// Syntax terms the writer will omit. CreditNote DueDate is stored as BT-9 and dropped on UBL write.
+pub fn write_drops(invoice: &Invoice, syntax: Syntax) -> Vec<String> {
+    match syntax {
+        Syntax::Ubl => ubl::write_drops(invoice),
+        Syntax::Cii => Vec::new(),
+    }
+}
+
+fn opt_amt(a: Option<core_invoice::Amount>) -> String {
+    a.map(|x| x.to_string()).unwrap_or_else(|| "absent".into())
+}
+
 fn diff_invoices(left: &Invoice, right: &Invoice) -> String {
     let mut lines = Vec::new();
     if left.number != right.number {
         lines.push(format!("number: {} → {}", left.number, right.number));
     }
     if left.payable() != right.payable() {
-        lines.push(format!("payable: {} → {}", left.payable(), right.payable()));
+        lines.push(format!(
+            "payable: {} → {}",
+            opt_amt(left.payable()),
+            opt_amt(right.payable())
+        ));
     }
     if left.currency != right.currency {
         lines.push(format!("currency: {} → {}", left.currency, right.currency));
@@ -217,6 +287,41 @@ fn diff_invoices(left: &Invoice, right: &Invoice) -> String {
             left.notes.len(),
             right.notes.len()
         ));
+        for (i, (a, b)) in left.notes.iter().zip(right.notes.iter()).enumerate() {
+            if a.text != b.text {
+                lines.push(format!("notes[{i}].text: differ"));
+            }
+            if a.subject != b.subject {
+                lines.push("notes.subject: differ".into());
+            }
+        }
+    }
+    if left.specification_id != right.specification_id {
+        lines.push("specification_id: differ".into());
+    }
+    if left.business_process != right.business_process {
+        lines.push("business_process: differ".into());
+    }
+    if left.payee != right.payee {
+        lines.push("payee: differ".into());
+    }
+    if left.tax_representative != right.tax_representative {
+        lines.push("tax_representative: differ".into());
+    }
+    if left.delivery != right.delivery {
+        lines.push("delivery: differ".into());
+    }
+    if left.supporting_documents != right.supporting_documents {
+        lines.push("supporting_documents: differ".into());
+    }
+    if left.document_allowances != right.document_allowances {
+        lines.push("document_allowances: differ".into());
+    }
+    if left.document_charges != right.document_charges {
+        lines.push("document_charges: differ".into());
+    }
+    if left.preceding != right.preceding {
+        lines.push("preceding: differ".into());
     }
     if left.payment != right.payment {
         lines.push("payment: differ".into());
@@ -260,6 +365,24 @@ fn diff_invoices(left: &Invoice, right: &Invoice) -> String {
         if a.price != b.price {
             lines.push(format!("lines[{i}].price: differ"));
         }
+        if a.extra_tax != b.extra_tax {
+            lines.push("lines.extra_tax: differ".into());
+        }
+        if a.tax_total != b.tax_total {
+            lines.push("lines.tax_total: differ".into());
+        }
+        if a.allowances != b.allowances || a.charges != b.charges {
+            lines.push(format!("lines[{i}].allowances: differ"));
+        }
+        if a.classifications != b.classifications {
+            lines.push(format!("lines[{i}].classifications: differ"));
+        }
+        if a.period != b.period {
+            lines.push("lines.period: differ".into());
+        }
+        if a.origin_country != b.origin_country {
+            lines.push("lines.origin_country: differ".into());
+        }
     }
     if lines.is_empty() {
         "no semantic difference".into()
@@ -295,6 +418,15 @@ fn diff_party(
     }
     if left.legal_registration != right.legal_registration {
         lines.push(format!("{label}.legal_registration: differ"));
+    }
+    if left.identifiers != right.identifiers {
+        lines.push(format!("{label}.identifiers: differ"));
+    }
+    if left.contact != right.contact {
+        lines.push(format!("{label}.contact: differ"));
+    }
+    if left.address != right.address {
+        lines.push(format!("{label}.address: differ"));
     }
 }
 
@@ -337,6 +469,10 @@ mod tests {
         let _ = read("<!DOCTYPE foo [<!ENTITY x SYSTEM 'file:///etc/passwd'>]><Invoice/>");
         let _ = read(&format!("<Invoice>{}</Invoice>", "x".repeat(200_000)));
         let _ = read(&"<a>".repeat(80));
+        let _ = read("<?xml version='1.0'?><Invoice>");
+        let _ = read(&format!("<Invoice>{}</Invoice>", "\u{0}".repeat(1000)));
+        let _ =
+            read("<Invoice xmlns='x'><InvoiceLine><Item><Name/></Item></InvoiceLine></Invoice>");
     }
 
     #[test]
@@ -446,8 +582,135 @@ mod tests {
         );
         let ubl2 = write_unchecked(&back, Syntax::Ubl).unwrap();
         let out = diff(ubl, &ubl2).unwrap();
-        // Named remaining CII drops (shrink this list as mapping grows):
-        // BT-23 ProfileID, endpoints, notes subject, line object, supporting docs.
         assert!(!out.contains("quantity"), "qty is mapped on CII: {out}");
+        for line in out.lines() {
+            if line == "no semantic difference" {
+                continue;
+            }
+            assert!(
+                CII_DROPPED.iter().any(|p| line.contains(p)),
+                "unexpected CII drop {line:?} in {out}"
+            );
+        }
+    }
+
+    #[test]
+    fn cii_to_ubl_round_trip_is_named_drops() {
+        let inv = read(
+            r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"><cbc:CustomizationID>urn:cen.eu:en16931:2017</cbc:CustomizationID><cbc:ID>1</cbc:ID><cbc:IssueDate>2026-01-15</cbc:IssueDate><cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode><cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode><cac:InvoiceLine><cbc:ID>1</cbc:ID><cbc:InvoicedQuantity unitCode="C62">2</cbc:InvoicedQuantity><cbc:LineExtensionAmount currencyID="EUR">10.00</cbc:LineExtensionAmount><cac:Item><cbc:Name>A</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>S</cbc:ID><cbc:Percent>19</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item><cac:Price><cbc:PriceAmount currencyID="EUR">5.00</cbc:PriceAmount></cac:Price></cac:InvoiceLine></Invoice>"#,
+        )
+        .unwrap();
+        let cii = write_unchecked(&inv, Syntax::Cii).unwrap();
+        let from_cii = read(&cii).unwrap();
+        let ubl = write_unchecked(&from_cii, Syntax::Ubl).unwrap();
+        let back = read(&ubl).unwrap();
+        let out = diff_invoices(&inv, &back);
+        for line in out.lines() {
+            if line == "no semantic difference" {
+                continue;
+            }
+            assert!(
+                CII_DROPPED.iter().any(|p| line.contains(p)),
+                "unexpected CII drop {line:?} in {out}"
+            );
+        }
+        assert!(!cii.contains("<Invoice "));
+    }
+
+    #[test]
+    fn diff_sees_payee_and_attachment() {
+        let a = r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"><cbc:ID>1</cbc:ID></Invoice>"#;
+        let b = r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"><cbc:ID>1</cbc:ID><cac:PayeeParty><cac:PartyName><cbc:Name>Payee AG</cbc:Name></cac:PartyName></cac:PayeeParty></Invoice>"#;
+        let out = diff(a, b).unwrap();
+        assert!(out.contains("payee"), "{out}");
+        let c = r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"><cbc:ID>1</cbc:ID><cac:AdditionalDocumentReference><cbc:ID>ATT</cbc:ID><cac:Attachment><cbc:EmbeddedDocumentBinaryObject mimeCode="application/pdf" filename="a.pdf">YQ==</cbc:EmbeddedDocumentBinaryObject></cac:Attachment></cac:AdditionalDocumentReference></Invoice>"#;
+        let out = diff(a, c).unwrap();
+        assert!(out.contains("supporting_documents"), "{out}");
+    }
+
+    #[test]
+    fn cii_missing_line_tax_is_not_sst() {
+        let xml = r#"<?xml version="1.0"?><rsm:CrossIndustryInvoice xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100" xmlns:ram="urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100" xmlns:udt="urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100"><rsm:ExchangedDocumentContext><ram:GuidelineSpecifiedDocumentContextParameter><ram:ID>urn:cen.eu:en16931:2017</ram:ID></ram:GuidelineSpecifiedDocumentContextParameter></rsm:ExchangedDocumentContext><rsm:ExchangedDocument><ram:ID>1</ram:ID><ram:TypeCode>380</ram:TypeCode></rsm:ExchangedDocument><rsm:SupplyChainTradeTransaction><ram:IncludedSupplyChainTradeLineItem><ram:AssociatedDocumentLineDocument><ram:LineID>1</ram:LineID></ram:AssociatedDocumentLineDocument><ram:SpecifiedTradeProduct><ram:Name>A</ram:Name></ram:SpecifiedTradeProduct></ram:IncludedSupplyChainTradeLineItem><ram:ApplicableHeaderTradeAgreement/><ram:ApplicableHeaderTradeDelivery/><ram:ApplicableHeaderTradeSettlement/></rsm:SupplyChainTradeTransaction></rsm:CrossIndustryInvoice>"#;
+        let inv = read(xml).unwrap();
+        assert_ne!(inv.lines[0].tax.system, core_invoice::TaxSystem::Sst);
+        assert!(inv.lines[0].tax.code.is_empty());
+    }
+
+    #[test]
+    fn cii_kind_from_credit_note_type_not_only_381() {
+        let xml = r#"<?xml version="1.0"?><rsm:CrossIndustryInvoice xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100" xmlns:ram="urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100"><rsm:ExchangedDocumentContext><ram:GuidelineSpecifiedDocumentContextParameter><ram:ID>urn:cen.eu:en16931:2017</ram:ID></ram:GuidelineSpecifiedDocumentContextParameter></rsm:ExchangedDocumentContext><rsm:ExchangedDocument><ram:ID>1</ram:ID><ram:TypeCode>396</ram:TypeCode></rsm:ExchangedDocument><rsm:SupplyChainTradeTransaction><ram:ApplicableHeaderTradeAgreement/><ram:ApplicableHeaderTradeDelivery/><ram:ApplicableHeaderTradeSettlement/></rsm:SupplyChainTradeTransaction></rsm:CrossIndustryInvoice>"#;
+        let inv = read(xml).unwrap();
+        assert_eq!(inv.kind, core_invoice::DocumentKind::CreditNote);
+    }
+
+    #[test]
+    fn cii_non_102_date_is_malformed() {
+        let xml = r#"<?xml version="1.0"?><rsm:CrossIndustryInvoice xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100" xmlns:ram="urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100" xmlns:udt="urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100"><rsm:ExchangedDocumentContext><ram:GuidelineSpecifiedDocumentContextParameter><ram:ID>urn:cen.eu:en16931:2017</ram:ID></ram:GuidelineSpecifiedDocumentContextParameter></rsm:ExchangedDocumentContext><rsm:ExchangedDocument><ram:ID>1</ram:ID><ram:TypeCode>380</ram:TypeCode><ram:IssueDateTime><udt:DateTimeString format="616">2026</udt:DateTimeString></ram:IssueDateTime></rsm:ExchangedDocument><rsm:SupplyChainTradeTransaction><ram:ApplicableHeaderTradeAgreement/><ram:ApplicableHeaderTradeDelivery/><ram:ApplicableHeaderTradeSettlement/></rsm:SupplyChainTradeTransaction></rsm:CrossIndustryInvoice>"#;
+        let traced = read_with_trace(xml).unwrap();
+        assert!(
+            traced.malformed.iter().any(|m| m.contains("format=616")),
+            "{:?}",
+            traced.malformed
+        );
+        assert!(traced.invoice.issue_date.is_none());
+    }
+
+    #[test]
+    fn cii_two_ibans_round_trip() {
+        let mut inv = read(
+            r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"><cbc:CustomizationID>urn:cen.eu:en16931:2017</cbc:CustomizationID><cbc:ID>1</cbc:ID><cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode><cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode></Invoice>"#,
+        )
+        .unwrap();
+        inv.payment = Some(core_invoice::PaymentInstructions {
+            means_code: Some(core_invoice::Code::new("30")),
+            means_text: None,
+            remittance: None,
+            means: Some(core_invoice::PaymentMeans::CreditTransfer(vec![
+                core_invoice::CreditTransfer {
+                    account_id: core_invoice::Identifier::new("DE89370400440532013000"),
+                    account_name: None,
+                    provider: None,
+                },
+                core_invoice::CreditTransfer {
+                    account_id: core_invoice::Identifier::new("FR1420041010050500013M02606"),
+                    account_name: None,
+                    provider: None,
+                },
+            ])),
+        });
+        let cii = write_unchecked(&inv, Syntax::Cii).unwrap();
+        assert_eq!(
+            cii.matches("<ram:SpecifiedTradeSettlementPaymentMeans>")
+                .count(),
+            2
+        );
+        let back = read(&cii).unwrap();
+        match back.payment.unwrap().means.unwrap() {
+            core_invoice::PaymentMeans::CreditTransfer(a) => {
+                assert_eq!(a.len(), 2);
+                assert_eq!(a[1].account_id.value, "FR1420041010050500013M02606");
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn cii_direct_read_refuses_oversize() {
+        let xml = format!(
+            r#"<rsm:CrossIndustryInvoice xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100">{}</rsm:CrossIndustryInvoice>"#,
+            "x".repeat(10 * 1024 * 1024 + 1)
+        );
+        assert!(cii::read(&xml).is_err());
+    }
+
+    #[test]
+    fn write_drops_credit_note_duedate() {
+        let mut inv = read(
+            r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"><cbc:ID>1</cbc:ID><cbc:DueDate>2026-02-01</cbc:DueDate></Invoice>"#,
+        )
+        .unwrap();
+        inv.kind = core_invoice::DocumentKind::CreditNote;
+        let drops = write_drops(&inv, Syntax::Ubl);
+        assert!(drops.iter().any(|d| d == "CreditNote/DueDate"), "{drops:?}");
     }
 }

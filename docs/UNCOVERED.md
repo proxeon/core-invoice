@@ -37,11 +37,11 @@ Artefact union of `EN16931-model.sch` ∪ `EN16931-UBL-codes.sch` is 223 syntax-
 
 Family A/C rows and IC-11/12: now in catalogue.
 
-Presence still not eval: BR-12, BR-13, BR-14, BR-15, BR-19, BR-31, BR-32, BR-33, BR-36, BR-37, BR-38, BR-41, BR-42, BR-43, BR-44, BR-45, BR-46, BR-47, BR-48, BR-49, BR-50, BR-61. Registered this slice: BR-17/18/20/29/30/52/54/55/56/57/62–65.
+Presence evals registered: BR-12…15, 17–20, 29–33, 36–38, 41–50, 52, 54–57, 61–65. BR-31/36/41/43/45/46 are type-retired (`explain` works).
 
 CL not bound: BR-CL-03, BR-CL-08.
 
-CO still not eval: BR-CO-26 (seller identifiable — would fail unit tests without TIN). Registered: BR-CO-09/19–24.
+CO registered: BR-CO-09/19–24/26 (CO-26 skipped on Pint/PintMy; EN/Peppol require BT-29/30/31).
 
 ## Pint GST
 
@@ -53,3 +53,5 @@ CO still not eval: BR-CO-26 (seller identifiable — would fail unit tests witho
 - ConnectingEurope XSLT SVRL job: `task svrl` / `xtask/svrl_oracle.py` (Saxon). Parses `failed-assert/@id` and diffs Fatal `Finding.id`. Mapping table `docs/svrl-id-map.md`. Skip without Saxon unless `CORE_INVOICE_REQUIRE_SPEC=1`. Peppol BIS pin is `.sch` only.
 - Mustang: only if `MUSTANG_JAR` is set; VAT CII; never default CI.
 - nix flake: Later (P18.03 / P19).
+- cargo-fuzz target `fuzz/fuzz_targets/formats_read.rs` is run locally (`cargo fuzz run formats_read`); not default CI. Unit smoke `random_bytes_do_not_panic` stays.
+- `#![warn(missing_docs)]` on the model crate is deferred until a full rustdoc audit (CI `-D warnings` would fail closed). Public Table 2 fields cite BT numbers.

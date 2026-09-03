@@ -35,6 +35,8 @@ impl TaxSystem {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaxCategory {
     pub system: TaxSystem,
+    /// BT-151 / BT-118 category code. `String` (not [`crate::Code`]) so PINT extra
+    /// codes (SA, SE, HVG, TTX, …) stay representable without a VAT-only enum.
     pub code: String,
     pub percent: Option<crate::numeric::Percentage>,
 }

@@ -49,6 +49,39 @@ pub fn core_rules() -> &'static [Rule] {
     })
 }
 
+/// Markdown table of `catalogue()` × shipped profiles. Not a legal-validator claim.
+pub fn conformance_matrix() -> String {
+    use crate::profile::Profile;
+    let profiles = [
+        Profile::En16931,
+        Profile::PeppolBis3,
+        Profile::Pint,
+        Profile::PintMy,
+    ];
+    let mut s = String::from(
+        "# Rule matrix\n\nIds **we** emit. Not ConnectingEurope / OpenPEPPOL / IRBM Valid. Not a legal validator.\n\nCORE runs on every profile. Extra rules are `Profile::extra_rules`.\n\n| id | en16931 | peppol | pint | pint-my |\n|---|---|---|---|---|\n",
+    );
+    for rule in catalogue() {
+        s.push_str("| ");
+        s.push_str(rule.id);
+        for p in profiles {
+            let core = crate::rules::core_rules().iter().any(|r| r.id == rule.id);
+            let extra = p.extra_rules().iter().any(|r| r.id == rule.id);
+            let cell = if core {
+                "CORE"
+            } else if extra {
+                "extra"
+            } else {
+                "—"
+            };
+            s.push_str(" | ");
+            s.push_str(cell);
+        }
+        s.push_str(" |\n");
+    }
+    s
+}
+
 /// Explain/rules dump: CORE plus every profile's extras so `explain PEPPOL-EN16931-R010` works.
 pub fn catalogue() -> &'static [Rule] {
     static CELL: std::sync::OnceLock<Vec<Rule>> = std::sync::OnceLock::new();
@@ -512,6 +545,295 @@ fn br_co_24(invoice: &Invoice, report: &mut Report) {
                 ));
             }
         }
+    }
+}
+
+fn br_12(invoice: &Invoice, report: &mut Report) {
+    if invoice.totals.as_ref().and_then(|t| t.line_net).is_none() {
+        report.push(Finding::fatal(
+            "BR-12",
+            Path::term(BtId(106)),
+            "An Invoice shall have the Sum of Invoice line net amount (BT-106)",
+        ));
+    }
+}
+
+fn br_13(invoice: &Invoice, report: &mut Report) {
+    if invoice
+        .totals
+        .as_ref()
+        .and_then(|t| t.without_tax)
+        .is_none()
+    {
+        report.push(Finding::fatal(
+            "BR-13",
+            Path::term(BtId(109)),
+            "An Invoice shall have the Invoice total amount without VAT (BT-109)",
+        ));
+    }
+}
+
+fn br_14(invoice: &Invoice, report: &mut Report) {
+    if invoice.totals.as_ref().and_then(|t| t.with_tax).is_none() {
+        report.push(Finding::fatal(
+            "BR-14",
+            Path::term(BtId(112)),
+            "An Invoice shall have the Invoice total amount with VAT (BT-112)",
+        ));
+    }
+}
+
+fn br_15(invoice: &Invoice, report: &mut Report) {
+    // BR-15: PayableAmount (BT-115). Present once BG-22 exists (non-Option on DocumentTotals);
+    // missing whole BG-22 still fires.
+    if invoice.totals.is_none() {
+        report.push(Finding::fatal(
+            "BR-15",
+            Path::term(BtId(115)),
+            "An Invoice shall have the Amount due for payment (BT-115)",
+        ));
+    }
+}
+
+fn br_19(invoice: &Invoice, report: &mut Report) {
+    // BR-19: Seller tax representative postal address (BG-12) if BG-11 is used.
+    if let Some(tr) = invoice.tax_representative.as_ref()
+        && tr.address.is_none()
+    {
+        report.push(Finding::fatal(
+            "BR-19",
+            Path::term(BtId(64)),
+            "The Seller tax representative postal address (BG-12) shall be provided if BG-11 is used",
+        ));
+    }
+}
+
+fn br_31(_invoice: &Invoice, _report: &mut Report) {
+    // BR-31: AllowanceCharge.amount is not Option (BT-92); type-retired.
+}
+
+fn br_32(invoice: &Invoice, report: &mut Report) {
+    for (i, a) in invoice.document_allowances.iter().enumerate() {
+        if a.tax
+            .as_ref()
+            .map(|t| t.code.trim())
+            .unwrap_or("")
+            .is_empty()
+        {
+            report.push(Finding::fatal(
+                "BR-32",
+                Path::at_term(Group::DocumentAllowance, i, BtId(95)),
+                "Each Document level allowance (BG-20) shall have a VAT category code (BT-95)",
+            ));
+        }
+    }
+}
+
+fn br_33(invoice: &Invoice, report: &mut Report) {
+    for (i, a) in invoice.document_allowances.iter().enumerate() {
+        if !reason_or_code(a.reason.as_deref(), a.reason_code.as_ref()) {
+            report.push(Finding::fatal(
+                "BR-33",
+                Path::at_term(Group::DocumentAllowance, i, BtId(97)),
+                "Each Document level allowance (BG-20) shall have a reason (BT-97) or reason code (BT-98)",
+            ));
+        }
+    }
+}
+
+fn br_36(_invoice: &Invoice, _report: &mut Report) {
+    // BR-36: charge amount is not Option (BT-99); type-retired.
+}
+
+fn br_37(invoice: &Invoice, report: &mut Report) {
+    for (i, a) in invoice.document_charges.iter().enumerate() {
+        if a.tax
+            .as_ref()
+            .map(|t| t.code.trim())
+            .unwrap_or("")
+            .is_empty()
+        {
+            report.push(Finding::fatal(
+                "BR-37",
+                Path::at_term(Group::DocumentCharge, i, BtId(102)),
+                "Each Document level charge (BG-21) shall have a VAT category code (BT-102)",
+            ));
+        }
+    }
+}
+
+fn br_38(invoice: &Invoice, report: &mut Report) {
+    for (i, a) in invoice.document_charges.iter().enumerate() {
+        if !reason_or_code(a.reason.as_deref(), a.reason_code.as_ref()) {
+            report.push(Finding::fatal(
+                "BR-38",
+                Path::at_term(Group::DocumentCharge, i, BtId(104)),
+                "Each Document level charge (BG-21) shall have a reason (BT-104) or reason code (BT-105)",
+            ));
+        }
+    }
+}
+
+fn br_41(_invoice: &Invoice, _report: &mut Report) {
+    // BR-41: line allowance amount is not Option (BT-136); type-retired.
+}
+
+fn br_42(invoice: &Invoice, report: &mut Report) {
+    for (i, line) in invoice.lines.iter().enumerate() {
+        for a in &line.allowances {
+            if !reason_or_code(a.reason.as_deref(), a.reason_code.as_ref()) {
+                report.push(Finding::fatal(
+                    "BR-42",
+                    Path::at_term(Group::Line, i, BtId(139)),
+                    "Each Invoice line allowance (BG-27) shall have a reason or reason code",
+                ));
+            }
+        }
+    }
+}
+
+fn br_43(_invoice: &Invoice, _report: &mut Report) {
+    // BR-43: line charge amount is not Option (BT-141); type-retired.
+}
+
+fn br_44(invoice: &Invoice, report: &mut Report) {
+    for (i, line) in invoice.lines.iter().enumerate() {
+        for a in &line.charges {
+            if !reason_or_code(a.reason.as_deref(), a.reason_code.as_ref()) {
+                report.push(Finding::fatal(
+                    "BR-44",
+                    Path::at_term(Group::Line, i, BtId(144)),
+                    "Each Invoice line charge shall have a reason or reason code",
+                ));
+            }
+        }
+    }
+}
+
+fn br_45(_invoice: &Invoice, _report: &mut Report) {
+    // BR-45: TaxBreakdown.taxable is not Option (BT-116); type-retired.
+}
+
+fn br_46(_invoice: &Invoice, _report: &mut Report) {
+    // BR-46: TaxBreakdown.tax is not Option (BT-117); type-retired.
+}
+
+fn br_47(invoice: &Invoice, report: &mut Report) {
+    for (i, row) in invoice.tax_breakdown.iter().enumerate() {
+        if row.category.as_str().trim().is_empty() {
+            report.push(Finding::fatal(
+                "BR-47",
+                Path::at_term(Group::TaxBreakdown, i, BtId(118)),
+                "Each VAT breakdown (BG-23) shall be defined through a VAT category code (BT-118)",
+            ));
+        }
+    }
+}
+
+fn br_48(invoice: &Invoice, report: &mut Report) {
+    for (i, row) in invoice.tax_breakdown.iter().enumerate() {
+        let cat = row.category.as_str();
+        // EN O has no BT-119. TTX has no IBT-119 (ALIGNED-IBRP-048).
+        if cat == "O" || cat == "TTX" || row.scheme.eq_ignore_ascii_case("AAL") {
+            continue;
+        }
+        if row.rate.is_none() {
+            report.push(Finding::fatal(
+                "BR-48",
+                Path::at_term(Group::TaxBreakdown, i, BtId(119)),
+                "Each VAT breakdown (BG-23) shall have a VAT category rate (BT-119), except if not subject to VAT",
+            ));
+        }
+    }
+}
+
+fn br_49(invoice: &Invoice, report: &mut Report) {
+    let Some(pay) = invoice.payment.as_ref() else {
+        return;
+    };
+    if pay
+        .means_code
+        .as_ref()
+        .map(|c| c.as_str().trim().is_empty())
+        .unwrap_or(true)
+    {
+        report.push(Finding::fatal(
+            "BR-49",
+            Path::term(BtId(81)),
+            "A Payment instruction (BG-16) shall specify the Payment means type code (BT-81)",
+        ));
+    }
+}
+
+fn br_50(invoice: &Invoice, report: &mut Report) {
+    let Some(pay) = invoice.payment.as_ref() else {
+        return;
+    };
+    let Some(crate::payment::PaymentMeans::CreditTransfer(accts)) = pay.means.as_ref() else {
+        return;
+    };
+    if accts.is_empty() || accts.iter().any(|a| a.account_id.value.trim().is_empty()) {
+        report.push(Finding::fatal(
+            "BR-50",
+            Path::term(BtId(84)),
+            "A Payment account identifier (BT-84) shall be present if Credit transfer (BG-17) is used",
+        ));
+    }
+}
+
+fn br_61(invoice: &Invoice, report: &mut Report) {
+    let Some(pay) = invoice.payment.as_ref() else {
+        return;
+    };
+    let code = pay
+        .means_code
+        .as_ref()
+        .map(|c| c.as_str().trim())
+        .unwrap_or("");
+    if code != "30" && code != "58" {
+        return;
+    }
+    let has_account = matches!(
+        pay.means.as_ref(),
+        Some(crate::payment::PaymentMeans::CreditTransfer(a))
+            if a.iter().any(|x| !x.account_id.value.trim().is_empty())
+    );
+    if !has_account {
+        report.push(Finding::fatal(
+            "BR-61",
+            Path::term(BtId(84)),
+            "If BT-81 is 30 or 58 (credit transfer), the Payment account identifier (BT-84) shall be present",
+        ));
+    }
+}
+
+fn br_co_26(invoice: &Invoice, report: &mut Report) {
+    // BR-CO-26: BT-29 (not SEPA) and/or BT-30 and/or BT-31. Skip Pint/PintMy (IBR-02/04).
+    if matches!(
+        invoice.profile,
+        crate::profile::Profile::Pint | crate::profile::Profile::PintMy
+    ) {
+        return;
+    }
+    let p = &invoice.seller;
+    let vat = p
+        .vat_identifier
+        .as_ref()
+        .is_some_and(|i| !i.value.trim().is_empty());
+    let legal = p
+        .legal_registration
+        .as_ref()
+        .is_some_and(|i| !i.value.trim().is_empty());
+    let ident = p
+        .identifiers
+        .iter()
+        .any(|i| i.scheme.as_deref() != Some("SEPA") && !i.value.trim().is_empty());
+    if !(vat || legal || ident) {
+        report.push(Finding::fatal(
+            "BR-CO-26",
+            Path::group_term(Group::Seller, BtId(29)),
+            "Seller identifier (BT-29), legal registration (BT-30) and/or VAT identifier (BT-31) shall be present",
+        ));
     }
 }
 
@@ -1378,6 +1700,167 @@ pub static ALL: &[Rule] = &[
         eval: br_co_24,
     },
     Rule {
+        id: "BR-12",
+        severity: Severity::Fatal,
+        text: "An Invoice shall have the Sum of Invoice line net amount (BT-106).",
+        source: Source::Both,
+        eval: br_12,
+    },
+    Rule {
+        id: "BR-13",
+        severity: Severity::Fatal,
+        text: "An Invoice shall have the Invoice total amount without VAT (BT-109).",
+        source: Source::Both,
+        eval: br_13,
+    },
+    Rule {
+        id: "BR-14",
+        severity: Severity::Fatal,
+        text: "An Invoice shall have the Invoice total amount with VAT (BT-112).",
+        source: Source::Both,
+        eval: br_14,
+    },
+    Rule {
+        id: "BR-15",
+        severity: Severity::Fatal,
+        text: "An Invoice shall have the Amount due for payment (BT-115).",
+        source: Source::Both,
+        eval: br_15,
+    },
+    Rule {
+        id: "BR-19",
+        severity: Severity::Fatal,
+        text: "The Seller tax representative postal address (BG-12) shall be provided if BG-11 is used.",
+        source: Source::Both,
+        eval: br_19,
+    },
+    Rule {
+        id: "BR-31",
+        severity: Severity::Fatal,
+        text: "Each Document level allowance (BG-20) shall have a Document level allowance amount (BT-92).",
+        source: Source::Both,
+        eval: br_31,
+    },
+    Rule {
+        id: "BR-32",
+        severity: Severity::Fatal,
+        text: "Each Document level allowance (BG-20) shall have a VAT category code (BT-95).",
+        source: Source::Both,
+        eval: br_32,
+    },
+    Rule {
+        id: "BR-33",
+        severity: Severity::Fatal,
+        text: "Each Document level allowance (BG-20) shall have a reason (BT-97) or reason code (BT-98).",
+        source: Source::Both,
+        eval: br_33,
+    },
+    Rule {
+        id: "BR-36",
+        severity: Severity::Fatal,
+        text: "Each Document level charge (BG-21) shall have a Document level charge amount (BT-99).",
+        source: Source::Both,
+        eval: br_36,
+    },
+    Rule {
+        id: "BR-37",
+        severity: Severity::Fatal,
+        text: "Each Document level charge (BG-21) shall have a VAT category code (BT-102).",
+        source: Source::Both,
+        eval: br_37,
+    },
+    Rule {
+        id: "BR-38",
+        severity: Severity::Fatal,
+        text: "Each Document level charge (BG-21) shall have a reason (BT-104) or reason code (BT-105).",
+        source: Source::Both,
+        eval: br_38,
+    },
+    Rule {
+        id: "BR-41",
+        severity: Severity::Fatal,
+        text: "Each Invoice line allowance (BG-27) shall have an Invoice line allowance amount (BT-136).",
+        source: Source::Both,
+        eval: br_41,
+    },
+    Rule {
+        id: "BR-42",
+        severity: Severity::Fatal,
+        text: "Each Invoice line allowance (BG-27) shall have a reason or reason code.",
+        source: Source::Both,
+        eval: br_42,
+    },
+    Rule {
+        id: "BR-43",
+        severity: Severity::Fatal,
+        text: "Each Invoice line charge (BG-28) shall have an Invoice line charge amount (BT-141).",
+        source: Source::Both,
+        eval: br_43,
+    },
+    Rule {
+        id: "BR-44",
+        severity: Severity::Fatal,
+        text: "Each Invoice line charge shall have a reason or reason code.",
+        source: Source::Both,
+        eval: br_44,
+    },
+    Rule {
+        id: "BR-45",
+        severity: Severity::Fatal,
+        text: "Each VAT breakdown (BG-23) shall have a VAT category taxable amount (BT-116).",
+        source: Source::Both,
+        eval: br_45,
+    },
+    Rule {
+        id: "BR-46",
+        severity: Severity::Fatal,
+        text: "Each VAT breakdown (BG-23) shall have a VAT category tax amount (BT-117).",
+        source: Source::Both,
+        eval: br_46,
+    },
+    Rule {
+        id: "BR-47",
+        severity: Severity::Fatal,
+        text: "Each VAT breakdown (BG-23) shall be defined through a VAT category code (BT-118).",
+        source: Source::Both,
+        eval: br_47,
+    },
+    Rule {
+        id: "BR-48",
+        severity: Severity::Fatal,
+        text: "Each VAT breakdown (BG-23) shall have a VAT category rate (BT-119), except if not subject to VAT.",
+        source: Source::Both,
+        eval: br_48,
+    },
+    Rule {
+        id: "BR-49",
+        severity: Severity::Fatal,
+        text: "A Payment instruction (BG-16) shall specify the Payment means type code (BT-81).",
+        source: Source::Both,
+        eval: br_49,
+    },
+    Rule {
+        id: "BR-50",
+        severity: Severity::Fatal,
+        text: "A Payment account identifier (BT-84) shall be present if Credit transfer (BG-17) is used.",
+        source: Source::Both,
+        eval: br_50,
+    },
+    Rule {
+        id: "BR-61",
+        severity: Severity::Fatal,
+        text: "If BT-81 is 30 or 58, the Payment account identifier (BT-84) shall be present.",
+        source: Source::Both,
+        eval: br_61,
+    },
+    Rule {
+        id: "BR-CO-26",
+        severity: Severity::Fatal,
+        text: "Seller identifier (BT-29), legal registration (BT-30) and/or VAT identifier (BT-31) shall be present.",
+        source: Source::Both,
+        eval: br_co_26,
+    },
+    Rule {
         id: "BR-CO-03",
         severity: Severity::Fatal,
         text: "Value added tax point date (BT-7) and Value added tax point date code (BT-8) are mutually exclusive.",
@@ -1660,6 +2143,26 @@ mod tests {
     use crate::code::Code;
 
     #[test]
+    fn matrix_lists_catalogue_ids() {
+        let matrix = crate::conformance_matrix();
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/matrix.md");
+        let on_disk = std::fs::read_to_string(&path).expect("docs/matrix.md");
+        assert_eq!(
+            on_disk, matrix,
+            "docs/matrix.md is stale; replace it with core_invoice::conformance_matrix()"
+        );
+        for rule in catalogue() {
+            assert!(
+                matrix.contains(rule.id),
+                "{} missing from generated matrix",
+                rule.id
+            );
+        }
+        assert!(matrix.contains("Not a legal validator"));
+        assert!(matrix.contains("CORE"));
+    }
+
+    #[test]
     fn padding_matches() {
         assert!(matches_id("BR-02", "br-2"));
         assert!(matches_id("BR-CO-16", "BR-CO-16"));
@@ -1874,5 +2377,242 @@ mod tests {
             report.findings.iter().all(|f| f.id != "BR-CO-17"),
             "{report}"
         );
+    }
+
+    #[test]
+    fn br_12_15_fire_when_totals_absent() {
+        let inv = crate::invoice::Invoice::blank(
+            crate::profile::Profile::En16931,
+            "1",
+            "EUR",
+            {
+                let mut p = crate::invoice::Party::new("S", "DE");
+                p.vat_identifier = Some(crate::identifier::Identifier::new("DE123456789"));
+                p
+            },
+            crate::invoice::Party::new("B", "FR"),
+        );
+        let report = crate::validate::validate(&inv);
+        for id in ["BR-12", "BR-13", "BR-14", "BR-15"] {
+            assert!(report.findings.iter().any(|f| f.id == id), "{id}: {report}");
+            assert!(explain(id).is_some());
+        }
+    }
+
+    #[test]
+    fn br_19_tax_rep_needs_address() {
+        let mut inv = crate::invoice::Invoice::blank(
+            crate::profile::Profile::En16931,
+            "1",
+            "EUR",
+            crate::invoice::Party::new("S", "DE"),
+            crate::invoice::Party::new("B", "FR"),
+        );
+        inv.tax_representative = Some(crate::invoice::TaxRepresentative {
+            name: "R".into(),
+            vat_identifier: Some(crate::identifier::Identifier::new("DE1")),
+            address: None,
+        });
+        let report = crate::validate::validate(&inv);
+        assert!(report.findings.iter().any(|f| f.id == "BR-19"), "{report}");
+    }
+
+    #[test]
+    fn br_32_33_on_document_allowance() {
+        let mut inv = crate::invoice::Invoice::blank(
+            crate::profile::Profile::En16931,
+            "1",
+            "EUR",
+            crate::invoice::Party::new("S", "DE"),
+            crate::invoice::Party::new("B", "FR"),
+        );
+        inv.document_allowances
+            .push(crate::invoice::AllowanceCharge {
+                amount: crate::amount::InvoiceAmount::parse("1.00").unwrap(),
+                base: None,
+                percent: None,
+                reason: None,
+                reason_code: None,
+                tax: None,
+            });
+        let report = crate::validate::validate(&inv);
+        assert!(report.findings.iter().any(|f| f.id == "BR-32"), "{report}");
+        assert!(report.findings.iter().any(|f| f.id == "BR-33"), "{report}");
+        assert!(explain("BR-31").unwrap().contains("BT-92"));
+        assert!(explain("BR-36").unwrap().contains("BT-99"));
+        assert!(explain("BR-41").unwrap().contains("BT-136"));
+        assert!(explain("BR-43").unwrap().contains("BT-141"));
+        assert!(explain("BR-45").unwrap().contains("BT-116"));
+        assert!(explain("BR-46").unwrap().contains("BT-117"));
+    }
+
+    #[test]
+    fn br_48_skips_o_and_ttx() {
+        use crate::invoice::TaxBreakdown;
+        let mut inv = crate::invoice::Invoice::blank(
+            crate::profile::Profile::En16931,
+            "1",
+            "EUR",
+            crate::invoice::Party::new("S", "DE"),
+            crate::invoice::Party::new("B", "FR"),
+        );
+        inv.tax_breakdown.push(TaxBreakdown {
+            system: crate::tax::TaxSystem::Vat,
+            scheme: "VAT".into(),
+            category: Code::new("S"),
+            rate: None,
+            taxable: crate::amount::InvoiceAmount::parse("1.00").unwrap(),
+            tax: crate::amount::InvoiceAmount::ZERO,
+            exemption_reason: None,
+            exemption_code: None,
+        });
+        let report = crate::validate::validate(&inv);
+        assert!(report.findings.iter().any(|f| f.id == "BR-48"), "{report}");
+        inv.tax_breakdown[0].category = Code::new("O");
+        assert!(
+            crate::validate::validate(&inv)
+                .findings
+                .iter()
+                .all(|f| f.id != "BR-48")
+        );
+        inv.tax_breakdown[0].category = Code::new("TTX");
+        inv.tax_breakdown[0].scheme = "AAL".into();
+        assert!(
+            crate::validate::validate(&inv)
+                .findings
+                .iter()
+                .all(|f| f.id != "BR-48")
+        );
+        inv.tax_breakdown[0].category = Code::new("");
+        assert!(
+            crate::validate::validate(&inv)
+                .findings
+                .iter()
+                .any(|f| f.id == "BR-47")
+        );
+    }
+
+    #[test]
+    fn br_49_50_61_payment() {
+        let mut inv = crate::invoice::Invoice::blank(
+            crate::profile::Profile::En16931,
+            "1",
+            "EUR",
+            crate::invoice::Party::new("S", "DE"),
+            crate::invoice::Party::new("B", "FR"),
+        );
+        inv.payment = Some(crate::invoice::PaymentInstructions {
+            means_code: None,
+            means_text: None,
+            remittance: None,
+            means: None,
+        });
+        let report = crate::validate::validate(&inv);
+        assert!(report.findings.iter().any(|f| f.id == "BR-49"), "{report}");
+        inv.payment = Some(crate::invoice::PaymentInstructions {
+            means_code: Some(Code::new("30")),
+            means_text: None,
+            remittance: None,
+            means: Some(crate::payment::PaymentMeans::CreditTransfer(vec![
+                crate::payment::CreditTransfer {
+                    account_id: crate::identifier::Identifier::new(""),
+                    account_name: None,
+                    provider: None,
+                },
+            ])),
+        });
+        let report = crate::validate::validate(&inv);
+        assert!(report.findings.iter().any(|f| f.id == "BR-50"), "{report}");
+        assert!(report.findings.iter().any(|f| f.id == "BR-61"), "{report}");
+        inv.payment = Some(crate::invoice::PaymentInstructions {
+            means_code: Some(Code::new("48")),
+            means_text: None,
+            remittance: None,
+            means: Some(crate::payment::PaymentMeans::Card(
+                crate::payment::PaymentCard {
+                    pan: "4111".into(),
+                    holder: None,
+                },
+            )),
+        });
+        let report = crate::validate::validate(&inv);
+        assert!(report.findings.iter().all(|f| f.id != "BR-50"), "{report}");
+        assert!(report.findings.iter().all(|f| f.id != "BR-61"), "{report}");
+    }
+
+    #[test]
+    fn br_co_26_seller_identifiable() {
+        let mut inv = crate::invoice::Invoice::blank(
+            crate::profile::Profile::En16931,
+            "1",
+            "EUR",
+            crate::invoice::Party::new("S", "DE"),
+            crate::invoice::Party::new("B", "FR"),
+        );
+        let report = crate::validate::validate(&inv);
+        assert!(
+            report.findings.iter().any(|f| f.id == "BR-CO-26"),
+            "{report}"
+        );
+        inv.seller.vat_identifier = Some(crate::identifier::Identifier::new("DE123"));
+        assert!(
+            crate::validate::validate(&inv)
+                .findings
+                .iter()
+                .all(|f| f.id != "BR-CO-26")
+        );
+        let my = crate::invoice::Invoice::blank(
+            crate::profile::Profile::PintMy,
+            "1",
+            "MYR",
+            crate::invoice::Party::new("S", "MY"),
+            crate::invoice::Party::new("B", "MY"),
+        );
+        assert!(
+            crate::validate::validate(&my)
+                .findings
+                .iter()
+                .all(|f| f.id != "BR-CO-26")
+        );
+        assert!(explain("BR-CO-26").unwrap().contains("BT-29"));
+        assert!(explain("BR-42").is_some());
+        assert!(explain("BR-44").is_some());
+        assert!(explain("BR-37").is_some());
+        assert!(explain("BR-38").is_some());
+    }
+
+    #[test]
+    fn br_42_44_line_ac_reason() {
+        let mut inv = crate::invoice::Invoice::blank(
+            crate::profile::Profile::En16931,
+            "1",
+            "EUR",
+            crate::invoice::Party::new("S", "DE"),
+            crate::invoice::Party::new("B", "FR"),
+        );
+        let mut line = crate::invoice::Line::new(
+            "1",
+            "A",
+            crate::amount::InvoiceAmount::parse("1.00").unwrap(),
+            crate::tax::TaxCategory::vat("S", rust_decimal::Decimal::from(19)),
+        );
+        line.allowances.push(crate::invoice::LineAllowanceCharge {
+            amount: crate::amount::InvoiceAmount::parse("1.00").unwrap(),
+            base: None,
+            percent: None,
+            reason: None,
+            reason_code: None,
+        });
+        line.charges.push(crate::invoice::LineAllowanceCharge {
+            amount: crate::amount::InvoiceAmount::parse("1.00").unwrap(),
+            base: None,
+            percent: None,
+            reason: None,
+            reason_code: None,
+        });
+        inv.lines = vec![line];
+        let report = crate::validate::validate(&inv);
+        assert!(report.findings.iter().any(|f| f.id == "BR-42"), "{report}");
+        assert!(report.findings.iter().any(|f| f.id == "BR-44"), "{report}");
     }
 }

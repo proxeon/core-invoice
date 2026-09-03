@@ -235,6 +235,11 @@ pub fn read(xml: &str) -> Result<Read, FormatError> {
             )));
         }
     };
+    let root_name = if kind == DocumentKind::CreditNote {
+        "CreditNote"
+    } else {
+        "Invoice"
+    };
     let customization = child_text(root, "CustomizationID");
     // Unknown BT-24 stays unknown; CORE-SPEC-01 is Fatal. Do not silently select En16931.
     let profile = match customization.as_deref() {
@@ -259,7 +264,7 @@ pub fn read(xml: &str) -> Result<Read, FormatError> {
     invoice.kind = kind;
     invoice.specification_id = customization;
     invoice.business_process = child_text(root, "ProfileID");
-    invoice.issue_date = child_text(root, "IssueDate").and_then(|s| Date::parse(&s).ok());
+    invoice.issue_date = child_date(root, "IssueDate", &mut malformed, root_name);
     let type_tag = if kind == DocumentKind::CreditNote {
         "CreditNoteTypeCode"
     } else {
@@ -267,14 +272,13 @@ pub fn read(xml: &str) -> Result<Read, FormatError> {
     };
     invoice.type_code = child_text(root, type_tag).map(Code::new);
     invoice.tax_currency = child_text(root, "TaxCurrencyCode").map(Code::new);
-    if let Some(d) = child_text(root, "DueDate").and_then(|s| Date::parse(&s).ok()) {
+    if let Some(d) = child_date(root, "DueDate", &mut malformed, root_name) {
         invoice.due_date = Some(d);
         if kind == DocumentKind::CreditNote {
-            // UBL 2.1 CreditNote has no DueDate child. LHDN samples still put BT-9 here.
-            // Store the date; do not treat it as a malformed amount (that would fail parse).
+            // UBL CreditNote has no DueDate. LHDN samples still put BT-9 here. Writer omits.
         }
     }
-    invoice.tax_point_date = child_text(root, "TaxPointDate").and_then(|s| Date::parse(&s).ok());
+    invoice.tax_point_date = child_date(root, "TaxPointDate", &mut malformed, root_name);
     invoice.notes = children(root, "Note")
         .filter_map(text)
         .map(read_note)
@@ -284,8 +288,8 @@ pub fn read(xml: &str) -> Result<Read, FormatError> {
         child_text(root, "BuyerReference").map(core_invoice::DocumentReference::new);
     if let Some(p) = child(root, "InvoicePeriod") {
         invoice.period = Some(Period {
-            start: child_text(p, "StartDate").and_then(|s| Date::parse(&s).ok()),
-            end: child_text(p, "EndDate").and_then(|s| Date::parse(&s).ok()),
+            start: child_date(p, "StartDate", &mut malformed, "InvoicePeriod"),
+            end: child_date(p, "EndDate", &mut malformed, "InvoicePeriod"),
         });
         invoice.tax_point_code = child_text(p, "DescriptionCode").map(Code::new);
     }
@@ -298,7 +302,7 @@ pub fn read(xml: &str) -> Result<Read, FormatError> {
             let r = child(n, "InvoiceDocumentReference")?;
             Some(core_invoice::PrecedingInvoice {
                 reference: DocumentReference::new(child_text(r, "ID")?),
-                issue_date: child_text(r, "IssueDate").and_then(|s| Date::parse(&s).ok()),
+                issue_date: child_date(r, "IssueDate", &mut malformed, "BillingReference"),
             })
         })
         .collect();
@@ -331,7 +335,7 @@ pub fn read(xml: &str) -> Result<Read, FormatError> {
     }
     invoice.payee = child(root, "PayeeParty").map(read_payee);
     invoice.tax_representative = child(root, "TaxRepresentativeParty").map(read_tax_rep);
-    invoice.delivery = child(root, "Delivery").map(read_delivery);
+    invoice.delivery = child(root, "Delivery").map(|n| read_delivery(n, &mut malformed));
     invoice.payment = child(root, "PaymentMeans").map(read_payment);
     invoice.payment_terms = child(root, "PaymentTerms").and_then(|n| child_text(n, "Note"));
     invoice.document_allowances = children(root, "AllowanceCharge")
@@ -382,15 +386,36 @@ pub fn read(xml: &str) -> Result<Read, FormatError> {
     invoice.lines = children(root, line_tag)
         .filter_map(|n| read_line(n, profile, kind, &mut malformed))
         .collect();
-    let root_name = if kind == DocumentKind::CreditNote {
-        "CreditNote"
-    } else {
-        "Invoice"
-    };
     let mut unmapped = unmapped_children(root, root_name, MAPPED_INVOICE_CHILDREN);
     for line in children(root, line_tag) {
         unmapped.extend(unmapped_children(line, line_tag, MAPPED_LINE_CHILDREN));
+        if let Some(item) = child(line, "Item") {
+            unmapped.extend(unmapped_children(item, "Item", MAPPED_ITEM_CHILDREN));
+        }
     }
+    for (parent, party) in [
+        (
+            "AccountingSupplierParty",
+            child(root, "AccountingSupplierParty").and_then(|n| child(n, "Party")),
+        ),
+        (
+            "AccountingCustomerParty",
+            child(root, "AccountingCustomerParty").and_then(|n| child(n, "Party")),
+        ),
+    ] {
+        let _ = parent;
+        if let Some(p) = party {
+            unmapped.extend(unmapped_children(p, "Party", MAPPED_PARTY_CHILDREN));
+            if let Some(addr) = child(p, "PostalAddress") {
+                unmapped.extend(unmapped_children(
+                    addr,
+                    "PostalAddress",
+                    MAPPED_ADDRESS_CHILDREN,
+                ));
+            }
+        }
+    }
+    report_duplicate_singletons(root, root_name, SINGLETON_INVOICE, &mut unmapped);
     Ok(Read {
         invoice,
         unmapped,
@@ -451,6 +476,59 @@ const MAPPED_LINE_CHILDREN: &[&str] = &[
     "Price",
 ];
 
+const MAPPED_ITEM_CHILDREN: &[&str] = &[
+    "Description",
+    "Name",
+    "BuyersItemIdentification",
+    "SellersItemIdentification",
+    "StandardItemIdentification",
+    "OriginCountry",
+    "CommodityClassification",
+    "ClassifiedTaxCategory",
+    "AdditionalItemProperty",
+];
+
+const MAPPED_PARTY_CHILDREN: &[&str] = &[
+    "EndpointID",
+    "PartyIdentification",
+    "PartyName",
+    "PostalAddress",
+    "PartyTaxScheme",
+    "PartyLegalEntity",
+    "Contact",
+];
+
+const MAPPED_ADDRESS_CHILDREN: &[&str] = &[
+    "StreetName",
+    "AdditionalStreetName",
+    "CityName",
+    "PostalZone",
+    "CountrySubentity",
+    "Country",
+];
+
+const SINGLETON_INVOICE: &[&str] = &[
+    "CustomizationID",
+    "ProfileID",
+    "ID",
+    "IssueDate",
+    "DueDate",
+    "InvoiceTypeCode",
+    "CreditNoteTypeCode",
+    "DocumentCurrencyCode",
+    "TaxCurrencyCode",
+    "AccountingCost",
+    "BuyerReference",
+    "InvoicePeriod",
+    "OrderReference",
+    "LegalMonetaryTotal",
+    "PayeeParty",
+    "TaxRepresentativeParty",
+    "Delivery",
+    "PaymentMeans",
+    "PaymentTerms",
+];
+
 fn unmapped_children(node: roxmltree::Node<'_, '_>, parent: &str, mapped: &[&str]) -> Vec<String> {
     node.children()
         .filter(|n| n.is_element())
@@ -458,6 +536,28 @@ fn unmapped_children(node: roxmltree::Node<'_, '_>, parent: &str, mapped: &[&str
         .filter(|name| !mapped.contains(name))
         .map(|name| format!("{parent}/{name}"))
         .collect()
+}
+
+fn report_duplicate_singletons(
+    node: roxmltree::Node<'_, '_>,
+    parent: &str,
+    names: &[&str],
+    unmapped: &mut Vec<String>,
+) {
+    for name in names {
+        if children(node, name).count() > 1 {
+            unmapped.push(format!("{parent}/{name} (duplicate)"));
+        }
+    }
+}
+
+/// UBL CreditNote has no DueDate. LHDN samples still put BT-9 here. Writer omits.
+pub fn write_drops(invoice: &Invoice) -> Vec<String> {
+    let mut drops = Vec::new();
+    if invoice.kind == DocumentKind::CreditNote && invoice.due_date.is_some() {
+        drops.push("CreditNote/DueDate".into());
+    }
+    drops
 }
 
 fn charge_indicator(node: roxmltree::Node<'_, '_>) -> Option<bool> {
@@ -823,9 +923,17 @@ fn write_allowance(
 
 fn write_tax_total(s: &mut String, invoice: &Invoice, cur: &str) {
     // First TaxTotal @currencyID = BT-5 is BT-110 + BG-23. Second TaxTotal @currencyID = BT-6 is BT-111, no TaxSubtotal.
+    if invoice.tax_total().is_none() && invoice.tax_breakdown.is_empty() {
+        return;
+    }
     open(s, 1, "TaxTotal");
-    let tax = invoice.tax_total();
-    amount(s, 2, "TaxAmount", tax, cur);
+    amount(
+        s,
+        2,
+        "TaxAmount",
+        invoice.tax_total().unwrap_or(Amount::ZERO),
+        cur,
+    );
     for row in &invoice.tax_breakdown {
         open(s, 2, "TaxSubtotal");
         amount(s, 3, "TaxableAmount", row.taxable, cur);
@@ -862,33 +970,35 @@ fn write_tax_total(s: &mut String, invoice: &Invoice, cur: &str) {
 }
 
 fn write_totals(s: &mut String, invoice: &Invoice, cur: &str) {
+    // UBL MonetaryTotalType sequence: LineExtension, TaxExclusive, TaxInclusive,
+    // AllowanceTotal, ChargeTotal, Prepaid, PayableRounding, Payable.
+    let Some(t) = invoice.totals.as_ref() else {
+        // Absent BG-22 is not 0.00.
+        return;
+    };
     open(s, 1, "LegalMonetaryTotal");
-    if let Some(t) = invoice.totals.as_ref() {
-        if let Some(v) = t.line_net {
-            amount(s, 2, "LineExtensionAmount", v, cur);
-        }
-        if let Some(v) = t.allowance_total {
-            amount(s, 2, "AllowanceTotalAmount", v, cur);
-        }
-        if let Some(v) = t.charge_total {
-            amount(s, 2, "ChargeTotalAmount", v, cur);
-        }
-        if let Some(v) = t.without_tax {
-            amount(s, 2, "TaxExclusiveAmount", v, cur);
-        }
-        if let Some(v) = t.with_tax {
-            amount(s, 2, "TaxInclusiveAmount", v, cur);
-        }
-        if let Some(v) = t.paid {
-            amount(s, 2, "PrepaidAmount", v, cur);
-        }
-        if let Some(v) = t.rounding {
-            amount(s, 2, "PayableRoundingAmount", v, cur);
-        }
-        amount(s, 2, "PayableAmount", t.payable, cur);
-    } else {
-        amount(s, 2, "PayableAmount", invoice.payable(), cur);
+    if let Some(v) = t.line_net {
+        amount(s, 2, "LineExtensionAmount", v, cur);
     }
+    if let Some(v) = t.without_tax {
+        amount(s, 2, "TaxExclusiveAmount", v, cur);
+    }
+    if let Some(v) = t.with_tax {
+        amount(s, 2, "TaxInclusiveAmount", v, cur);
+    }
+    if let Some(v) = t.allowance_total {
+        amount(s, 2, "AllowanceTotalAmount", v, cur);
+    }
+    if let Some(v) = t.charge_total {
+        amount(s, 2, "ChargeTotalAmount", v, cur);
+    }
+    if let Some(v) = t.paid {
+        amount(s, 2, "PrepaidAmount", v, cur);
+    }
+    if let Some(v) = t.rounding {
+        amount(s, 2, "PayableRoundingAmount", v, cur);
+    }
+    amount(s, 2, "PayableAmount", t.payable, cur);
     close(s, 1, "LegalMonetaryTotal");
 }
 
@@ -1057,6 +1167,18 @@ fn write_line(
             let unit = price.base_unit.as_ref().map(|c| ("unitCode", c.as_str()));
             leaf(s, 3, "BaseQuantity", &q.to_string(), unit);
         }
+        if price.discount.is_some() || price.gross.is_some() {
+            // R044: Price/AllowanceCharge is an allowance (ChargeIndicator false). BT-147 Amount, BT-148 BaseAmount.
+            open(s, 3, "AllowanceCharge");
+            leaf(s, 4, "ChargeIndicator", "false", None);
+            if let Some(d) = price.discount {
+                amount_unit(s, 4, "Amount", d, cur);
+            }
+            if let Some(g) = price.gross {
+                amount_unit(s, 4, "BaseAmount", g, cur);
+            }
+            close(s, 3, "AllowanceCharge");
+        }
         close(s, 2, "Price");
     }
     close(s, 1, line_tag);
@@ -1193,7 +1315,7 @@ fn read_tax_rep(node: roxmltree::Node<'_, '_>) -> TaxRepresentative {
     }
 }
 
-fn read_delivery(node: roxmltree::Node<'_, '_>) -> Delivery {
+fn read_delivery(node: roxmltree::Node<'_, '_>, malformed: &mut Vec<String>) -> Delivery {
     let loc = child(node, "DeliveryLocation").and_then(|n| child(n, "Address"));
     let country = loc
         .and_then(|a| child(a, "Country"))
@@ -1206,7 +1328,7 @@ fn read_delivery(node: roxmltree::Node<'_, '_>) -> Delivery {
         location_id: child(node, "DeliveryLocation")
             .and_then(|n| child(n, "ID"))
             .map(ident),
-        date: child_text(node, "ActualDeliveryDate").and_then(|s| Date::parse(&s).ok()),
+        date: child_date(node, "ActualDeliveryDate", malformed, "Delivery"),
         address: country.map(|c| core_invoice::PostalAddress {
             line1: None,
             line2: None,
@@ -1407,10 +1529,17 @@ fn read_line(
         .map(Code::new);
     let price = child(node, "Price").and_then(|p| {
         let net = child_text(p, "PriceAmount").and_then(|t| UnitPriceAmount::parse(&t).ok())?;
+        let ac = children(p, "AllowanceCharge").find(|n| charge_indicator(*n) == Some(false));
         Some(core_invoice::Price {
             net,
-            discount: None,
-            gross: None,
+            // BT-147 is UnitPriceAmount (uncapped decimals), not InvoiceAmount.
+            discount: ac
+                .and_then(|n| child_text(n, "Amount"))
+                .and_then(|t| UnitPriceAmount::parse(&t).ok()),
+            // BT-148 BaseAmount is the gross unit price.
+            gross: ac
+                .and_then(|n| child_text(n, "BaseAmount"))
+                .and_then(|t| UnitPriceAmount::parse(&t).ok()),
             base_qty: child_text(p, "BaseQuantity").and_then(|t| Quantity::parse(&t).ok()),
             base_unit: child(p, "BaseQuantity")
                 .and_then(|n| n.attribute("unitCode"))
@@ -1418,8 +1547,8 @@ fn read_line(
         })
     });
     let period = child(node, "InvoicePeriod").map(|p| Period {
-        start: child_text(p, "StartDate").and_then(|s| Date::parse(&s).ok()),
-        end: child_text(p, "EndDate").and_then(|s| Date::parse(&s).ok()),
+        start: child_date(p, "StartDate", malformed, "InvoiceLine/InvoicePeriod"),
+        end: child_date(p, "EndDate", malformed, "InvoiceLine/InvoicePeriod"),
     });
     let allowances = children(node, "AllowanceCharge")
         .filter(|n| charge_indicator(*n) == Some(false))
@@ -1581,6 +1710,22 @@ fn text(node: roxmltree::Node<'_, '_>) -> Option<String> {
 
 fn child_text(node: roxmltree::Node<'_, '_>, name: &str) -> Option<String> {
     child(node, name).and_then(text)
+}
+
+fn child_date(
+    node: roxmltree::Node<'_, '_>,
+    name: &str,
+    malformed: &mut Vec<String>,
+    path: &str,
+) -> Option<Date> {
+    let s = child_text(node, name)?;
+    match Date::parse(&s) {
+        Ok(d) => Some(d),
+        Err(_) => {
+            malformed.push(format!("{path}/{name}: {s}"));
+            None
+        }
+    }
 }
 
 fn child_amount(
@@ -2090,5 +2235,132 @@ mod tests {
     fn sniff_skips_comment() {
         let xml = "<!-- Invoice in a comment --><CreditNote xmlns='urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2'/>";
         assert_eq!(sniff(xml).unwrap(), DocumentKind::CreditNote);
+    }
+
+    #[test]
+    fn legal_monetary_total_follows_xsd_sequence() {
+        let mut inv = sample();
+        let t = inv.totals.as_mut().unwrap();
+        t.allowance_total = Some(Amount::parse("1.00").unwrap());
+        t.charge_total = Some(Amount::parse("2.00").unwrap());
+        t.paid = Some(Amount::parse("3.00").unwrap());
+        t.rounding = Some(Amount::parse("0.01").unwrap());
+        let xml = write_unchecked(&inv);
+        let line = xml.find("LineExtensionAmount").unwrap();
+        let excl = xml.find("TaxExclusiveAmount").unwrap();
+        let incl = xml.find("TaxInclusiveAmount").unwrap();
+        let allw = xml.find("AllowanceTotalAmount").unwrap();
+        let chg = xml.find("ChargeTotalAmount").unwrap();
+        let paid = xml.find("PrepaidAmount").unwrap();
+        let round = xml.find("PayableRoundingAmount").unwrap();
+        let pay = xml.find("PayableAmount").unwrap();
+        assert!(
+            line < excl
+                && excl < incl
+                && incl < allw
+                && allw < chg
+                && chg < paid
+                && paid < round
+                && round < pay,
+            "{xml}"
+        );
+        assert!(!xml.contains("AllowanceTotalAmount currencyID=\"EUR\">0<"));
+    }
+
+    #[test]
+    fn price_discount_gross_round_trip() {
+        let mut inv = sample();
+        inv.lines[0].price = Some(core_invoice::Price {
+            net: UnitPriceAmount::parse("9.00").unwrap(),
+            discount: Some(UnitPriceAmount::parse("1.005").unwrap()),
+            gross: Some(UnitPriceAmount::parse("10.005").unwrap()),
+            base_qty: None,
+            base_unit: None,
+        });
+        let xml = write_unchecked(&inv);
+        assert!(xml.contains("<cbc:ChargeIndicator>false</cbc:ChargeIndicator>"));
+        let back = read(&xml).unwrap().invoice;
+        let p = back.lines[0].price.as_ref().unwrap();
+        assert_eq!(p.discount.as_ref().unwrap().to_string(), "1.005");
+        assert_eq!(p.gross.as_ref().unwrap().to_string(), "10.005");
+    }
+
+    #[test]
+    fn malformed_issue_date_is_not_silent() {
+        let xml = r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"><cbc:ID>1</cbc:ID><cbc:IssueDate>2026-01-15Z</cbc:IssueDate></Invoice>"#;
+        let traced = read(xml).unwrap();
+        assert!(
+            traced.malformed.iter().any(|m| m.contains("IssueDate")),
+            "{:?}",
+            traced.malformed
+        );
+        assert!(traced.invoice.issue_date.is_none());
+        let xml = r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"><cbc:ID>1</cbc:ID><cbc:DueDate>2026-02-30</cbc:DueDate></Invoice>"#;
+        let traced = read(xml).unwrap();
+        assert!(
+            traced.malformed.iter().any(|m| m.contains("DueDate")),
+            "{:?}",
+            traced.malformed
+        );
+        assert!(traced.invoice.due_date.is_none());
+    }
+
+    #[test]
+    fn duplicate_duedate_is_unmapped() {
+        let xml = r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"><cbc:ID>1</cbc:ID><cbc:DueDate>2026-02-01</cbc:DueDate><cbc:DueDate>2026-02-02</cbc:DueDate></Invoice>"#;
+        let traced = read(xml).unwrap();
+        assert!(
+            traced
+                .unmapped
+                .iter()
+                .any(|u| u.contains("DueDate") && u.contains("duplicate")),
+            "{:?}",
+            traced.unmapped
+        );
+        assert_eq!(traced.invoice.due_date, Date::parse("2026-02-01").ok());
+    }
+
+    #[test]
+    fn nested_item_unknown_is_unmapped() {
+        let xml = r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"><cbc:ID>1</cbc:ID><cac:InvoiceLine><cbc:ID>1</cbc:ID><cac:Item><cbc:Name>A</cbc:Name><cbc:Foo>x</cbc:Foo></cac:Item></cac:InvoiceLine></Invoice>"#;
+        let traced = read(xml).unwrap();
+        assert!(
+            traced.unmapped.iter().any(|u| u.contains("Item/Foo")),
+            "{:?}",
+            traced.unmapped
+        );
+        assert!(
+            traced.unmapped.iter().all(|u| !u.contains("Item/Name")),
+            "{:?}",
+            traced.unmapped
+        );
+    }
+
+    #[test]
+    fn credit_note_duedate_write_drop_is_named() {
+        let mut inv = sample();
+        inv.kind = DocumentKind::CreditNote;
+        inv.type_code = Some(Code::new("381"));
+        inv.due_date = Date::parse("2026-02-01").ok();
+        let drops = write_drops(&inv);
+        assert!(drops.iter().any(|d| d == "CreditNote/DueDate"), "{drops:?}");
+        assert!(!write_unchecked(&inv).contains("DueDate"));
+    }
+
+    #[test]
+    fn line_taxtotal_and_documentreference_are_mapped() {
+        let xml = r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"><cbc:ID>1</cbc:ID><cac:InvoiceLine><cbc:ID>1</cbc:ID><cac:DocumentReference><cbc:ID>OBJ</cbc:ID></cac:DocumentReference><cac:TaxTotal><cbc:TaxAmount currencyID="EUR">1.00</cbc:TaxAmount></cac:TaxTotal><cac:Item><cbc:Name>A</cbc:Name></cac:Item></cac:InvoiceLine></Invoice>"#;
+        let traced = read(xml).unwrap();
+        assert!(
+            traced
+                .unmapped
+                .iter()
+                .all(|u| !u.contains("InvoiceLine/TaxTotal")
+                    && !u.contains("InvoiceLine/DocumentReference")),
+            "{:?}",
+            traced.unmapped
+        );
+        assert!(traced.invoice.lines[0].tax_total.is_some());
+        assert!(traced.invoice.lines[0].invoiced_object.is_some());
     }
 }
