@@ -19,6 +19,7 @@ down here**, not that there are none.
 
 ### Added
 
+- SVRL oracle runs ConnectingEurope XSLT via Docker Compose Java (`eclipse-temurin:21-jre` + Saxon-HE 10.9) when the host has no JDK. Official EN examples, BR-03 mutant, PINT-MY SA, and SST-as-EN three-way compare.
 - BR-CL-03 (`@currencyID` ISO 4217 wire walk), BR-CL-08 (UNCL 4451 from EN Schematron). Peppol COMMON-R041–R047/R049/R050/R052/R053 ICD checksums; R051 `@currencyID` = BT-5 except BT-111.
 - Remaining CEN presence/CO: BR-12…15, BR-19, BR-31–33, BR-36–38, BR-41–50, BR-61, BR-CO-26 (skipped on Pint/PintMy).
 - Named CII drop list `CII_DROPPED`; UBL↔CII model diff must stay inside it.

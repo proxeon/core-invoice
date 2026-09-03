@@ -14,14 +14,17 @@ import re
 import shutil
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+SAXON_JAR_LOCAL = ROOT / "xtask/.saxon/Saxon-HE.jar"
+SAXON_JAR_URL = (
+    "https://repo1.maven.org/maven2/net/sf/saxon/Saxon-HE/10.9/Saxon-HE-10.9.jar"
+)
 SVRL_NS = {"svrl": "http://purl.oclc.org/dsdl/svrl"}
 # Artefact ids are compared case-insensitively; PINT-MY zip uses lowercase.
 ID_TOKEN = re.compile(
-    r"\b((?:BR|PEPPOL-EN16931|PEPPOL-COMMON|ALIGNED-IBRP|IBR)[A-Z0-9\-]+)\b",
+    r"\b((?:BR|PEPPOL-EN16931|PEPPOL-COMMON|ALIGNED-IBRP|IBR|UBL-CR|UBL-SR|UBL-DT)[A-Z0-9\-]+)\b",
     re.I,
 )
 
@@ -93,7 +96,9 @@ def parse_svrl_failed_ids(xml: str) -> set[str]:
     return ids
 
 
-def our_fatal_ids(cli: Path, xml_path: Path, profile: str | None) -> set[str]:
+def our_fatal_ids(
+    cli: Path, xml_path: Path, profile: str | None
+) -> tuple[set[str], str]:
     cmd = [str(cli), "validate", "--format", "json"]
     if profile:
         cmd.extend(["--profile", profile])
@@ -111,7 +116,18 @@ def our_fatal_ids(cli: Path, xml_path: Path, profile: str | None) -> set[str]:
         if str(f.get("severity", "")).lower() != "fatal":
             continue
         ids.add(canonical(str(f.get("id", ""))))
-    return ids
+    return ids, str(data.get("profile") or "")
+
+
+def extras_artefact_cannot_emit(extra: set[str], artefact: str, profile: str) -> set[str]:
+    """EN XSLT cannot emit Peppol/PINT extras; drop those from unexpected extra."""
+    if artefact == "en" and profile in {"peppol", "pint", "pint-my"}:
+        return {
+            i
+            for i in extra
+            if i.startswith("PEPPOL-") or i.startswith("ALIGNED-") or i.startswith("IBR-")
+        }
+    return set()
 
 
 def diff_sets(
@@ -136,19 +152,67 @@ def diff_sets(
     return extra, missing
 
 
-def saxon_cmd(saxon: str | None, jar: str | None, xslt: Path, xml: Path, out: Path) -> list[str]:
-    if saxon:
-        # Saxon-HE CLI: Transform -s:in -xsl:sheet -o:out
-        return [saxon, f"-s:{xml}", f"-xsl:{xslt}", f"-o:{out}"]
-    assert jar
-    return [
-        "java",
-        "-jar",
-        jar,
-        f"-s:{xml}",
-        f"-xsl:{xslt}",
-        f"-o:{out}",
-    ]
+def java_works(java: str) -> bool:
+    try:
+        r = subprocess.run([java, "-version"], capture_output=True, text=True)
+    except OSError:
+        return False
+    text = (r.stdout or "") + (r.stderr or "")
+    return r.returncode == 0 and "Unable to locate a Java Runtime" not in text
+
+
+def ensure_saxon_jar() -> Path:
+    if SAXON_JAR_LOCAL.is_file() and SAXON_JAR_LOCAL.stat().st_size > 1_000_000:
+        return SAXON_JAR_LOCAL
+    SAXON_JAR_LOCAL.parent.mkdir(parents=True, exist_ok=True)
+    cached = Path("/tmp/Saxon-HE.jar")
+    if cached.is_file() and cached.stat().st_size > 1_000_000:
+        shutil.copy2(cached, SAXON_JAR_LOCAL)
+        return SAXON_JAR_LOCAL
+    print(f"fetching Saxon-HE → {SAXON_JAR_LOCAL}", file=sys.stderr)
+    subprocess.run(
+        ["curl", "-fsSL", "-o", str(SAXON_JAR_LOCAL), SAXON_JAR_URL],
+        check=True,
+    )
+    return SAXON_JAR_LOCAL
+
+
+def to_container(path: Path) -> str:
+    rel = path.resolve().relative_to(ROOT)
+    return "/work/" + rel.as_posix()
+
+
+def saxon_cmd(xslt: Path, xml: Path, out: Path) -> list[str]:
+    """Prefer local saxon/java; otherwise Docker Compose eclipse-temurin + Saxon-HE."""
+    cli = shutil.which("saxon") or shutil.which("saxonb-xslt") or shutil.which("transform")
+    if cli:
+        return [cli, f"-s:{xml}", f"-xsl:{xslt}", f"-o:{out}"]
+    jar = os.environ.get("SAXON_JAR")
+    java = shutil.which("java")
+    if jar and java and java_works(java):
+        return [java, "-jar", jar, f"-s:{xml}", f"-xsl:{xslt}", f"-o:{out}"]
+    ensure_saxon_jar()
+    if java and java_works(java):
+        return [java, "-jar", str(SAXON_JAR_LOCAL), f"-s:{xml}", f"-xsl:{xslt}", f"-o:{out}"]
+    compose = ROOT / "docker-compose.yml"
+    if shutil.which("docker") and compose.is_file():
+        # Bind-mount is the repo; SVRL must be written under /work (not host /tmp).
+        return [
+            "docker",
+            "compose",
+            "-f",
+            str(compose),
+            "run",
+            "--rm",
+            "-T",
+            "saxon",
+            f"-s:{to_container(xml)}",
+            f"-xsl:{to_container(xslt)}",
+            f"-o:{to_container(out)}",
+        ]
+    raise FileNotFoundError(
+        "no Saxon: install a JDK, set SAXON_JAR, or install Docker for docker compose run saxon"
+    )
 
 
 def find_cli() -> Path | None:
@@ -188,6 +252,10 @@ def self_test() -> int:
     assert missing == set(), missing
     extra, missing = diff_sets({"BR-03"}, {"BR-03", "CORE-SPEC-01"}, mapping, uncovered)
     assert "CORE-SPEC-01" in extra
+    dropped = extras_artefact_cannot_emit(
+        {"PEPPOL-COMMON-R049", "BR-03"}, "en", "peppol"
+    )
+    assert dropped == {"PEPPOL-COMMON-R049"}, dropped
     print("self-test ok")
     return 0
 
@@ -205,10 +273,14 @@ def main(argv: list[str]) -> int:
         print(f"missing {xslt_dir}; run task spec", file=sys.stderr)
         return 1 if require_spec() else 0
 
-    saxon = shutil.which("saxon") or shutil.which("saxonb-xslt") or shutil.which("transform")
-    jar = os.environ.get("SAXON_JAR")
-    if not saxon and not jar:
-        print("skip: no saxon CLI / SAXON_JAR")
+    try:
+        saxon_cmd(
+            ROOT / "refers/en16931/ubl/xslt/EN16931-UBL-validation.xslt",
+            ROOT / "xtask/testdata/missing-issue-date.xml",
+            ROOT / "target/svrl/_probe.xml",
+        )
+    except FileNotFoundError as e:
+        print(f"skip: {e}")
         return 1 if require_spec() else 0
 
     if os.environ.get("MUSTANG_JAR"):
@@ -238,24 +310,26 @@ def main(argv: list[str]) -> int:
         print(f"missing {xslt_en}", file=sys.stderr)
         return 1 if require_spec() else 0
 
+    svrl_dir = ROOT / "target" / "svrl"
+    svrl_dir.mkdir(parents=True, exist_ok=True)
     failed = 0
     for xml in files:
         if not xml.is_file():
             print(f"missing {xml}", file=sys.stderr)
             failed += 1
             continue
-        with tempfile.NamedTemporaryFile(suffix=".svrl.xml", delete=False) as tmp:
-            out = Path(tmp.name)
+        out = svrl_dir / f"{xml.stem}.svrl.xml"
         try:
-            cmd = saxon_cmd(saxon, jar, xslt_en, xml, out)
-            proc = subprocess.run(cmd, capture_output=True, text=True)
+            cmd = saxon_cmd(xslt_en, xml, out)
+            proc = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
             if proc.returncode != 0:
-                print(f"saxon failed on {xml}: {proc.stderr}", file=sys.stderr)
+                print(f"saxon failed on {xml}: {proc.stderr or proc.stdout}", file=sys.stderr)
                 failed += 1
                 continue
             svrl = parse_svrl_failed_ids(out.read_text(errors="replace"))
-            ours = our_fatal_ids(cli, xml, None)
+            ours, slug = our_fatal_ids(cli, xml, None)
             extra, missing = diff_sets(svrl, ours, mapping, uncovered)
+            extra -= extras_artefact_cannot_emit(extra, "en", slug)
             print(f"{xml.name}: svrl={sorted(svrl)} ours={sorted(ours)}")
             if extra or missing:
                 print(f"  unexpected extra={sorted(extra)} missing={sorted(missing)}", file=sys.stderr)
@@ -276,17 +350,16 @@ def main(argv: list[str]) -> int:
     )
     sa = ROOT / "refers/pint-my-1.3.0/unpacked/trn-invoice/example/Invoice-Sample-SA_1.3.0.xml"
     if my_xslt.is_file() and sa.is_file() and ("--pint-my" in argv or not argv[1:]):
-        with tempfile.NamedTemporaryFile(suffix=".svrl.xml", delete=False) as tmp:
-            out = Path(tmp.name)
+        out = svrl_dir / "pint-my-sa.svrl.xml"
         try:
-            cmd = saxon_cmd(saxon, jar, my_xslt, sa, out)
-            proc = subprocess.run(cmd, capture_output=True, text=True)
+            cmd = saxon_cmd(my_xslt, sa, out)
+            proc = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
             if proc.returncode != 0:
-                print(f"saxon PINT-MY failed: {proc.stderr}", file=sys.stderr)
+                print(f"saxon PINT-MY failed: {proc.stderr or proc.stdout}", file=sys.stderr)
                 failed += 1
             else:
                 svrl = parse_svrl_failed_ids(out.read_text(errors="replace"))
-                ours = our_fatal_ids(cli, sa, "pint-my")
+                ours, _slug = our_fatal_ids(cli, sa, "pint-my")
                 extra, missing = diff_sets(svrl, ours, mapping, uncovered)
                 print(f"PINT-MY SA: svrl={sorted(svrl)} ours={sorted(ours)}")
                 if extra or missing:
@@ -296,6 +369,41 @@ def main(argv: list[str]) -> int:
                     print("  comparable")
         finally:
             out.unlink(missing_ok=True)
+
+    # Sibling profiles: SST SA is not a Peppol BIS invoice.
+    if sa.is_file() and xslt_en.is_file() and ("--pint-my" in argv or not argv[1:]):
+        out = svrl_dir / "sa-as-en.svrl.xml"
+        try:
+            cmd = saxon_cmd(xslt_en, sa, out)
+            proc = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
+            if proc.returncode != 0:
+                print(f"saxon EN-on-SA failed: {proc.stderr or proc.stdout}", file=sys.stderr)
+                failed += 1
+            else:
+                svrl = parse_svrl_failed_ids(out.read_text(errors="replace"))
+                ours, _slug = our_fatal_ids(cli, sa, "en16931")
+                extra, missing = diff_sets(svrl, ours, mapping, uncovered)
+                print(f"SA as EN: svrl={sorted(svrl)} ours={sorted(ours)}")
+                if extra or missing:
+                    print(
+                        f"  unexpected extra={sorted(extra)} missing={sorted(missing)}",
+                        file=sys.stderr,
+                    )
+                    failed += 1
+                elif not svrl and not ours:
+                    print("  unexpected: SST SA passed EN", file=sys.stderr)
+                    failed += 1
+                else:
+                    print("  comparable (both invalid)")
+        finally:
+            out.unlink(missing_ok=True)
+        ours_pep, _slug = our_fatal_ids(cli, sa, "peppol")
+        print(f"SA as Peppol: ours={sorted(ours_pep)}")
+        if not ours_pep:
+            print("  unexpected: SST SA passed Peppol", file=sys.stderr)
+            failed += 1
+        else:
+            print("  invalid (no BIS compiled XSLT in this pin)")
 
     return 1 if failed else 0
 

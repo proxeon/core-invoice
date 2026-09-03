@@ -64,7 +64,9 @@ tasks:
       - cargo deny check
 
   svrl:
-    desc: Optional ConnectingEurope XSLT SVRL oracle (needs Saxon + refers/)
+    desc: Optional ConnectingEurope XSLT SVRL oracle (Saxon, or Docker Compose Java)
+    env:
+      SVRL_ORACLE: "1"
     cmds:
       - python3 xtask/svrl_oracle.py --self-test
       - python3 xtask/svrl_oracle.py

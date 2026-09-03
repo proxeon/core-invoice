@@ -25,6 +25,6 @@ Do not copy CEN example XML into `crates/core-invoice-fixtures/data/`. Synthetic
 
 Optional CI job `artefacts` (`CORE_INVOICE_REQUIRE_SPEC=1`) fetches `refers/` then runs official-sample tests. Default PR/`check` skips when artefacts are absent. **Tag skip is not OK:** pushes of `v*` tags run `artefacts`.
 
-SVRL oracle: `task svrl` (set `SVRL_ORACLE=1` or `CORE_INVOICE_REQUIRE_SPEC=1`). Needs Saxon-HE (`saxon` on PATH or `SAXON_JAR` pointing at the jar). The MIT crate does **not** vendor Java. Mapping: [`svrl-id-map.md`](svrl-id-map.md). Not the default `task test`. Self-check of the diff (no Saxon): `python3 xtask/svrl_oracle.py --self-test`. Mustang (`MUSTANG_JAR`) is VAT CII only and never default CI.
+SVRL oracle: `task svrl` (sets `SVRL_ORACLE=1`; `CORE_INVOICE_REQUIRE_SPEC=1` also works). Saxon-HE is an **oracle runner**, not a crate dependency. Resolution order: `saxon` on PATH, then `SAXON_JAR` + a working `java`, then **Docker Compose** `eclipse-temurin:21-jre` (`docker compose run --rm saxon …`) with the jar fetched to `xtask/.saxon/` (gitignored). Mapping: [`svrl-id-map.md`](svrl-id-map.md). Not the default `task test`. Self-check of the diff (no Saxon): `python3 xtask/svrl_oracle.py --self-test`. Mustang (`MUSTANG_JAR`) is VAT CII only and never default CI.
 
 `task lists` regenerates `crates/core-invoice/src/generated_codes.rs` from PINT-MY genericode (code points only).

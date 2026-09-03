@@ -1,0 +1,9 @@
+# Java is an SVRL oracle runner, not a crate dependency.
+# Saxon-HE jar lives in xtask/.saxon/ (gitignored; fetched by xtask/svrl_oracle.py).
+services:
+  saxon:
+    image: eclipse-temurin:21-jre
+    working_dir: /work
+    volumes:
+      - .:/work
+    entrypoint: ["java", "-jar", "/work/xtask/.saxon/Saxon-HE.jar"]

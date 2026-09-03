@@ -8,12 +8,17 @@ ConnectingEurope XSLT 1.3.16 / Peppol / PINT-MY Schematron SVRL `@id` compared t
 |---|---|---|
 | BR-CO-17 | BR-CO-17 | Artefact slack ±1.00 exclusive on abs; mapped 1:1 |
 | BR-03 | BR-03 | Issue date presence (mutant) |
+| BR-CO-26 | BR-CO-26 | Seller identifiable (mutant) |
+| BR-S-02 | BR-S-02 | Standard rate line VAT (mutant) |
 | PEPPOL-EN16931-R010 | PEPPOL-EN16931-R010 | Buyer EndpointID |
 | PEPPOL-EN16931-R020 | PEPPOL-EN16931-R020 | Seller EndpointID |
 | PEPPOL-EN16931-R004 | PEPPOL-EN16931-R004 | BT-24 Peppol prefix (SA-as-Peppol) |
 | PEPPOL-EN16931-R007 | PEPPOL-EN16931-R007 | Peppol process id |
 | PINT-TAX | PINT-TAX | Crate id; SST on Peppol |
 | BR-CL-17 | BR-CL-17 | UNCL 5305 on VAT profiles |
+| BR-CL-18 | PINT-TAX | SST line category is not UNCL 5305; we emit PINT-TAX instead of BR-CL-18 |
 | ids in `docs/UNCOVERED.md` | — | Not implemented; SVRL hit is expected unmatched |
+
+Peppol-only Fatal ids (`PEPPOL-*`) compared to ConnectingEurope EN XSLT are not unexpected extras (EN cannot emit them). Docker Compose `saxon` (eclipse-temurin:21-jre + Saxon-HE 10.9) is an oracle runner when the host has no JDK.
 
 `task svrl` (`xtask/svrl_oracle.py`) reads this table. Saxon is an oracle, not a crate dependency. Peppol BIS v3.0.20 in `refers/` is Schematron (`.sch`), not compiled XSLT — EN and PINT-MY XSLT are the live compares.

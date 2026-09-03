@@ -32,7 +32,7 @@ CLASS: mapped as `Line.classifications` with `listID` (`CG` is CLASS in PINT-MY)
 
 ## CEN semantic ids not in catalogue (P14 walk, pin validation-1.3.16)
 
-Artefact union of `EN16931-model.sch` ∪ `EN16931-UBL-codes.sch` is 223 syntax-independent `BR-*`. Catalogue holds a subset. This list is artefact-minus-catalogue so SVRL unmatched is not a surprise. Do not invent `BR-CO-01/02/27`, `BR-CL-02/09/12`. UBL-CR/SR/DT (756) are formats/unmapped, not CORE.
+Artefact union of `EN16931-model.sch` ∪ `EN16931-UBL-codes.sch` is 223 syntax-independent `BR-*`. Catalogue holds a subset. This list is artefact-minus-catalogue so SVRL unmatched is not a surprise. Do not invent `BR-CO-01/02/27`, `BR-CL-02/09/12`. UBL-CR/SR/DT (756) are formats/unmapped, not CORE (e.g. UBL-SR-43 on SST-as-EN).
 
 Family A/C rows and IC-11/12: now in catalogue.
 
@@ -49,7 +49,7 @@ CO registered: BR-CO-09/19–24/26 (CO-26 skipped on Pint/PintMy; EN/Peppol requ
 
 ## P14 / P18
 
-- ConnectingEurope XSLT SVRL job: `task svrl` / `xtask/svrl_oracle.py` (Saxon). Parses `failed-assert/@id` and diffs Fatal `Finding.id`. Mapping table `docs/svrl-id-map.md`. Skip without Saxon unless `CORE_INVOICE_REQUIRE_SPEC=1`. Peppol BIS pin is `.sch` only.
+- ConnectingEurope XSLT SVRL job: `task svrl` / `xtask/svrl_oracle.py`. Saxon-HE 10.9 via host JDK or Docker Compose `eclipse-temurin:21-jre`. Parses `failed-assert/@id` and diffs Fatal `Finding.id`. Mapping table `docs/svrl-id-map.md`. Peppol BIS pin is `.sch` only.
 - Mustang: only if `MUSTANG_JAR` is set; VAT CII; never default CI.
 - nix flake: Later (P18.03 / P19).
 - cargo-fuzz target `fuzz/fuzz_targets/formats_read.rs` is run locally (`cargo fuzz run formats_read`); not default CI. Unit smoke `random_bytes_do_not_panic` stays.
