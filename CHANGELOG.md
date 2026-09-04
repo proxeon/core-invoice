@@ -17,16 +17,25 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.0.3] — 2026-09-04
+
+Additive. No Rust API break.
+
+### Added
+
+- `Finding::info` for overlay info findings (`BR-DE-TMP-32`).
+- Optional `xrechnung`: Skonto `BR-DE-18`, IBAN warnings `BR-DE-19`/`20`, specification-id warning `BR-DE-21`, unique filenames `BR-DE-22`, `BR-DE-26`/`27`/`28` (warnings), `BR-DE-31`, `BR-DE-TMP-32` (info), `BR-TMP-2`. Still never default, never CORE, not KoSIT Valid. Extension / CVD stay unregistered.
+
 ### Changed
 
 - Prohibition tables extract `not(elem/@attr)` and `not(//elem)` with context (UBL 693/696, CII 466/511). Remaining UNEXTRACTED are predicates, `ends-with`/`*` wildcards, or mutual exclusions. `scan_written` matches contextual attributes on both syntaxes and treats unparseable written XML as a hit. Still does not rewrite. Empty hits are not CEN Valid. PINT-MY TIN `schemeID="GST"` is a named `UBL-CR-652` hit.
 - CII maps BT-15/16 despatch and receiving advice, BT-19 buyer accounting, BT-7/8 tax point on each header `ApplicableTradeTax`, line BG-26/27/28, BT-155…159, BT-132/133/128, and BT-147 inside gross price. `CII_DROPPED` shrinks to empty `PostalAddress` vs absent plus PINT-MY line extras (`lines.extra_tax`, `lines.tax_total`). Discount without gross is not written (no D16B home). PINT-MY stays UBL-only.
 - Peppol syntax extras: formats `validate_xml` walks R006 (CII), R008 (UBL empty elements), R043, R044, R053, R080 (UBL CreditNote), R100, and CL007. Model evals stay constant-pass. Not OpenPEPPOL Valid.
-- Optional `xrechnung`: `BR-DE-1` is BG-16 (was mislabelled seller contact). Seller contact is `BR-DE-2`. Added `BR-DE-3`–`11`, `BR-DE-14`, `BR-DE-17` (warning), Skonto `BR-DE-18`, IBAN warnings `BR-DE-19`/`20`, `BR-DE-21`, unique filenames `BR-DE-22`, `BR-DE-26`/`27`/`28` (warnings), `BR-DE-31`, `BR-DE-TMP-32` (info), `BR-TMP-2`. `BR-DE-16` uses the listed VAT categories. Extension / CVD stay unregistered. Still never default, never CORE, not KoSIT Valid. `Finding::info` is additive.
-- crates.io README is the workspace page: members set `readme.workspace = true` (`[workspace.package] readme = "README.md"` is workspace-root relative). Crate-level `crates/*/README.md` removed so `cargo package` does not ship the short local copy. Honesty fences unchanged (not OpenPEPPOL Valid, not IRBM Valid, XRechnung not CORE). `testdata/` still not in the crate tarball.
+- Optional `xrechnung`: `BR-DE-1` is BG-16 (was mislabelled seller contact). Seller contact is `BR-DE-2`. Added `BR-DE-3`–`11`, `BR-DE-14`, `BR-DE-17` (warning). `BR-DE-16` uses the listed VAT categories.
+- crates.io README is the workspace page: members set `readme.workspace = true`. Crate-level `crates/*/README.md` removed so `cargo package` does not ship the short local copy. Honesty fences unchanged (not OpenPEPPOL Valid, not IRBM Valid, XRechnung not CORE). `testdata/` still not in the crate tarball.
 - PINT GST honesty: `pint_gst_sr` stays authored MIT, not a 1.1.2 oracle. Helper rustdoc no longer claims the zip lists `SR`/`ZR`. UNCOVERED names the missing tax-category CL and removed `ibr-cl-27`. No official PINT international XML.
 - `core-invoice` enables `missing_docs` (rustdoc on public items).
-- Artefact tripwires: Peppol `rules/sch` panics under `CORE_INVOICE_REQUIRE_SPEC` if missing; PINT 1.1.2 pin must not grow official instance XML unnoticed; pin consts include PINT 1.1.2; Python `validate_xml` ctypes 0/1/2 (DTD, unknown profile, Peppol example) in CI — fail if the cdylib is missing. convert/diff stay C/CLI. Fuzz and nix stay parked.
+- Artefact tripwires: Peppol `rules/sch` panics under `CORE_INVOICE_REQUIRE_SPEC` if missing; PINT 1.1.2 pin must not grow official instance XML unnoticed; pin consts include PINT 1.1.2; Python `validate_xml` ctypes 0/1/2 in CI. convert/diff stay C/CLI. Fuzz and nix stay parked.
 
 ## [2.0.2] — 2026-09-04
 
@@ -212,7 +221,8 @@ PINT-MY as profiles.
 - **`core-invoice-sys`** — C ABI `core_invoice_validate_ubl` and
   `include/core_invoice.h`.
 
-[Unreleased]: https://github.com/proxeon/core-invoice/compare/v2.0.2...HEAD
+[Unreleased]: https://github.com/proxeon/core-invoice/compare/v2.0.3...HEAD
+[2.0.3]: https://github.com/proxeon/core-invoice/compare/v2.0.2...v2.0.3
 [2.0.2]: https://github.com/proxeon/core-invoice/compare/v2.0.1...v2.0.2
 [2.0.1]: https://github.com/proxeon/core-invoice/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/proxeon/core-invoice/compare/v1.0.0...v2.0.0

@@ -185,4 +185,4 @@ task svrl            # compare Fatal ids to pinned ConnectingEurope / PINT-MY XS
 
 MIT OR Apache-2.0. Releases: [CHANGELOG.md](https://github.com/proxeon/core-invoice/blob/main/CHANGELOG.md).
 
-crates.io: [core-invoice 2.0.2](https://crates.io/crates/core-invoice). Git tag **v2.0.2**. crates.io **2.0.1** / **2.0.0** / **1.0.0** remain (not yanked). 2.x may add APIs; breaking changes are 3.0. The C ABI is the 0/1/2 verbs, not `Invoice` layout.
+crates.io: [core-invoice 2.0.3](https://crates.io/crates/core-invoice). Git tag **v2.0.3**. crates.io **2.0.2** / **2.0.1** / **2.0.0** / **1.0.0** remain (not yanked). 2.x may add APIs; breaking changes are 3.0. The C ABI is the 0/1/2 verbs, not `Invoice` layout.
