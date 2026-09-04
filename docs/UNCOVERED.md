@@ -68,7 +68,7 @@ Classified `Edition::En2026`. `is_implemented()` is **false**. `Profile::edition
 
 ## Syntax prohibition tables
 
-Generated from preprocessed ConnectingEurope Schematron (`task prohibitions`). UBL: 664/696 `not(…)` assertions (32 UNEXTRACTED). CII: 447/522 (75 UNEXTRACTED). Conditional XPath is counted, not guessed. `write_drops` reports hits on written XML; it does not rewrite the tree.
+Generated from preprocessed ConnectingEurope Schematron (`task prohibitions`). UBL: 693/696 `not(…)` assertions (3 UNEXTRACTED: `UBL-CR-665`/`666`/`673` predicates on invoiced-object vs supporting-document). CII: 466/511 (45 UNEXTRACTED: `ends-with`/`ram:*` contexts, `CII-DT-031` `@currencyID` on non-`TaxTotalAmount`, mutual exclusions `CII-SR-465`/`466`). `not(x) or y` is not a `not(…)` assertion. `not(elem/@attr)` and `not(//elem)` are extracted with context — not as `//@schemeID`. `write_drops` / `scan_written` report hits on written XML; they do not rewrite the tree. Empty hits are not CEN Valid, not KoSIT Valid, not OpenPEPPOL Valid.
 
 ## XRechnung (optional feature)
 

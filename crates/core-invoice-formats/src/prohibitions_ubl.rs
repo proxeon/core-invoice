@@ -6,11 +6,15 @@
 //! under that context, not everywhere. Source is the preprocessed artefact
 //! (resolved `rule/@context`).
 //!
-//! 664 of 696 `not(…)` assertions; 1548 element rows,
-//! 21 attribute rows. [`UNEXTRACTED`] = 32 need an XPath
-//! engine (predicates, wildcards).
+//! 693 of 696 `not(…)` assertions; 1553 element rows,
+//! 21 document-wide (`//@attr`) rows, 37 contextual
+//! attribute rows. [`UNEXTRACTED`] = 3 remaining are predicates,
+//! `ends-with` / `*` wildcards, or mutual exclusions (`not(A and B)`).
+//! `not(elem/@attr)` and `not(//elem)` are extracted with their context.
 
 /// `(rule id, context, forbidden path relative to that context)`.
+///
+/// Empty relative means the context node itself (`//cac:FinancialInstitution`).
 pub static FORBIDDEN_PATHS: &[(&str, &str, &str)] = &[
     ("UBL-CR-001", "/cn:CreditNote", "ext:UBLExtensions"),
     ("UBL-CR-001", "/ubl:Invoice", "ext:UBLExtensions"),
@@ -7468,6 +7472,27 @@ pub static FORBIDDEN_PATHS: &[(&str, &str, &str)] = &[
         "/ubl:Invoice",
         "cac:InvoiceLine/cac:ItemPriceExtension",
     ),
+    ("UBL-CR-664", "//cac:FinancialInstitution", ""),
+    (
+        "UBL-CR-669",
+        "//cac:Price/cac:AllowanceCharge",
+        "cbc:AllowanceChargeReasonCode",
+    ),
+    (
+        "UBL-CR-670",
+        "//cac:Price/cac:AllowanceCharge",
+        "cbc:AllowanceChargeReason",
+    ),
+    (
+        "UBL-CR-671",
+        "//cac:Price/cac:AllowanceCharge",
+        "cbc:MultiplierFactorNumeric",
+    ),
+    (
+        "UBL-CR-680",
+        "//cac:PaymentMeans",
+        "cac:PayerFinancialAccount",
+    ),
     (
         "UBL-CR-681",
         "/cn:CreditNote",
@@ -7515,5 +7540,135 @@ pub static FORBIDDEN_ATTRIBUTES: &[(&str, &str)] = &[
     ("UBL-DT-28", "listAgencyID"),
 ];
 
+/// `(rule id, context of the element, forbidden attribute local name)`.
+///
+/// Context is kept: `cbc:CompanyID/@schemeID` is not `//@schemeID`.
+pub static FORBIDDEN_ATTRIBUTE_PATHS: &[(&str, &str, &str)] = &[
+    (
+        "UBL-CR-648",
+        "/cn:CreditNote/cbc:CustomizationID",
+        "schemeID",
+    ),
+    ("UBL-CR-648", "/ubl:Invoice/cbc:CustomizationID", "schemeID"),
+    ("UBL-CR-649", "/cn:CreditNote/cbc:ProfileID", "schemeID"),
+    ("UBL-CR-649", "/ubl:Invoice/cbc:ProfileID", "schemeID"),
+    ("UBL-CR-650", "/cn:CreditNote/cbc:ID", "schemeID"),
+    ("UBL-CR-650", "/ubl:Invoice/cbc:ID", "schemeID"),
+    ("UBL-CR-651", "/cn:CreditNote/cbc:SalesOrderID", "schemeID"),
+    ("UBL-CR-651", "/ubl:Invoice/cbc:SalesOrderID", "schemeID"),
+    (
+        "UBL-CR-652",
+        "//cac:PartyTaxScheme/cbc:CompanyID",
+        "schemeID",
+    ),
+    (
+        "UBL-CR-653",
+        "/cn:CreditNote/cac:PaymentMeans/cbc:PaymentID",
+        "schemeID",
+    ),
+    (
+        "UBL-CR-653",
+        "/ubl:Invoice/cac:PaymentMeans/cbc:PaymentID",
+        "schemeID",
+    ),
+    (
+        "UBL-CR-654",
+        "/cn:CreditNote/cac:PaymentMeans/cac:PayeeFinancialAccount/cbc:ID",
+        "schemeID",
+    ),
+    (
+        "UBL-CR-654",
+        "/ubl:Invoice/cac:PaymentMeans/cac:PayeeFinancialAccount/cbc:ID",
+        "schemeID",
+    ),
+    (
+        "UBL-CR-655",
+        "/cn:CreditNote/cac:PaymentMeans/cac:PayeeFinancialAccount/cac:FinancialInstitutionBranch/cbc:ID",
+        "schemeID",
+    ),
+    (
+        "UBL-CR-655",
+        "/ubl:Invoice/cac:PaymentMeans/cac:PayeeFinancialAccount/cac:FinancialInstitutionBranch/cbc:ID",
+        "schemeID",
+    ),
+    ("UBL-CR-656", "/cn:CreditNote/cbc:InvoiceTypeCode", "listID"),
+    ("UBL-CR-656", "/ubl:Invoice/cbc:InvoiceTypeCode", "listID"),
+    (
+        "UBL-CR-657",
+        "/cn:CreditNote/cbc:DocumentCurrencyCode",
+        "listID",
+    ),
+    (
+        "UBL-CR-657",
+        "/ubl:Invoice/cbc:DocumentCurrencyCode",
+        "listID",
+    ),
+    ("UBL-CR-658", "/cn:CreditNote/cbc:TaxCurrencyCode", "listID"),
+    ("UBL-CR-658", "/ubl:Invoice/cbc:TaxCurrencyCode", "listID"),
+    (
+        "UBL-CR-659",
+        "/cn:CreditNote/cac:AdditionalDocumentReference/cbc:DocumentTypeCode",
+        "listID",
+    ),
+    (
+        "UBL-CR-659",
+        "/ubl:Invoice/cac:AdditionalDocumentReference/cbc:DocumentTypeCode",
+        "listID",
+    ),
+    (
+        "UBL-CR-660",
+        "//cac:Country/cbc:IdentificationCode",
+        "listID",
+    ),
+    (
+        "UBL-CR-661",
+        "/cn:CreditNote/cac:PaymentMeans/cbc:PaymentMeansCode",
+        "listID",
+    ),
+    (
+        "UBL-CR-661",
+        "/ubl:Invoice/cac:PaymentMeans/cbc:PaymentMeansCode",
+        "listID",
+    ),
+    ("UBL-CR-662", "//cbc:AllowanceChargeReasonCode", "listID"),
+    (
+        "UBL-CR-667",
+        "//cac:BuyersItemIdentification/cbc:ID",
+        "schemeID",
+    ),
+    (
+        "UBL-CR-668",
+        "//cac:SellersItemIdentification/cbc:ID",
+        "schemeID",
+    ),
+    (
+        "UBL-CR-672",
+        "/cn:CreditNote/cbc:CreditNoteTypeCode",
+        "listID",
+    ),
+    (
+        "UBL-CR-672",
+        "/ubl:Invoice/cbc:CreditNoteTypeCode",
+        "listID",
+    ),
+    ("UBL-CR-674", "//cbc:PrimaryAccountNumberID", "schemeID"),
+    ("UBL-CR-675", "//cac:CardAccount/cbc:NetworkID", "schemeID"),
+    ("UBL-CR-676", "//cac:PaymentMandate/cbc:ID", "schemeID"),
+    (
+        "UBL-CR-677",
+        "//cac:PaymentMandate/cac:PayerFinancialAccount/cbc:ID",
+        "schemeID",
+    ),
+    ("UBL-CR-678", "//cac:TaxCategory/cbc:ID", "schemeID"),
+    (
+        "UBL-CR-679",
+        "//cac:ClassifiedTaxCategory/cbc:ID",
+        "schemeID",
+    ),
+];
+
+/// Rule ids whose `not(…)` test was not extracted.
+pub static UNEXTRACTED_IDS: &[&str] = &["UBL-CR-665", "UBL-CR-666", "UBL-CR-673"];
+
 pub const TOTAL_PARAMS: usize = 696;
-pub const UNEXTRACTED: usize = 32;
+pub const UNEXTRACTED: usize = 3;

@@ -6,11 +6,15 @@
 //! under that context, not everywhere. Source is the preprocessed artefact
 //! (resolved `rule/@context`).
 //!
-//! 447 of 522 `not(…)` assertions; 447 element rows,
-//! 0 attribute rows. [`UNEXTRACTED`] = 75 need an XPath
-//! engine (predicates, wildcards).
+//! 466 of 511 `not(…)` assertions; 447 element rows,
+//! 0 document-wide (`//@attr`) rows, 40 contextual
+//! attribute rows. [`UNEXTRACTED`] = 45 remaining are predicates,
+//! `ends-with` / `*` wildcards, or mutual exclusions (`not(A and B)`).
+//! `not(elem/@attr)` and `not(//elem)` are extracted with their context.
 
 /// `(rule id, context, forbidden path relative to that context)`.
+///
+/// Empty relative means the context node itself (`//cac:FinancialInstitution`).
 pub static FORBIDDEN_PATHS: &[(&str, &str, &str)] = &[
     (
         "CII-DT-068",
@@ -2212,5 +2216,248 @@ pub static FORBIDDEN_PATHS: &[(&str, &str, &str)] = &[
 /// `(rule id, attribute local name)` forbidden anywhere (`//@attr`).
 pub static FORBIDDEN_ATTRIBUTES: &[(&str, &str)] = &[];
 
-pub const TOTAL_PARAMS: usize = 522;
-pub const UNEXTRACTED: usize = 75;
+/// `(rule id, context of the element, forbidden attribute local name)`.
+///
+/// Context is kept: `cbc:CompanyID/@schemeID` is not `//@schemeID`.
+pub static FORBIDDEN_ATTRIBUTE_PATHS: &[(&str, &str, &str)] = &[
+    (
+        "CII-DT-001",
+        "/rsm:CrossIndustryInvoice/rsm:ExchangedDocument/ram:ID",
+        "schemeName",
+    ),
+    (
+        "CII-DT-001",
+        "/rsm:CrossIndustryInvoice/rsm:ExchangedDocumentContext/ram:GuidelineSpecifiedDocumentContextParameter/ram:ID",
+        "schemeName",
+    ),
+    (
+        "CII-DT-001",
+        "/rsm:CrossIndustryInvoice/rsm:SupplyChainTradeTransaction/ram:IncludedSupplyChainTradeLineItem/ram:AssociatedDocumentLineDocument/ram:LineID",
+        "schemeName",
+    ),
+    (
+        "CII-DT-001",
+        "/rsm:CrossIndustryInvoice/rsm:SupplyChainTradeTransaction/ram:IncludedSupplyChainTradeLineItem/ram:SpecifiedTradeProduct/ram:SellerAssignedID",
+        "schemeName",
+    ),
+    (
+        "CII-DT-002",
+        "/rsm:CrossIndustryInvoice/rsm:ExchangedDocument/ram:ID",
+        "schemeAgencyName",
+    ),
+    (
+        "CII-DT-002",
+        "/rsm:CrossIndustryInvoice/rsm:ExchangedDocumentContext/ram:GuidelineSpecifiedDocumentContextParameter/ram:ID",
+        "schemeAgencyName",
+    ),
+    (
+        "CII-DT-002",
+        "/rsm:CrossIndustryInvoice/rsm:SupplyChainTradeTransaction/ram:IncludedSupplyChainTradeLineItem/ram:AssociatedDocumentLineDocument/ram:LineID",
+        "schemeAgencyName",
+    ),
+    (
+        "CII-DT-002",
+        "/rsm:CrossIndustryInvoice/rsm:SupplyChainTradeTransaction/ram:IncludedSupplyChainTradeLineItem/ram:SpecifiedTradeProduct/ram:SellerAssignedID",
+        "schemeAgencyName",
+    ),
+    (
+        "CII-DT-003",
+        "/rsm:CrossIndustryInvoice/rsm:ExchangedDocument/ram:ID",
+        "schemeDataURI",
+    ),
+    (
+        "CII-DT-003",
+        "/rsm:CrossIndustryInvoice/rsm:ExchangedDocumentContext/ram:GuidelineSpecifiedDocumentContextParameter/ram:ID",
+        "schemeDataURI",
+    ),
+    (
+        "CII-DT-003",
+        "/rsm:CrossIndustryInvoice/rsm:SupplyChainTradeTransaction/ram:IncludedSupplyChainTradeLineItem/ram:AssociatedDocumentLineDocument/ram:LineID",
+        "schemeDataURI",
+    ),
+    (
+        "CII-DT-003",
+        "/rsm:CrossIndustryInvoice/rsm:SupplyChainTradeTransaction/ram:IncludedSupplyChainTradeLineItem/ram:SpecifiedTradeProduct/ram:SellerAssignedID",
+        "schemeDataURI",
+    ),
+    (
+        "CII-DT-004",
+        "/rsm:CrossIndustryInvoice/rsm:ExchangedDocument/ram:ID",
+        "schemeURI",
+    ),
+    (
+        "CII-DT-004",
+        "/rsm:CrossIndustryInvoice/rsm:ExchangedDocumentContext/ram:GuidelineSpecifiedDocumentContextParameter/ram:ID",
+        "schemeURI",
+    ),
+    (
+        "CII-DT-004",
+        "/rsm:CrossIndustryInvoice/rsm:SupplyChainTradeTransaction/ram:IncludedSupplyChainTradeLineItem/ram:AssociatedDocumentLineDocument/ram:LineID",
+        "schemeURI",
+    ),
+    (
+        "CII-DT-004",
+        "/rsm:CrossIndustryInvoice/rsm:SupplyChainTradeTransaction/ram:IncludedSupplyChainTradeLineItem/ram:SpecifiedTradeProduct/ram:SellerAssignedID",
+        "schemeURI",
+    ),
+    (
+        "CII-DT-005",
+        "/rsm:CrossIndustryInvoice/rsm:ExchangedDocument/ram:ID",
+        "schemeID",
+    ),
+    (
+        "CII-DT-005",
+        "/rsm:CrossIndustryInvoice/rsm:ExchangedDocumentContext/ram:GuidelineSpecifiedDocumentContextParameter/ram:ID",
+        "schemeID",
+    ),
+    (
+        "CII-DT-005",
+        "/rsm:CrossIndustryInvoice/rsm:SupplyChainTradeTransaction/ram:IncludedSupplyChainTradeLineItem/ram:AssociatedDocumentLineDocument/ram:LineID",
+        "schemeID",
+    ),
+    (
+        "CII-DT-005",
+        "/rsm:CrossIndustryInvoice/rsm:SupplyChainTradeTransaction/ram:IncludedSupplyChainTradeLineItem/ram:SpecifiedTradeProduct/ram:SellerAssignedID",
+        "schemeID",
+    ),
+    (
+        "CII-DT-006",
+        "/rsm:CrossIndustryInvoice/rsm:ExchangedDocument/ram:ID",
+        "schemeAgencyID",
+    ),
+    (
+        "CII-DT-006",
+        "/rsm:CrossIndustryInvoice/rsm:ExchangedDocumentContext/ram:GuidelineSpecifiedDocumentContextParameter/ram:ID",
+        "schemeAgencyID",
+    ),
+    (
+        "CII-DT-006",
+        "/rsm:CrossIndustryInvoice/rsm:SupplyChainTradeTransaction/ram:IncludedSupplyChainTradeLineItem/ram:AssociatedDocumentLineDocument/ram:LineID",
+        "schemeAgencyID",
+    ),
+    (
+        "CII-DT-006",
+        "/rsm:CrossIndustryInvoice/rsm:SupplyChainTradeTransaction/ram:IncludedSupplyChainTradeLineItem/ram:SpecifiedTradeProduct/ram:SellerAssignedID",
+        "schemeAgencyID",
+    ),
+    (
+        "CII-DT-007",
+        "/rsm:CrossIndustryInvoice/rsm:ExchangedDocument/ram:ID",
+        "schemeVersionID",
+    ),
+    (
+        "CII-DT-007",
+        "/rsm:CrossIndustryInvoice/rsm:ExchangedDocumentContext/ram:GuidelineSpecifiedDocumentContextParameter/ram:ID",
+        "schemeVersionID",
+    ),
+    (
+        "CII-DT-007",
+        "/rsm:CrossIndustryInvoice/rsm:SupplyChainTradeTransaction/ram:IncludedSupplyChainTradeLineItem/ram:AssociatedDocumentLineDocument/ram:LineID",
+        "schemeVersionID",
+    ),
+    (
+        "CII-DT-007",
+        "/rsm:CrossIndustryInvoice/rsm:SupplyChainTradeTransaction/ram:IncludedSupplyChainTradeLineItem/ram:SpecifiedTradeProduct/ram:SellerAssignedID",
+        "schemeVersionID",
+    ),
+    ("CII-DT-008", "//ram:TypeCode", "name"),
+    ("CII-DT-009", "//ram:TypeCode", "listURI"),
+    (
+        "CII-DT-010",
+        "/rsm:CrossIndustryInvoice/rsm:ExchangedDocument/ram:TypeCode",
+        "listID",
+    ),
+    (
+        "CII-DT-011",
+        "/rsm:CrossIndustryInvoice/rsm:ExchangedDocument/ram:TypeCode",
+        "listAgencyID",
+    ),
+    (
+        "CII-DT-012",
+        "/rsm:CrossIndustryInvoice/rsm:ExchangedDocument/ram:TypeCode",
+        "listVersionID",
+    ),
+    ("CII-DT-013", "/rsm:CrossIndustryInvoice", "languageID"),
+    (
+        "CII-DT-014",
+        "/rsm:CrossIndustryInvoice",
+        "languageLocaleID",
+    ),
+    (
+        "CII-DT-045",
+        "/rsm:CrossIndustryInvoice/rsm:SupplyChainTradeTransaction/ram:IncludedSupplyChainTradeLineItem/ram:SpecifiedLineTradeSettlement/ram:ApplicableTradeTax/ram:CategoryCode",
+        "listID",
+    ),
+    (
+        "CII-DT-046",
+        "/rsm:CrossIndustryInvoice/rsm:SupplyChainTradeTransaction/ram:IncludedSupplyChainTradeLineItem/ram:SpecifiedLineTradeSettlement/ram:ApplicableTradeTax/ram:CategoryCode",
+        "listAgencyID",
+    ),
+    (
+        "CII-DT-047",
+        "/rsm:CrossIndustryInvoice/rsm:SupplyChainTradeTransaction/ram:IncludedSupplyChainTradeLineItem/ram:SpecifiedLineTradeSettlement/ram:ApplicableTradeTax/ram:CategoryCode",
+        "listVersionID",
+    ),
+    (
+        "CII-DT-048",
+        "/rsm:CrossIndustryInvoice/rsm:SupplyChainTradeTransaction/ram:IncludedSupplyChainTradeLineItem/ram:SpecifiedLineTradeSettlement/ram:ApplicableTradeTax/ram:CategoryCode",
+        "listURI",
+    ),
+    (
+        "CII-SR-186",
+        "/rsm:CrossIndustryInvoice/rsm:SupplyChainTradeTransaction/ram:IncludedSupplyChainTradeLineItem/ram:SpecifiedLineTradeSettlement/ram:SpecifiedTradeAllowanceCharge/ram:CalculationPercent",
+        "format",
+    ),
+];
+
+/// Rule ids whose `not(…)` test was not extracted.
+pub static UNEXTRACTED_IDS: &[&str] = &[
+    "CII-DT-016",
+    "CII-DT-017",
+    "CII-DT-019",
+    "CII-DT-020",
+    "CII-DT-023",
+    "CII-DT-025",
+    "CII-DT-026",
+    "CII-DT-028",
+    "CII-DT-029",
+    "CII-DT-030",
+    "CII-DT-031",
+    "CII-DT-032",
+    "CII-DT-034",
+    "CII-DT-035",
+    "CII-DT-036",
+    "CII-DT-038",
+    "CII-DT-039",
+    "CII-DT-040",
+    "CII-DT-042",
+    "CII-DT-043",
+    "CII-DT-044",
+    "CII-DT-049",
+    "CII-DT-050",
+    "CII-DT-051",
+    "CII-DT-053",
+    "CII-DT-055",
+    "CII-DT-056",
+    "CII-DT-057",
+    "CII-DT-059",
+    "CII-DT-060",
+    "CII-DT-061",
+    "CII-DT-062",
+    "CII-DT-063",
+    "CII-DT-064",
+    "CII-DT-065",
+    "CII-DT-066",
+    "CII-DT-067",
+    "CII-DT-101",
+    "CII-DT-102",
+    "CII-DT-103",
+    "CII-DT-104",
+    "CII-SR-04",
+    "CII-SR-05",
+    "CII-SR-465",
+    "CII-SR-466",
+];
+
+pub const TOTAL_PARAMS: usize = 511;
+pub const UNEXTRACTED: usize = 45;

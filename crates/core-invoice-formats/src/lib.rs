@@ -1024,6 +1024,52 @@ mod tests {
         assert!(cii::read(&xml).is_err());
     }
 
+    fn en_model_invoice() -> Invoice {
+        use core_invoice::{
+            Amount, Code, Date, Identifier, Line, Party, Price, Quantity, TaxCategory,
+            UnitPriceAmount, reconcile,
+        };
+        use rust_decimal::Decimal;
+        let mut inv = Invoice::blank(
+            Profile::En16931,
+            "INV-EN",
+            "EUR",
+            {
+                let mut p = Party::new("Seller GmbH", "DE");
+                p.vat_identifier = Some(Identifier::new("DE123456789"));
+                p
+            },
+            {
+                let mut b = Party::new("Buyer SARL", "FR");
+                b.vat_identifier = Some(Identifier::new("FR12345678901"));
+                b
+            },
+        );
+        inv.issue_date = Date::parse("2026-01-15").ok();
+        inv.type_code = Some(Code::new("380"));
+        inv.lines = vec![{
+            let mut line = Line::new(
+                "1",
+                "Service",
+                Amount::parse("100.00").unwrap(),
+                TaxCategory::vat("S", Decimal::from(19)),
+            );
+            line.quantity = Some(Quantity::parse("1").unwrap());
+            line.unit = Some(Code::new("C62"));
+            line.price = Some(Price {
+                net: UnitPriceAmount::parse("100.00").unwrap(),
+                discount: None,
+                gross: None,
+                base_qty: None,
+                base_unit: None,
+            });
+            line
+        }];
+        inv.payment_terms = Some("Net 30".into());
+        reconcile(&mut inv).unwrap();
+        inv
+    }
+
     #[test]
     fn write_drops_credit_note_duedate() {
         let mut inv = read(
@@ -1033,6 +1079,12 @@ mod tests {
         inv.kind = core_invoice::DocumentKind::CreditNote;
         let drops = write_drops(&inv, Syntax::Ubl);
         assert!(drops.iter().any(|d| d == "CreditNote/DueDate"), "{drops:?}");
+        let xml = write_unchecked(&inv, Syntax::Ubl).unwrap();
+        let hits = prohibitions::scan_written(&xml, Syntax::Ubl);
+        assert!(
+            hits.iter().all(|h| !h.contains("DueDate")),
+            "DueDate omit is named, not a prohibition id: {hits:?}"
+        );
     }
 
     #[test]
@@ -1044,6 +1096,94 @@ mod tests {
         let xml = write_unchecked(&inv, Syntax::Ubl).unwrap();
         let hits = prohibitions::scan_written(&xml, Syntax::Ubl);
         assert!(hits.iter().all(|h| !h.contains("cbc:UUID")), "{hits:?}");
+    }
+
+    #[test]
+    fn model_built_en_invoice_has_no_prohibition_hits() {
+        let inv = en_model_invoice();
+        let ubl = write_unchecked(&inv, Syntax::Ubl).unwrap();
+        let ubl_hits = prohibitions::scan_written(&ubl, Syntax::Ubl);
+        assert!(ubl_hits.is_empty(), "{ubl_hits:?}\n{ubl}");
+        let cii = write_unchecked(&inv, Syntax::Cii).unwrap();
+        let cii_hits = prohibitions::scan_written(&cii, Syntax::Cii);
+        assert!(cii_hits.is_empty(), "{cii_hits:?}\n{cii}");
+    }
+
+    #[test]
+    fn model_built_en_credit_note_ubl_has_no_prohibition_hits() {
+        let mut inv = en_model_invoice();
+        inv.kind = core_invoice::DocumentKind::CreditNote;
+        inv.type_code = Some(core_invoice::Code::new("381"));
+        inv.due_date = core_invoice::Date::parse("2026-02-01").ok();
+        let xml = write_unchecked(&inv, Syntax::Ubl).unwrap();
+        assert!(xml.contains("<CreditNote "));
+        let hits = prohibitions::scan_written(&xml, Syntax::Ubl);
+        assert!(hits.is_empty(), "{hits:?}\n{xml}");
+        let drops = write_drops(&inv, Syntax::Ubl);
+        assert!(drops.iter().any(|d| d == "CreditNote/DueDate"), "{drops:?}");
+        assert!(drops.iter().all(|d| !d.contains("UBL-CR-")), "{drops:?}");
+    }
+
+    #[test]
+    fn planted_uuid_is_a_prohibition_hit() {
+        let xml = write_unchecked(&en_model_invoice(), Syntax::Ubl).unwrap();
+        let planted = xml.replacen("<cbc:ID>", "<cbc:UUID>planted</cbc:UUID><cbc:ID>", 1);
+        let hits = prohibitions::scan_written(&planted, Syntax::Ubl);
+        assert!(hits.iter().any(|h| h.contains("UBL-CR-005")), "{hits:?}");
+    }
+
+    #[test]
+    fn planted_customization_scheme_id_is_a_prohibition_hit() {
+        let xml = write_unchecked(&en_model_invoice(), Syntax::Ubl).unwrap();
+        let planted = xml.replacen(
+            "<cbc:CustomizationID>",
+            "<cbc:CustomizationID schemeID=\"x\">",
+            1,
+        );
+        let hits = prohibitions::scan_written(&planted, Syntax::Ubl);
+        assert!(hits.iter().any(|h| h.contains("UBL-CR-648")), "{hits:?}");
+    }
+
+    #[test]
+    fn pint_my_tin_scheme_is_named_ubl_cr_652() {
+        use core_invoice::{
+            Amount, Code, Date, Identifier, Line, Party, TaxCategory, TaxSystem, reconcile,
+        };
+        use rust_decimal::Decimal;
+        let mut inv = Invoice::blank(
+            Profile::PintMy,
+            "MY-1",
+            "MYR",
+            {
+                let mut p = Party::new("Kedai", "MY");
+                p.tax_registration = Some(Identifier::new("C12345678901"));
+                p.legal_registration = Some(Identifier::new("2023010000001"));
+                p.electronic_address = Some(Identifier::schemed("C12345678901", "0230"));
+                p
+            },
+            {
+                let mut b = Party::new("Pembeli", "MY");
+                b.legal_registration = Some(Identifier::new("1999010000001"));
+                b
+            },
+        );
+        inv.issue_date = Date::parse("2026-01-15").ok();
+        inv.type_code = Some(Code::new("380"));
+        inv.lines = vec![Line::new(
+            "1",
+            "W",
+            Amount::parse("100.00").unwrap(),
+            TaxCategory::sst("SA", Decimal::from(10)),
+        )];
+        reconcile(&mut inv).unwrap();
+        let xml = write_unchecked(&inv, Syntax::Ubl).unwrap();
+        assert!(xml.contains("schemeID=\"GST\""));
+        let hits = prohibitions::scan_written(&xml, Syntax::Ubl);
+        assert!(
+            hits.iter().any(|h| h.contains("UBL-CR-652")),
+            "CEN core forbids CompanyID/@schemeID; PINT-MY TIN requires it: {hits:?}"
+        );
+        assert_eq!(inv.lines[0].tax.system, TaxSystem::Sst);
     }
 
     #[test]

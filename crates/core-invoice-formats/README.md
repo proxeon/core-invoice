@@ -14,4 +14,6 @@ BT-147-in-gross are mapped. Empty `PostalAddress` vs absent stays a named drop.
 returns `FormatError::CiiNotForProfile`. Do not wrap UBL in a
 `CrossIndustryInvoice` costume.
 
+Generated CEN syntax prohibitions (`task prohibitions`) feed `write_drops` / `scan_written`: they report forbidden children and attributes on the written bytes. They do not rewrite the tree and they are not a Schematron engine. Empty hits are not CEN Valid, not KoSIT Valid, not OpenPEPPOL Valid.
+
 Full guide: <https://github.com/proxeon/core-invoice>

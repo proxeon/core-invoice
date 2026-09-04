@@ -62,6 +62,7 @@ tasks:
     desc: Regenerate UBL/CII prohibition tables from preprocessed Schematron
     cmds:
       - python3 xtask/gen_prohibitions.py
+      - cargo fmt -p core-invoice-formats
 
   deny:
     desc: cargo deny check (licences, advisories)
