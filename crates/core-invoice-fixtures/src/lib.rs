@@ -195,8 +195,8 @@ mod tests {
 
     #[test]
     fn official_pint_my_sa_when_refers_present() {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(
-            "../../refers/pint-my-1.3.0/unpacked/trn-invoice/example/Invoice-Sample-SA_1.3.0.xml",
+        let path = core_invoice_formats::corpus(
+            "pint-my-1.3.0/unpacked/trn-invoice/example/Invoice-Sample-SA_1.3.0.xml",
         );
         if !path.exists() {
             if std::env::var("CORE_INVOICE_REQUIRE_SPEC").ok().as_deref() == Some("1") {
@@ -219,8 +219,7 @@ mod tests {
 
     #[test]
     fn official_pint_my_samples_validate() {
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../refers/pint-my-1.3.0/unpacked/trn-invoice/example");
+        let dir = core_invoice_formats::corpus("pint-my-1.3.0/unpacked/trn-invoice/example");
         let names = [
             "Invoice-Sample-SA_1.3.0.xml",
             "Invoice-Sample-SE_1.3.0.xml",
@@ -248,8 +247,8 @@ mod tests {
 
     #[test]
     fn official_peppol_base_example_when_refers_present() {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../refers/peppol-bis-invoice-3/rules/examples/base-example.xml");
+        let path =
+            core_invoice_formats::corpus("peppol-bis-invoice-3/rules/examples/base-example.xml");
         if !path.exists() {
             if std::env::var("CORE_INVOICE_REQUIRE_SPEC").ok().as_deref() == Some("1") {
                 panic!("missing {}", path.display());
@@ -266,8 +265,7 @@ mod tests {
 
     #[test]
     fn official_cen_cii_example1_when_refers_present() {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../refers/en16931/cii/examples/CII_example1.xml");
+        let path = core_invoice_formats::corpus("en16931/cii/examples/CII_example1.xml");
         if !path.exists() {
             if std::env::var("CORE_INVOICE_REQUIRE_SPEC").ok().as_deref() == Some("1") {
                 panic!("missing {}", path.display());
@@ -296,8 +294,7 @@ mod tests {
 
     #[test]
     fn official_en16931_example_when_refers_present() {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../refers/en16931/ubl/examples/ubl-tc434-example1.xml");
+        let path = core_invoice_formats::corpus("en16931/ubl/examples/ubl-tc434-example1.xml");
         if !path.exists() {
             if std::env::var("CORE_INVOICE_REQUIRE_SPEC").ok().as_deref() == Some("1") {
                 panic!("missing {}", path.display());
@@ -313,8 +310,7 @@ mod tests {
 
     #[test]
     fn official_en16931_example5_eas_em() {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../refers/en16931/ubl/examples/ubl-tc434-example5.xml");
+        let path = core_invoice_formats::corpus("en16931/ubl/examples/ubl-tc434-example5.xml");
         if !path.exists() {
             if std::env::var("CORE_INVOICE_REQUIRE_SPEC").ok().as_deref() == Some("1") {
                 panic!("missing {}", path.display());
@@ -332,8 +328,7 @@ mod tests {
 
     #[test]
     fn official_en_sample_discount_price() {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../refers/en16931/ubl/examples/sample-discount-price.xml");
+        let path = core_invoice_formats::corpus("en16931/ubl/examples/sample-discount-price.xml");
         if !path.exists() {
             if std::env::var("CORE_INVOICE_REQUIRE_SPEC").ok().as_deref() == Some("1") {
                 panic!("missing {}", path.display());
@@ -357,8 +352,8 @@ mod tests {
 
     #[test]
     fn official_pint_my_lhdn_complete_credit_note() {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(
-            "../../refers/pint-my-1.3.0/unpacked/trn-invoice/example/CompleteSample_LHDN-CreditNote.xml",
+        let path = core_invoice_formats::corpus(
+            "pint-my-1.3.0/unpacked/trn-invoice/example/CompleteSample_LHDN-CreditNote.xml",
         );
         if !path.exists() {
             if std::env::var("CORE_INVOICE_REQUIRE_SPEC").ok().as_deref() == Some("1") {

@@ -6,11 +6,31 @@ use core_invoice::{
     En16931Marker, Invoice, PeppolBis3Marker, PintMarker, PintMyMarker, Profile, ProfileMarker,
     Report, Validated,
 };
+use std::path::{Path, PathBuf};
 
 pub mod cii;
 pub mod prohibitions;
 pub mod ubl;
 pub mod xml;
+
+/// Git-tracked official XML (`testdata/`). EUPL/Peppol terms; not crate licence.
+pub fn testdata_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../testdata")
+}
+
+/// Prefer [`testdata_root`], then `refers/` after `task spec`.
+///
+/// `rel` is relative to both trees (e.g. `en16931/ubl/examples/ubl-tc434-example1.xml`).
+pub fn corpus(rel: impl AsRef<Path>) -> PathBuf {
+    let rel = rel.as_ref();
+    let testdata = testdata_root().join(rel);
+    if testdata.exists() {
+        return testdata;
+    }
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../refers")
+        .join(rel)
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum FormatError {

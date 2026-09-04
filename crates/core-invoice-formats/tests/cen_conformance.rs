@@ -1,16 +1,17 @@
 //! Run CEN's own UBL unit-test suite against our rules.
 //!
-//! `refers/en16931/test/{Invoice,CreditNote}-unit-UBL/` is Difi `testSet` XML:
-//! `<error>BR-01</error>` means the rule must fire; `<success>` means it must not.
-//! Skip unless `refers/` is present; fail if `CORE_INVOICE_REQUIRE_SPEC=1` and the
-//! suite is missing. Syntax `UBL-*` / `CII-*` are formats/unmapped, not CORE.
+//! `testdata/en16931/test/{Invoice,CreditNote}-unit-UBL/` is Difi `testSet` XML
+//! (vendored from ConnectingEurope pin; EUPL-1.2). `<error>BR-01</error>` means
+//! the rule must fire; `<success>` means it must not. Falls back to `refers/`
+//! after `task spec`. Fail if `CORE_INVOICE_REQUIRE_SPEC=1` and the suite is
+//! missing. Syntax `UBL-*` / `CII-*` are formats/unmapped, not CORE.
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use core_invoice::Profile;
 use core_invoice::rules::{self, catalogue};
-use core_invoice_formats::validate_xml;
+use core_invoice_formats::{corpus, validate_xml};
 
 struct Case {
     file: String,
@@ -21,7 +22,7 @@ struct Case {
 }
 
 fn suite_root() -> Option<PathBuf> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../refers/en16931/test");
+    let root = corpus("en16931/test");
     root.is_dir().then_some(root)
 }
 
@@ -183,9 +184,9 @@ fn cen_ubl_unit_tests_agree() {
     let cases = cases();
     if cases.is_empty() {
         if std::env::var("CORE_INVOICE_REQUIRE_SPEC").ok().as_deref() == Some("1") {
-            panic!("missing refers/en16931/test; run task spec");
+            panic!("missing testdata/en16931/test (and refers/); run task spec");
         }
-        eprintln!("skipping: refers/en16931/test not present");
+        eprintln!("skipping: testdata/en16931/test not present");
         return;
     }
 

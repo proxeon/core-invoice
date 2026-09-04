@@ -5,6 +5,7 @@ This directory is the **local cache of sources of truth**. The Rust clone
 structure a meaning engine). It is **not** the spec.
 
 Clones and zips are **gitignored**. This README and `fetch.sh` are tracked.
+The XML slice tests need is git-tracked under [`testdata/`](../testdata/) (not this cache).
 
 ```
 task spec          # same as: refers/fetch.sh

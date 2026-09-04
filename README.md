@@ -28,7 +28,7 @@ task test            # cargo test --workspace
 task check           # fmt + clippy + test
 task cli -- validate --profile auto path/to/invoice.xml
 task invoice:test    # one crate (invoice|formats|bin|fixtures|sys)
-task spec            # fetch official artefacts into gitignored refers/
+task spec            # fetch full artefacts into gitignored refers/ (SVRL/XSLT; testdata/ is enough for cargo test)
 task svrl            # compare Fatal ids to pinned ConnectingEurope / PINT-MY XSLT
 ```
 
@@ -61,4 +61,4 @@ A German XRechnung BT-24 is ingested as **EN 16931**. There is no shipped `Profi
 
 License: MIT OR Apache-2.0. Releases: [CHANGELOG.md](CHANGELOG.md). crates.io: [core-invoice 2.0.1](https://crates.io/crates/core-invoice). Git tag **v2.0.1**. crates.io **2.0.0** / **1.0.0** remain (not yanked).
 
-Official artefacts (CEN / Peppol / PINT): [docs/spec.md](docs/spec.md) and [`refers/`](refers/) (`task spec`; clones and zips are gitignored).
+Official artefacts (CEN / Peppol / PINT): [docs/spec.md](docs/spec.md). Git-tracked XML for `cargo test`: [`testdata/`](testdata/) (EUPL/Peppol terms, [NOTICE](testdata/NOTICE)). Full clones and zips: [`refers/`](refers/) (`task spec`; gitignored).

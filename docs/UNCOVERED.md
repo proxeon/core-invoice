@@ -57,7 +57,7 @@ Family A/C rows and IC-11/12: in catalogue. Presence evals registered: BR-12…1
 
 ## CEN UBL unit tests (pin validation-1.3.16)
 
-`cargo test -p core-invoice-formats --test cen_conformance` when `refers/en16931/test` is present. Floor **1055** agreed / **1000** run; ceiling **0** unexplained disagreements. Named divergences (6): empty `PostalAddress`, empty `BillingReference`. Raise the floor when a skipped unevaluated rule starts agreeing.
+`cargo test -p core-invoice-formats --test cen_conformance` uses git-tracked `testdata/en16931/test` (falls back to `refers/` after `task spec`). Floor **1055** agreed / **1000** run; ceiling **0** unexplained disagreements. Named divergences (6): empty `PostalAddress`, empty `BillingReference`. Raise the floor when a skipped unevaluated rule starts agreeing.
 
 ## Syntax prohibition tables
 

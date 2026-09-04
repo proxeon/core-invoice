@@ -17,6 +17,10 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Git-tracked `testdata/` (~2 MB): CEN UBL unit-test XML and official EN/Peppol/PINT-MY samples so `cargo test` on a fresh clone does not skip. EUPL/Peppol terms in `testdata/NOTICE`. Not copied into `crates/`. Full Schematron/XSLT still `task spec`.
+
 ## [2.0.1] — 2026-09-04
 
 Additive. No Rust API break.

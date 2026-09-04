@@ -4,6 +4,8 @@ CEN EN 16931 validation artefacts are **EUPL-1.2**. Peppol and PINT carry their 
 
 **Local cache:** [`refers/`](../refers/) — links, pins, and `fetch.sh`. Clones and zips are gitignored; the README is tracked.
 
+**Test XML slice:** [`testdata/`](../testdata/) (~2 MB, tracked). Official examples and CEN unit-test XML so `cargo test` on a fresh clone does not skip. EUPL/Peppol terms — [testdata/NOTICE](../testdata/NOTICE). Not copied into `crates/`. Full Schematron/XSLT still need `task spec`.
+
 ```
 task spec
 # or
@@ -21,9 +23,9 @@ task spec
 
 The hupe1980 crate at `/Users/akmalfirdaus/Code/lazuar/en16931` is a **shape** reference only (`refers/shape-en16931` after fetch). Schematron + CEN text win if they disagree.
 
-Do not copy CEN example XML into `crates/core-invoice-fixtures/data/`. Synthetic samples we author may be MIT OR Apache-2.0. Never `git add refers/*.zip` or the clones.
+Do not copy CEN example XML into `crates/core-invoice-fixtures/data/`. The git-tracked slice is [`testdata/`](../testdata/) (NOTICE, not crate licence). Synthetic samples we author may be MIT OR Apache-2.0. Never `git add refers/*.zip` or the clones.
 
-Optional CI job `artefacts` (`CORE_INVOICE_REQUIRE_SPEC=1`) fetches `refers/` then runs official-sample tests. Default PR/`check` skips when artefacts are absent. **Tag skip is not OK:** pushes of `v*` tags run `artefacts`.
+Default `cargo test` loads `testdata/`. Optional CI job `artefacts` (`CORE_INVOICE_REQUIRE_SPEC=1`) still fetches full `refers/` for SVRL/XSLT. **Tag skip is not OK:** pushes of `v*` tags run `artefacts`.
 
 SVRL oracle: `task svrl` (sets `SVRL_ORACLE=1`; `CORE_INVOICE_REQUIRE_SPEC=1` also works). Saxon-HE is an **oracle runner**, not a crate dependency. Resolution order: `saxon` on PATH, then `SAXON_JAR` + a working `java`, then **Docker Compose** `eclipse-temurin:21-jre` (`docker compose run --rm saxon …`) with the jar fetched to `xtask/.saxon/` (gitignored). Mapping: [`svrl-id-map.md`](svrl-id-map.md). Expected unmatched: the fenced list in [`UNCOVERED.md`](UNCOVERED.md) (prose is not scanned). UBL-CR/SR/DT are ignored in the semantic compare. Peppol BIS **v3.0.20** is `.sch` only — no OpenPEPPOL `@id` compare in this pin. Not the default `task test`. Self-check of the diff (no Saxon): `python3 xtask/svrl_oracle.py --self-test`. Mustang (`MUSTANG_JAR`) is VAT CII only and never default CI.
 
