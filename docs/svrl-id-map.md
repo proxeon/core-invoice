@@ -16,8 +16,12 @@ ConnectingEurope XSLT 1.3.16 / Peppol / PINT-MY Schematron SVRL `@id` compared t
 | PEPPOL-EN16931-R007 | PEPPOL-EN16931-R007 | Peppol process id |
 | PINT-TAX | PINT-TAX | Crate id; SST on Peppol |
 | BR-CL-17 | BR-CL-17 | UNCL 5305 on VAT profiles |
-| BR-CL-18 | PINT-TAX | SST line category is not UNCL 5305; we emit PINT-TAX instead of BR-CL-18 |
-| ids in `docs/UNCOVERED.md` | — | Not implemented; SVRL hit is expected unmatched |
+| BR-CL-18 | PINT-TAX | SST line category is not UNCL 5305; we emit PINT-TAX instead of BR-CL-18 (EN artefact on SA) |
+| CORE-SPEC-01 | — | Crate-only; expected extra on unknown BT-24, not on official EN examples |
+| CORE-PROCESS-01 | — | Crate-only; self-billing URN |
+| ids in `docs/UNCOVERED.md` fenced list | — | Expected unmatched when **they** fire and **we** do not. Prose in that file is not loaded. |
+
+UBL-CR / UBL-SR / UBL-DT failed-asserts are **syntax**; the oracle drops them from the semantic compare (e.g. UBL-SR-43 on SST-as-EN).
 
 Peppol-only Fatal ids (`PEPPOL-*`) compared to ConnectingEurope EN XSLT are not unexpected extras (EN cannot emit them). Docker Compose `saxon` (eclipse-temurin:21-jre + Saxon-HE 10.9) is an oracle runner when the host has no JDK.
 

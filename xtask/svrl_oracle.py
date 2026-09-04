@@ -65,20 +65,39 @@ def load_map(path: Path) -> dict[str, str]:
     return mapping
 
 
-def load_uncovered(path: Path) -> set[str]:
+def load_uncovered_text(text: str) -> set[str]:
+    """Ids in the fenced block under `## Oracle expected-unmatched` only. Prose is not scanned."""
     ids: set[str] = set()
-    if not path.is_file():
+    m = re.search(
+        r"^## Oracle expected-unmatched\s*\n+```[^\n]*\n(.*?)```",
+        text,
+        re.M | re.S,
+    )
+    if not m:
         return ids
-    text = path.read_text()
-    for m in ID_TOKEN.finditer(text):
-        ids.add(canonical(m.group(1)))
-    # Range PEPPOL-COMMON-R041–R053 (en-dash or hyphen).
-    for a, b in re.findall(
-        r"PEPPOL-COMMON-R0(\d{2})[–-]R0(\d{2})", text, flags=re.I
-    ):
-        for n in range(int(a), int(b) + 1):
-            ids.add(canonical(f"PEPPOL-COMMON-R0{n:02d}"))
+    for line in m.group(1).splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        tok = line.split()[0].strip(",")
+        for hit in ID_TOKEN.finditer(tok):
+            ids.add(canonical(hit.group(1)))
     return ids
+
+
+def load_uncovered(path: Path) -> set[str]:
+    if not path.is_file():
+        return set()
+    return load_uncovered_text(path.read_text())
+
+
+def syntax_ids(ids: set[str]) -> set[str]:
+    """UBL-CR/SR/DT are formats/unmapped, not the semantic compare."""
+    return {
+        i
+        for i in ids
+        if i.startswith("UBL-CR") or i.startswith("UBL-SR") or i.startswith("UBL-DT")
+    }
 
 
 def parse_svrl_failed_ids(xml: str) -> set[str]:
@@ -225,18 +244,45 @@ def find_cli() -> Path | None:
     return shutil.which("core-invoice") and Path(shutil.which("core-invoice"))  # type: ignore[arg-type]
 
 
+# Default EN corpus: TC434 examples + credit note + guide + discount + mutant.
+# Other files in refers/en16931/ubl/examples/ are named skips, not forgotten.
+EN_CORE_NAMES = [
+    *[f"ubl-tc434-example{i}.xml" for i in range(1, 11)],
+    "ubl-tc434-creditnote1.xml",
+    "guide-example1.xml",
+    "guide-example2.xml",
+    "guide-example3.xml",
+    "sample-discount-price.xml",
+]
+EN_SKIP_NAMED = {
+    "BIS3_Invoice_negativ.XML": "Peppol-named; not default EN XSLT compare",
+    "BIS3_Invoice_positive.XML": "Peppol-named; not default EN XSLT compare",
+    "FT G2G_TD01 con Allegato, Bonifico e Split Payment.xml": "Italian G2G split-payment fixture; not TC434 core",
+    "issue116.xml": "ConnectingEurope regression fixture; not TC434 core",
+}
+PINT_MY_LHDN_SKIP = {
+    "CompleteSample_LHDN.xml": "Zip LHDN-shaped sample; not IRBM Valid",
+    "CompleteSample_LHDN-CreditNote.xml": "Zip LHDN-shaped sample; not IRBM Valid",
+}
+
+
 def default_en_files() -> list[Path]:
     base = ROOT / "refers/en16931/ubl/examples"
-    names = [
-        "ubl-tc434-example1.xml",
-        "ubl-tc434-example5.xml",
-        "sample-discount-price.xml",
-    ]
-    out = [base / n for n in names if (base / n).is_file()]
+    out = [base / n for n in EN_CORE_NAMES if (base / n).is_file()]
     mutant = ROOT / "xtask/testdata/missing-issue-date.xml"
     if mutant.is_file():
         out.append(mutant)
     return out
+
+
+def pint_my_official_xml() -> list[Path]:
+    d = ROOT / "refers/pint-my-1.3.0/unpacked/trn-invoice/example"
+    if not d.is_dir():
+        return []
+    files = sorted(d.glob("Invoice-Sample-*.xml")) + sorted(
+        d.glob("CreditNote-Sample-*.xml")
+    )
+    return [p for p in files if p.name not in PINT_MY_LHDN_SKIP]
 
 
 def self_test() -> int:
@@ -256,6 +302,17 @@ def self_test() -> int:
         {"PEPPOL-COMMON-R049", "BR-03"}, "en", "peppol"
     )
     assert dropped == {"PEPPOL-COMMON-R049"}, dropped
+    prose = (
+        "## Oracle expected-unmatched\n\n"
+        "```\nBR-17\n```\n\n"
+        "Prose mentions BR-99 and BR-CO-25 so a scrape would hide them.\n"
+    )
+    loaded = load_uncovered_text(prose)
+    assert canonical("BR-17") in loaded, loaded
+    assert canonical("BR-99") not in loaded, loaded
+    assert canonical("BR-CO-25") not in loaded, loaded
+    syn = syntax_ids({"UBL-SR-43", "BR-03", "UBL-DT-01"})
+    assert syn == {"UBL-SR-43", "UBL-DT-01"}, syn
     print("self-test ok")
     return 0
 
@@ -302,6 +359,16 @@ def main(argv: list[str]) -> int:
     files = [Path(a) for a in argv[1:] if not a.startswith("-")]
     if not files:
         files = default_en_files()
+        examples = ROOT / "refers/en16931/ubl/examples"
+        if examples.is_dir():
+            for p in sorted(examples.iterdir()):
+                if p.name in EN_SKIP_NAMED:
+                    print(f"skip EN example {p.name}: {EN_SKIP_NAMED[p.name]}")
+        my_ex = ROOT / "refers/pint-my-1.3.0/unpacked/trn-invoice/example"
+        if my_ex.is_dir():
+            for name, why in PINT_MY_LHDN_SKIP.items():
+                if (my_ex / name).is_file():
+                    print(f"skip PINT-MY {name}: {why}")
     if not files:
         print("no XML files to compare (pass paths or fetch refers/)", file=sys.stderr)
         return 1 if require_spec() else 0
@@ -326,11 +393,15 @@ def main(argv: list[str]) -> int:
                 print(f"saxon failed on {xml}: {proc.stderr or proc.stdout}", file=sys.stderr)
                 failed += 1
                 continue
-            svrl = parse_svrl_failed_ids(out.read_text(errors="replace"))
+            svrl_all = parse_svrl_failed_ids(out.read_text(errors="replace"))
+            syn = syntax_ids(svrl_all)
+            svrl = svrl_all - syn
             ours, slug = our_fatal_ids(cli, xml, None)
             extra, missing = diff_sets(svrl, ours, mapping, uncovered)
             extra -= extras_artefact_cannot_emit(extra, "en", slug)
             print(f"{xml.name}: svrl={sorted(svrl)} ours={sorted(ours)}")
+            if syn:
+                print(f"  syntax ignored={sorted(syn)}")
             if extra or missing:
                 print(f"  unexpected extra={sorted(extra)} missing={sorted(missing)}", file=sys.stderr)
                 failed += 1
@@ -349,26 +420,38 @@ def main(argv: list[str]) -> int:
         "PINT-UBL-validation-preprocessed.xslt"
     )
     sa = ROOT / "refers/pint-my-1.3.0/unpacked/trn-invoice/example/Invoice-Sample-SA_1.3.0.xml"
-    if my_xslt.is_file() and sa.is_file() and ("--pint-my" in argv or not argv[1:]):
-        out = svrl_dir / "pint-my-sa.svrl.xml"
-        try:
-            cmd = saxon_cmd(my_xslt, sa, out)
-            proc = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
-            if proc.returncode != 0:
-                print(f"saxon PINT-MY failed: {proc.stderr or proc.stdout}", file=sys.stderr)
-                failed += 1
-            else:
-                svrl = parse_svrl_failed_ids(out.read_text(errors="replace"))
-                ours, _slug = our_fatal_ids(cli, sa, "pint-my")
+    pint_my_files = pint_my_official_xml() if ("--pint-my" in argv or not argv[1:]) else []
+    if my_xslt.is_file() and pint_my_files:
+        for sample in pint_my_files:
+            out = svrl_dir / f"pint-my-{sample.stem}.svrl.xml"
+            try:
+                cmd = saxon_cmd(my_xslt, sample, out)
+                proc = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
+                if proc.returncode != 0:
+                    print(
+                        f"saxon PINT-MY failed on {sample.name}: {proc.stderr or proc.stdout}",
+                        file=sys.stderr,
+                    )
+                    failed += 1
+                    continue
+                svrl_all = parse_svrl_failed_ids(out.read_text(errors="replace"))
+                syn = syntax_ids(svrl_all)
+                svrl = svrl_all - syn
+                ours, _slug = our_fatal_ids(cli, sample, "pint-my")
                 extra, missing = diff_sets(svrl, ours, mapping, uncovered)
-                print(f"PINT-MY SA: svrl={sorted(svrl)} ours={sorted(ours)}")
+                print(f"PINT-MY {sample.name}: svrl={sorted(svrl)} ours={sorted(ours)}")
+                if syn:
+                    print(f"  syntax ignored={sorted(syn)}")
                 if extra or missing:
-                    print(f"  unexpected extra={sorted(extra)} missing={sorted(missing)}", file=sys.stderr)
+                    print(
+                        f"  unexpected extra={sorted(extra)} missing={sorted(missing)}",
+                        file=sys.stderr,
+                    )
                     failed += 1
                 else:
                     print("  comparable")
-        finally:
-            out.unlink(missing_ok=True)
+            finally:
+                out.unlink(missing_ok=True)
 
     # Sibling profiles: SST SA is not a Peppol BIS invoice.
     if sa.is_file() and xslt_en.is_file() and ("--pint-my" in argv or not argv[1:]):
@@ -380,10 +463,14 @@ def main(argv: list[str]) -> int:
                 print(f"saxon EN-on-SA failed: {proc.stderr or proc.stdout}", file=sys.stderr)
                 failed += 1
             else:
-                svrl = parse_svrl_failed_ids(out.read_text(errors="replace"))
+                svrl_all = parse_svrl_failed_ids(out.read_text(errors="replace"))
+                syn = syntax_ids(svrl_all)
+                svrl = svrl_all - syn
                 ours, _slug = our_fatal_ids(cli, sa, "en16931")
                 extra, missing = diff_sets(svrl, ours, mapping, uncovered)
                 print(f"SA as EN: svrl={sorted(svrl)} ours={sorted(ours)}")
+                if syn:
+                    print(f"  syntax ignored={sorted(syn)}")
                 if extra or missing:
                     print(
                         f"  unexpected extra={sorted(extra)} missing={sorted(missing)}",

@@ -2,6 +2,20 @@
 
 Every `catalogue()` id is either exercised by a `#[test]` or listed here with a reason.
 
+## Oracle expected-unmatched
+
+Ids the artefact may fire and we do not. `task svrl` loads **this fenced list only**. Prose elsewhere is not scanned.
+
+```
+BR-CO-25
+```
+
+`BR-CO-25` has no UBL assert in pin `validation-1.3.16`. UBL-CR/SR/DT (e.g. UBL-SR-43 on SST-as-EN) are ignored by the semantic compare, not listed here.
+
+## Peppol BIS pin is Schematron-only
+
+Peppol BIS **v3.0.20** in `refers/peppol-bis-invoice-3` is `.sch` (`rules/sch/PEPPOL-EN16931-UBL.sch`). This pin has **no compiled XSLT**. `task svrl` does **not** diff Peppol `@id`. SA-as-Peppol is **our** Fatal set only (must be non-empty). Compiling `.sch` ourselves is not OpenPEPPOL Valid. If a later pin ships XSLT, compare then.
+
 ## Code lists (generated; remaining holes)
 
 - none of BR-CL-03 / BR-CL-08: BR-CL-03 is a formats wire walk (`@currencyID` ∈ ISO 4217). BR-CL-08 uses UNCL 4451 extracted from EN UBL preprocessed Schematron (no `.gc` in the PINT-MY zip).
@@ -30,17 +44,11 @@ Registered remaining zip ids: `ALIGNED-IBRP-002`, `046/047/048`, `HVG-10`, `LVG-
 
 CLASS: mapped as `Line.classifications` with `listID` (`CG` is CLASS in PINT-MY). `BR-CL-13` / UNCL 7143. Not an LHDN submit artefact.
 
-## CEN semantic ids not in catalogue (P14 walk, pin validation-1.3.16)
+## CEN semantic ids not in catalogue (pin validation-1.3.16)
 
-Artefact union of `EN16931-model.sch` ∪ `EN16931-UBL-codes.sch` is 223 syntax-independent `BR-*`. Catalogue holds a subset. This list is artefact-minus-catalogue so SVRL unmatched is not a surprise. Do not invent `BR-CO-01/02/27`, `BR-CL-02/09/12`. UBL-CR/SR/DT (756) are formats/unmapped, not CORE (e.g. UBL-SR-43 on SST-as-EN).
+Artefact union of `EN16931-model.sch` ∪ `EN16931-UBL-codes.sch`: **223** syntax-independent `BR-*`. Live `catalogue()` EN intersection: **223**. Listed holes: **0**. Do not invent `BR-CO-01/02/27`, `BR-CL-02/09/12` (`explain` stays None). `BR-CO-25` is not in the 223 (no UBL rule). UBL-CR/SR/DT (~756) are formats/unmapped, not CORE.
 
-Family A/C rows and IC-11/12: now in catalogue.
-
-Presence evals registered: BR-12…15, 17–20, 29–33, 36–38, 41–50, 52, 54–57, 61–65. BR-31/36/41/43/45/46 are type-retired (`explain` works).
-
-CL bound: BR-CL-03 (wire), BR-CL-08 (BT-21).
-
-CO registered: BR-CO-09/19–24/26 (CO-26 skipped on Pint/PintMy; EN/Peppol require BT-29/30/31).
+Family A/C rows and IC-11/12: in catalogue. Presence evals registered: BR-12…15, 17–20, 29–33, 36–38, 41–50, 52, 54–57, 61–65. BR-31/36/41/43/45/46 are type-retired (`explain` works). CL bound: BR-CL-03 (wire), BR-CL-08 (BT-21). CO registered: BR-CO-09/19–24/26 (CO-26 skipped on Pint/PintMy).
 
 ## Pint GST
 
@@ -49,7 +57,7 @@ CO registered: BR-CO-09/19–24/26 (CO-26 skipped on Pint/PintMy; EN/Peppol requ
 
 ## P14 / P18
 
-- ConnectingEurope XSLT SVRL job: `task svrl` / `xtask/svrl_oracle.py`. Saxon-HE 10.9 via host JDK or Docker Compose `eclipse-temurin:21-jre`. Parses `failed-assert/@id` and diffs Fatal `Finding.id`. Mapping table `docs/svrl-id-map.md`. Peppol BIS pin is `.sch` only.
+- ConnectingEurope XSLT SVRL job: `task svrl` / `xtask/svrl_oracle.py`. Default EN corpus is TC434 examples 1–10 + credit note + guide 1–3 + `sample-discount-price` + BR-03 mutant. PINT-MY official Invoice/CreditNote samples SA/SE/HVG/LVG/TTX. BIS3/G2G/`issue116` and LHDN-shaped zip samples are named skips. v0.2.0 tag baseline (example1/5/discount+mutant+SA) was comparable. Peppol BIS pin is `.sch` only (see above).
 - Mustang: only if `MUSTANG_JAR` is set; VAT CII; never default CI.
 - nix flake: Later (P18.03 / P19).
 - cargo-fuzz target `fuzz/fuzz_targets/formats_read.rs` is run locally (`cargo fuzz run formats_read`); not default CI. Unit smoke `random_bytes_do_not_panic` stays.
