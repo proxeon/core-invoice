@@ -62,13 +62,26 @@ if ! download "$CII_ZIP_URL" "$ROOT/cii-d16b/D16B_SCRDM__Subset__CII.zip"; then
   ln -sfn "../en16931/cii/schema" "$ROOT/cii-d16b/from-cen-artefacts"
 fi
 
+unpack_zip() {
+  local zip="$1" dest="$2"
+  mkdir -p "$dest"
+  if [[ -d "$dest/trn-invoice" ]]; then
+    echo "have $dest"
+    return 0
+  fi
+  echo "unzip $zip -> $dest"
+  unzip -q -o "$zip" -d "$dest"
+}
+
 echo "== PINT Billing $PINT_VER resources.zip"
 mkdir -p "$ROOT/pint-billing-${PINT_VER}"
 download "$PINT_ZIP_URL" "$ROOT/pint-billing-${PINT_VER}/resources.zip"
+unpack_zip "$ROOT/pint-billing-${PINT_VER}/resources.zip" "$ROOT/pint-billing-${PINT_VER}/unpacked"
 
 echo "== PINT-MY $PINT_MY_VER resources.zip"
 mkdir -p "$ROOT/pint-my-${PINT_MY_VER}"
 download "$PINT_MY_ZIP_URL" "$ROOT/pint-my-${PINT_MY_VER}/resources.zip"
+unpack_zip "$ROOT/pint-my-${PINT_MY_VER}/resources.zip" "$ROOT/pint-my-${PINT_MY_VER}/unpacked"
 
 SHAPE="/Users/akmalfirdaus/Code/lazuar/en16931"
 if [[ -d "$SHAPE" && ! -e "$ROOT/shape-en16931" ]]; then

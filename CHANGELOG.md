@@ -17,6 +17,18 @@ down here**, not that there are none.
 
 ## [Unreleased]
 
+### Added
+
+- SVRL default corpus: EN TC434 examples 1–10, credit note, guide 1–3, discount sample; PINT-MY official SA/SE/HVG/LVG/TTX invoices and credit notes. Named skips: BIS3/G2G/`issue116`, LHDN-shaped zip samples (not IRBM Valid).
+- `docs/UNCOVERED.md` fenced **Oracle expected-unmatched** list (prose is not scanned). CEN artefact `BR-*` vs catalogue: 223/223, listed holes 0.
+
+### Changed
+
+- Peppol BIS v3.0.20 documented as `.sch` only: no OpenPEPPOL `@id` compare in this pin.
+- `CII_DROPPED` no longer names mapped delivery/payment/notes/document A/C amounts; sub-paths remain where the subset still drops.
+- CI installs cbindgen and diffs `core_invoice.h` (no skip). Python 1.0 surface is `validate_xml` only.
+- `refers/fetch.sh` unzips PINT / PINT-MY `resources.zip` into `unpacked/` so tag artefacts jobs see official samples.
+
 ## [0.2.0] — 2026-09-03
 
 Honest meaning engine for embedders to **build against**. Still **not** a legal validator: `validate().ok()` is not ConnectingEurope / OpenPEPPOL / IRBM Valid. Do not publish this tree as 0.1.1.
