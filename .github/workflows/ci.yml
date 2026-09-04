@@ -24,14 +24,14 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: test
         run: cargo test --workspace --locked
+      - name: cbindgen
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cbindgen
       - name: cbindgen header
         run: |
-          if command -v cbindgen >/dev/null; then
-            cbindgen --config cbindgen.toml --crate core-invoice-sys --output /tmp/core_invoice.h
-            diff -u crates/core-invoice-sys/include/core_invoice.h /tmp/core_invoice.h
-          else
-            echo "cbindgen not installed; skip drift check"
-          fi
+          cbindgen --config cbindgen.toml --crate core-invoice-sys --output /tmp/core_invoice.h
+          diff -u crates/core-invoice-sys/include/core_invoice.h /tmp/core_invoice.h
 
   artefacts:
     runs-on: ubuntu-latest
