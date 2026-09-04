@@ -6,7 +6,7 @@ one version and one entry per release.
 
 The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-1.x may add APIs; breaking changes are 2.0. The C ABI is the 0/1/2 verbs, not
+2.x may add APIs; breaking changes are 3.0. The C ABI is the 0/1/2 verbs, not
 `Invoice` layout.
 
 [`core-invoice`]: https://crates.io/crates/core-invoice
@@ -17,6 +17,12 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.0.0] — 2026-09-04
+
+**Breaking (Rust API only).** `DocumentTotals.payable` is `Option<InvoiceAmount>`. A missing PayableAmount is not `0.00`, so BR-15 can fire. `Invoice::payable()` was already `Option` (absent BG-22). Callers that wrote `totals.payable` as a required amount, or `DocumentTotals { payable: amt, .. }`, need `Some(amt)`. The C ABI is unchanged.
+
+This is not a new product. crates.io 1.0.0 stays; 2.0 is the honest BT-115 type after 1.0 was already published.
+
 ### Added
 
 - CEN UBL unit-test runner (`refers/en16931/test/{Invoice,CreditNote}-unit-UBL`). Ratchet: ≥1000 run, ≥1055 agreed, **0** unexplained disagreements. Six named divergences remain (empty `PostalAddress` / empty `BillingReference`). Skip unless `refers/` is present.
@@ -26,7 +32,6 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - UBL `AllowanceCharge` without `Amount` is kept (amount 0) so BT-95/102 on CEN fragments still evaluate. Line A/C, empty PayeeFinancialAccount, empty item attributes, Price without `PriceAmount`, TaxSubtotal without category, and supporting documents without `ID` are kept so presence rules can fire.
-- `DocumentTotals.payable` is `Option` (missing PayableAmount is not 0). **Breaking** for 1.x callers that stored a required `InvoiceAmount`.
 - VAT family rows apply as soon as the category appears (not only once BG-22/BG-23 exist). Dual `TaxTotal` subtotals are concatenated. PartyTaxScheme `TAX`/`GST`/`AAL` vs `VAT` is distinguished.
 - CII maps party street/city/postcode and contact (phone/email/name). `seller.contact` / `buyer.contact` leave `CII_DROPPED`.
 - Peppol pin test: `rules/sch/` must not contain compiled Schematron XSLT. `stylesheet/stylesheet-ubl.xslt` is presentation, not OpenPEPPOL Valid.
@@ -174,7 +179,8 @@ PINT-MY as profiles.
 - **`core-invoice-sys`** — C ABI `core_invoice_validate_ubl` and
   `include/core_invoice.h`.
 
-[Unreleased]: https://github.com/proxeon/core-invoice/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/proxeon/core-invoice/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/proxeon/core-invoice/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/proxeon/core-invoice/compare/v0.2.0...v1.0.0
 [0.2.0]: https://github.com/proxeon/core-invoice/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/proxeon/core-invoice/releases/tag/v0.1.0
