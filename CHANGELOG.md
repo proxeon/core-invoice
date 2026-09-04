@@ -17,36 +17,11 @@ down here**, not that there are none.
 
 ## [Unreleased]
 
-### Added
-
-- SVRL oracle: official EN examples, BR-03 mutant, PINT-MY SA, SST-as-EN three-way. Docker Compose Java fallback.
-- BR-CL-03 (`@currencyID` ISO 4217 wire walk), BR-CL-08 (UNCL 4451 from EN Schematron). Peppol COMMON-R041–R047/R049/R050/R052/R053 ICD checksums; R051 `@currencyID` = BT-5 except BT-111.
-- Remaining CEN presence/CO: BR-12…15, BR-19, BR-31–33, BR-36–38, BR-41–50, BR-61, BR-CO-26 (skipped on Pint/PintMy).
-- Named CII drop list `CII_DROPPED`; UBL↔CII model diff must stay inside it.
-- `docs/matrix.md` generated from `catalogue()` × profile.
-- cargo-fuzz target on `formats::read` (local). `task tracked` greps `crates/` for TODO/FIXME.
-- Line BT-132 (`order_line`), BT-133 (`accounting_reference`), BT-156 (`buyer_id`), BG-32 (`attributes` BT-160/161). UBL read/write. CII still named-dropped.
-- `IBR-CL-05-MY` (BT-6 ⇒ MYR). `explain BR-24` (type-retired BT-131).
-- BR-CL-07/10/11/21/26 bound to UNTDID 1153 / ICD. Generated `UNCL_1153`. EN type list includes 326/384/389 (Peppol P0100 still forbids 389).
-- VAT family `-03/-04/-06/-07` rows beyond S; BR-IC-11/12; BR-B-01 is Italian-domestic.
-- PINT-MY zip leftovers: ALIGNED-IBRP-002, 046–048, HVG/LVG-10, TTX-08, E-05/08, O-09.
-- Presence/co-occurrence: BR-17/18/20/29/30/52/54/55/56/57/62–65, BR-CO-09/19–24.
-- CII `Read.unmapped` lists unmapped `SupplyChainTradeTransaction` children. Official CEN CII example test when `refers/` present.
-
-### Changed
-
-- `Invoice::payable()` / `tax_total()` return `Option` — absent BG-22 is not 0.00.
-- UBL `LegalMonetaryTotal` child order matches XSD `MonetaryTotalType`. Price BT-147/148 round-trip as unit amounts. Unparseable dates and duplicate singletons are reported. Nested Item/Party unknowns appear in `unmapped`. CreditNote DueDate omit is named (`write_drops`).
-- CII: TypeCode credit-note set (not 381-only); `@format` not 102 is malformed; one PaymentMeans per IBAN; missing line tax is not SST; notes Content round-trips; delivery ShipTo before ActualDelivery; settlement tax before allowance/charge.
-- BR-23 fires when unit is absent even if quantity is absent (artefact `@unitCode` independent of qty).
-- Peppol R061 also applies to means code 59, not only 49 / DirectDebit.
-- CLI `inspect` uses the document element, not a `CrossIndustryInvoice` substring.
-- CLI `rules --profile en16931` lists CORE only (not Peppol extras).
-- UBL reads Payee / TaxRepresentative / Delivery; TaxRepresentativeParty has no extra `cac:Party`.
-
-## [0.2.0] — 2026-08-31
+## [0.2.0] — 2026-09-03
 
 Honest meaning engine for embedders to **build against**. Still **not** a legal validator: `validate().ok()` is not ConnectingEurope / OpenPEPPOL / IRBM Valid. Do not publish this tree as 0.1.1.
+
+This tag folds work that sat under Unreleased while the workspace version was already 0.2.0. crates.io **0.1.0** remains the published skeleton; this tree is not 0.1.1 and is not 1.0.0.
 
 ### Changed
 
@@ -76,8 +51,30 @@ Honest meaning engine for embedders to **build against**. Still **not** a legal 
 - **PINT-MY fixture** category is `SA` (not Singapore `SR`).
 - **C ABI.** Unknown profile strings return 2 (not silent PINT). NULL profile is auto from BT-24. Error buffer truncation is byte-safe.
 - **`/spec/`** is gitignored (CEN artefacts are EUPL-1.2). See `docs/spec.md`.
+- `Invoice::payable()` / `tax_total()` return `Option` — absent BG-22 is not 0.00.
+- UBL `LegalMonetaryTotal` child order matches XSD `MonetaryTotalType`. Price BT-147/148 round-trip as unit amounts. Unparseable dates and duplicate singletons are reported. Nested Item/Party unknowns appear in `unmapped`. CreditNote DueDate omit is named (`write_drops`).
+- CII: TypeCode credit-note set (not 381-only); `@format` not 102 is malformed; one PaymentMeans per IBAN; missing line tax is not SST; notes Content round-trips; delivery ShipTo before ActualDelivery; settlement tax before allowance/charge.
+- BR-23 fires when unit is absent even if quantity is absent (artefact `@unitCode` independent of qty).
+- Peppol R061 also applies to means code 59, not only 49 / DirectDebit.
+- CLI `inspect` uses the document element, not a `CrossIndustryInvoice` substring.
+- CLI `rules --profile en16931` lists CORE only (not Peppol extras).
+- UBL reads Payee / TaxRepresentative / Delivery; TaxRepresentativeParty has no extra `cac:Party`.
 
 ### Added
+
+- SVRL oracle: official EN examples, BR-03 mutant, PINT-MY SA, SST-as-EN three-way. Docker Compose Java fallback.
+- BR-CL-03 (`@currencyID` ISO 4217 wire walk), BR-CL-08 (UNCL 4451 from EN Schematron). Peppol COMMON-R041–R047/R049/R050/R052/R053 ICD checksums; R051 `@currencyID` = BT-5 except BT-111.
+- Remaining CEN presence/CO: BR-12…15, BR-19, BR-31–33, BR-36–38, BR-41–50, BR-61, BR-CO-26 (skipped on Pint/PintMy).
+- Named CII drop list `CII_DROPPED`; UBL↔CII model diff must stay inside it.
+- `docs/matrix.md` generated from `catalogue()` × profile.
+- cargo-fuzz target on `formats::read` (local). `task tracked` greps `crates/` for TODO/FIXME.
+- Line BT-132 (`order_line`), BT-133 (`accounting_reference`), BT-156 (`buyer_id`), BG-32 (`attributes` BT-160/161). UBL read/write. CII still named-dropped.
+- `IBR-CL-05-MY` (BT-6 ⇒ MYR). `explain BR-24` (type-retired BT-131).
+- BR-CL-07/10/11/21/26 bound to UNTDID 1153 / ICD. Generated `UNCL_1153`. EN type list includes 326/384/389 (Peppol P0100 still forbids 389).
+- VAT family `-03/-04/-06/-07` rows beyond S; BR-IC-11/12; BR-B-01 is Italian-domestic.
+- PINT-MY zip leftovers: ALIGNED-IBRP-002, 046–048, HVG/LVG-10, TTX-08, E-05/08, O-09.
+- Presence/co-occurrence: BR-17/18/20/29/30/52/54/55/56/57/62–65, BR-CO-09/19–24.
+- CII `Read.unmapped` lists unmapped `SupplyChainTradeTransaction` children. Official CEN CII example test when `refers/` present.
 
 - Semantic types: `InvoiceAmount` (refuses a third decimal), `UnitPriceAmount`,
   `Quantity`, `Percentage` (per cent, not fraction), `Date`, `Code`,

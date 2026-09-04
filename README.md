@@ -32,4 +32,5 @@ Install the orchestrator: `brew install go-task`.
 MSRV 1.88.0, pinned by [`rust-toolchain.toml`](rust-toolchain.toml).
 
 License: MIT OR Apache-2.0. Releases: [CHANGELOG.md](CHANGELOG.md).
+crates.io **0.1.0** is the published skeleton. This tree is git tag **v0.2.0** (development engine, still not-legal). It is not published as 0.1.1 and is not 1.0.0.
 Official artefacts (CEN / Peppol / PINT): [docs/spec.md](docs/spec.md) and [`refers/`](refers/) (`task spec`; clones and zips are gitignored).
