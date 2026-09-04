@@ -2,7 +2,7 @@
 
 [![crates.io](https://img.shields.io/crates/v/core-invoice.svg)](https://crates.io/crates/core-invoice)
 [![docs.rs](https://docs.rs/core-invoice/badge.svg)](https://docs.rs/core-invoice)
-[![MSRV](https://img.shields.io/badge/MSRV-1.88-blue)](rust-toolchain.toml)
+[![MSRV](https://img.shields.io/badge/MSRV-1.88-blue)](https://github.com/proxeon/core-invoice/blob/main/rust-toolchain.toml)
 
 Offline library for **what an e-invoice means**, not for sending it.
 
@@ -136,8 +136,8 @@ cargo run -p core-invoice-cli -- validate testdata/peppol-bis-invoice-3/rules/ex
 
 ## C, Python, WebAssembly
 
-- **C** — [`crates/core-invoice-sys`](crates/core-invoice-sys): `core_invoice_validate` / `_ubl`, convert, diff, version. Same 0/1/2 contract. Header: [`include/core_invoice.h`](crates/core-invoice-sys/include/core_invoice.h).
-- **Python** — [`python/core_invoice.py`](python/core_invoice.py) via ctypes. Surface is `validate_xml` only (no PyPI wheel).
+- **C** — [`crates/core-invoice-sys`](https://github.com/proxeon/core-invoice/tree/main/crates/core-invoice-sys): `core_invoice_validate` / `_ubl`, convert, diff, version. Same 0/1/2 contract. Header: [`include/core_invoice.h`](https://github.com/proxeon/core-invoice/blob/main/crates/core-invoice-sys/include/core_invoice.h).
+- **Python** — [`python/core_invoice.py`](https://github.com/proxeon/core-invoice/blob/main/python/core_invoice.py) via ctypes. Surface is `validate_xml` only (no PyPI wheel).
 - **wasm** — the **model** crate: `cargo build -p core-invoice --target wasm32-unknown-unknown`. Not a browser Access Point. Formats/sys are not that job.
 
 ## Not this library
@@ -153,7 +153,7 @@ cargo run -p core-invoice-cli -- validate testdata/peppol-bis-invoice-3/rules/ex
 
 ## Evidence
 
-Pins, fetch, and licence fences: [`docs/spec.md`](docs/spec.md). Expected unmatched ids: [`docs/UNCOVERED.md`](docs/UNCOVERED.md).
+Pins, fetch, and licence fences: [`docs/spec.md`](https://github.com/proxeon/core-invoice/blob/main/docs/spec.md). Expected unmatched ids: [`docs/UNCOVERED.md`](https://github.com/proxeon/core-invoice/blob/main/docs/UNCOVERED.md).
 
 | Corpus | Pin | Role |
 |---|---|---|
@@ -164,13 +164,13 @@ Pins, fetch, and licence fences: [`docs/spec.md`](docs/spec.md). Expected unmatc
 
 `task svrl` runs pinned Schematron (Saxon-HE, or Docker Compose Java) and diffs Fatal `Finding.id` against SVRL `@id`. That is an **oracle**, not a crate dependency.
 
-**Test XML** lives in git-tracked [`testdata/`](testdata/) (~2 MB): CEN UBL unit tests and official EN / Peppol / PINT-MY samples, so `cargo test` on a fresh clone does not skip. EUPL / Peppol terms — [`testdata/NOTICE`](testdata/NOTICE). Not copied into `crates/`, so crates.io packages do not include it.
+**Test XML** lives in git-tracked [`testdata/`](https://github.com/proxeon/core-invoice/tree/main/testdata) (~2 MB): CEN UBL unit tests and official EN / Peppol / PINT-MY samples, so `cargo test` on a fresh clone does not skip. EUPL / Peppol terms — [`testdata/NOTICE`](https://github.com/proxeon/core-invoice/blob/main/testdata/NOTICE). Not copied into `crates/`, so crates.io packages do not include it.
 
-**Full artefacts** (Schematron, XSLT, XSD zips, clones) stay in gitignored [`refers/`](refers/). Fetch with `task spec`.
+**Full artefacts** (Schematron, XSLT, XSD zips, clones) stay in gitignored [`refers/`](https://github.com/proxeon/core-invoice/tree/main/refers). Fetch with `task spec`.
 
 ## Development
 
-MSRV **1.88.0**, pinned by [`rust-toolchain.toml`](rust-toolchain.toml). Orchestrator: `brew install go-task`.
+MSRV **1.88.0**, pinned by [`rust-toolchain.toml`](https://github.com/proxeon/core-invoice/blob/main/rust-toolchain.toml). Orchestrator: `brew install go-task`.
 
 ```sh
 task                 # list
@@ -183,6 +183,6 @@ task svrl            # compare Fatal ids to pinned ConnectingEurope / PINT-MY XS
 
 ## License and versions
 
-MIT OR Apache-2.0. Releases: [CHANGELOG.md](CHANGELOG.md).
+MIT OR Apache-2.0. Releases: [CHANGELOG.md](https://github.com/proxeon/core-invoice/blob/main/CHANGELOG.md).
 
 crates.io: [core-invoice 2.0.2](https://crates.io/crates/core-invoice). Git tag **v2.0.2**. crates.io **2.0.1** / **2.0.0** / **1.0.0** remain (not yanked). 2.x may add APIs; breaking changes are 3.0. The C ABI is the 0/1/2 verbs, not `Invoice` layout.
