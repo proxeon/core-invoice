@@ -65,6 +65,64 @@ pub fn ubl_forbidden_attribute(name: &str) -> Option<&'static str> {
         .map(|(id, _)| *id)
 }
 
+const NS_INV: &str = "urn:oasis:names:specification:ubl:schema:xsd:Invoice-2";
+const NS_CN: &str = "urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2";
+const NS_CAC: &str = "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2";
+const NS_CBC: &str = "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2";
+const NS_EXT: &str = "urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2";
+const NS_RSM: &str = "urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100";
+const NS_RAM: &str =
+    "urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100";
+const NS_UDT: &str = "urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100";
+
+fn qualified(node: roxmltree::Node<'_, '_>) -> String {
+    let local_name = node.tag_name().name();
+    match node.tag_name().namespace() {
+        Some(NS_CAC) => format!("cac:{local_name}"),
+        Some(NS_CBC) => format!("cbc:{local_name}"),
+        Some(NS_EXT) => format!("ext:{local_name}"),
+        Some(NS_RAM) => format!("ram:{local_name}"),
+        Some(NS_RSM) => format!("rsm:{local_name}"),
+        Some(NS_UDT) => format!("udt:{local_name}"),
+        Some(NS_INV) | Some(NS_CN) => local_name.to_owned(),
+        _ => local_name.to_owned(),
+    }
+}
+
+/// Walk a written document and list prohibition hits. Does not strip.
+///
+/// The semantic writer should produce none of these. Hits mean a write call
+/// site emitted a CEN-forbidden child.
+pub fn scan_written(xml: &str, syntax: crate::Syntax) -> Vec<String> {
+    let Ok(doc) = roxmltree::Document::parse(xml) else {
+        return Vec::new();
+    };
+    let root = doc.root_element();
+    let mut hits = Vec::new();
+    walk(root, &qualified(root), syntax, &mut hits);
+    hits
+}
+
+fn walk(node: roxmltree::Node<'_, '_>, path: &str, syntax: crate::Syntax, hits: &mut Vec<String>) {
+    let hit = match syntax {
+        crate::Syntax::Ubl => ubl_forbidden_path(path),
+        crate::Syntax::Cii => cii_forbidden_path(path),
+    };
+    if let Some(id) = hit {
+        hits.push(format!("{path} ({id})"));
+    }
+    if syntax == crate::Syntax::Ubl {
+        for a in node.attributes() {
+            if let Some(id) = ubl_forbidden_attribute(a.name()) {
+                hits.push(format!("{path}/@{} ({id})", a.name()));
+            }
+        }
+    }
+    for child in node.children().filter(|n| n.is_element()) {
+        walk(child, &format!("{path}/{}", qualified(child)), syntax, hits);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

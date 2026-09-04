@@ -61,11 +61,11 @@ Family A/C rows and IC-11/12: in catalogue. Presence evals registered: BR-12…1
 
 ## Syntax prohibition tables
 
-Generated from preprocessed ConnectingEurope Schematron (`task prohibitions`). UBL: 664/696 `not(…)` assertions (32 UNEXTRACTED). CII: 447/522 (75 UNEXTRACTED). Conditional XPath is counted, not guessed.
+Generated from preprocessed ConnectingEurope Schematron (`task prohibitions`). UBL: 664/696 `not(…)` assertions (32 UNEXTRACTED). CII: 447/522 (75 UNEXTRACTED). Conditional XPath is counted, not guessed. `write_drops` reports hits on written XML; it does not rewrite the tree.
 
 ## XRechnung (optional feature)
 
-`core-invoice` feature `xrechnung` is **off** by default and is **not CORE**. Evaluated when BT-24 claims KoSIT/xeinkauf: `BR-DE-15`, `BR-DE-16`. Remaining KoSIT `BR-DE-*` / Extension / CVD are not registered. Do not treat `validate().ok()` on an XRechnung claim as KoSIT Valid.
+`core-invoice` feature `xrechnung` is **off** by default and is **not CORE**. Evaluated when BT-24 claims KoSIT/xeinkauf: `BR-DE-1`, `BR-DE-15`, `BR-DE-16`, `BR-DE-23-a`/`24-a`/`25-a`, `BR-DE-30`. `-b` payment exclusivity is type-retired (`PaymentMeans` enum). Remaining KoSIT `BR-DE-*` / Extension / CVD are not registered. Do not treat `validate().ok()` on an XRechnung claim as KoSIT Valid.
 
 ## P14 / P18
 

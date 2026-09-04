@@ -379,9 +379,9 @@ pub struct SupportingDocument {
     pub attachment: Option<Attachment>,
 }
 
-/// Semantic invoice. Fields stay public through 0.1–0.2; Table 2 terms will
-/// still be added. Construct with [`Invoice::blank`], then set fields. Do not
-/// match on the struct layout.
+/// Semantic invoice. Fields are `pub` on 2.x so embedders can [`Invoice::blank`]
+/// then set terms. Do not match on the struct layout — `#[non_exhaustive]` would
+/// be a 3.0 break. A proved document is [`crate::Validated`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Invoice {
     pub profile: Profile,

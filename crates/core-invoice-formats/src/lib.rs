@@ -228,36 +228,13 @@ pub fn diff(left_xml: &str, right_xml: &str) -> Result<String, FormatError> {
 /// Paths the UBL↔CII model diff may still show. Shrink when mapping grows.
 /// Must not name a path the writer+reader restore.
 pub const CII_DROPPED: &[&str] = &[
-    "business_process",
-    "seller.endpoint",
-    "buyer.endpoint",
-    "seller.identifiers",
-    "buyer.identifiers",
+    // Empty <PostalAddress/> vs absent is still a model divergence (same as CEN BR-08).
     "seller.address",
     "buyer.address",
-    "payee",
-    "tax_representative",
-    "delivery.location_id",
-    "delivery.address",
-    "payment.remittance",
-    "payment.means_text",
-    "document_allowances.reason",
-    "document_charges.reason",
-    "supporting_documents",
-    "preceding",
-    "purchase_order",
-    "sales_order",
-    "contract",
-    "project",
     "despatch",
     "receiving_advice",
-    "tender",
-    "invoiced_object",
     "buyer_accounting",
-    "buyer_reference",
-    "payment_terms",
     "tax_point",
-    "due_date",
     "lines.extra_tax",
     "lines.tax_total",
     "lines.allowances",
@@ -271,19 +248,27 @@ pub const CII_DROPPED: &[&str] = &[
     "lines.origin_country",
     "lines.classifications",
     "lines.invoiced_object",
-    "lines.note",
-    "lines.description",
     "lines.period",
     "price.discount",
-    "price.gross",
 ];
 
-/// Syntax terms the writer will omit. CreditNote DueDate is stored as BT-9 and dropped on UBL write.
+/// Syntax terms the writer will omit, plus CEN prohibition hits on the bytes.
+///
+/// CreditNote DueDate is stored as BT-9 and dropped on UBL write. Prohibition
+/// hits mean a write call site emitted a forbidden child — they should be empty
+/// for a document built from the model.
 pub fn write_drops(invoice: &Invoice, syntax: Syntax) -> Vec<String> {
-    match syntax {
+    let mut drops = match syntax {
         Syntax::Ubl => ubl::write_drops(invoice),
         Syntax::Cii => Vec::new(),
+    };
+    if syntax == Syntax::Cii && invoice.profile == Profile::PintMy {
+        return drops;
     }
+    if let Ok(xml) = write_unchecked(invoice, syntax) {
+        drops.extend(prohibitions::scan_written(&xml, syntax));
+    }
+    drops
 }
 
 fn opt_amt(a: Option<core_invoice::Amount>) -> String {
@@ -885,6 +870,17 @@ mod tests {
         inv.kind = core_invoice::DocumentKind::CreditNote;
         let drops = write_drops(&inv, Syntax::Ubl);
         assert!(drops.iter().any(|d| d == "CreditNote/DueDate"), "{drops:?}");
+    }
+
+    #[test]
+    fn written_ubl_does_not_emit_root_uuid() {
+        let inv = read(
+            r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"><cbc:CustomizationID>urn:cen.eu:en16931:2017</cbc:CustomizationID><cbc:ID>1</cbc:ID><cbc:IssueDate>2026-01-15</cbc:IssueDate><cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode><cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode></Invoice>"#,
+        )
+        .unwrap();
+        let xml = write_unchecked(&inv, Syntax::Ubl).unwrap();
+        let hits = prohibitions::scan_written(&xml, Syntax::Ubl);
+        assert!(hits.iter().all(|h| !h.contains("cbc:UUID")), "{hits:?}");
     }
 
     #[test]

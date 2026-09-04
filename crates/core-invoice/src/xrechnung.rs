@@ -7,6 +7,7 @@
 
 use crate::bt::{BtId, Group, Path};
 use crate::invoice::Invoice;
+use crate::payment::PaymentMeans;
 use crate::report::{Finding, Report, Severity, Source};
 use crate::rules::Rule;
 use crate::tax::TaxSystem;
@@ -70,6 +71,107 @@ fn br_de_16(inv: &Invoice, report: &mut Report) {
     }
 }
 
+fn br_de_1(inv: &Invoice, report: &mut Report) {
+    if !claimed(inv) {
+        return;
+    }
+    let empty = inv.seller.contact.as_ref().is_none_or(|c| {
+        c.point.as_deref().unwrap_or("").trim().is_empty()
+            && c.phone.as_deref().unwrap_or("").trim().is_empty()
+            && c.email.as_deref().unwrap_or("").trim().is_empty()
+    });
+    if empty {
+        report.push(Finding::fatal(
+            "BR-DE-1",
+            Path::group_term(Group::Seller, BtId(41)),
+            "XRechnung: Seller contact (BG-6) shall be present",
+        ));
+    }
+}
+
+fn means_code(inv: &Invoice) -> Option<&str> {
+    inv.payment
+        .as_ref()
+        .and_then(|p| p.means_code.as_ref())
+        .map(crate::code::Code::as_str)
+}
+
+fn br_de_23_a(inv: &Invoice, report: &mut Report) {
+    if !claimed(inv) {
+        return;
+    }
+    if means_code(inv).is_some_and(|c| c == "30" || c == "58")
+        && !matches!(
+            inv.payment.as_ref().and_then(|p| p.means.as_ref()),
+            Some(PaymentMeans::CreditTransfer(_))
+        )
+    {
+        report.push(Finding::fatal(
+            "BR-DE-23-a",
+            Path::group_term(Group::Payment, BtId(81)),
+            "XRechnung: BT-81 30/58 requires credit transfer (BG-17)",
+        ));
+    }
+}
+
+fn br_de_24_a(inv: &Invoice, report: &mut Report) {
+    if !claimed(inv) {
+        return;
+    }
+    if means_code(inv).is_some_and(|c| matches!(c, "48" | "54" | "55"))
+        && !matches!(
+            inv.payment.as_ref().and_then(|p| p.means.as_ref()),
+            Some(PaymentMeans::Card(_))
+        )
+    {
+        report.push(Finding::fatal(
+            "BR-DE-24-a",
+            Path::group_term(Group::Payment, BtId(81)),
+            "XRechnung: BT-81 48/54/55 requires payment card (BG-18)",
+        ));
+    }
+}
+
+fn br_de_25_a(inv: &Invoice, report: &mut Report) {
+    if !claimed(inv) {
+        return;
+    }
+    if means_code(inv).is_some_and(|c| c == "59")
+        && !matches!(
+            inv.payment.as_ref().and_then(|p| p.means.as_ref()),
+            Some(PaymentMeans::DirectDebit(_))
+        )
+    {
+        report.push(Finding::fatal(
+            "BR-DE-25-a",
+            Path::group_term(Group::Payment, BtId(81)),
+            "XRechnung: BT-81 59 requires direct debit (BG-19)",
+        ));
+    }
+}
+
+fn br_de_23_b(_inv: &Invoice, _report: &mut Report) {
+    // Unrepresentable: PaymentMeans is an enum.
+}
+
+fn br_de_30(inv: &Invoice, report: &mut Report) {
+    if !claimed(inv) {
+        return;
+    }
+    if let Some(PaymentMeans::DirectDebit(d)) = inv.payment.as_ref().and_then(|p| p.means.as_ref())
+        && d.creditor_id
+            .as_ref()
+            .map(|c| c.value.trim().is_empty())
+            .unwrap_or(true)
+    {
+        report.push(Finding::fatal(
+            "BR-DE-30",
+            Path::group_term(Group::Payment, BtId(90)),
+            "XRechnung: BG-19 requires creditor identifier (BT-90)",
+        ));
+    }
+}
+
 const fn r(id: &'static str, text: &'static str, eval: fn(&Invoice, &mut Report)) -> Rule {
     Rule {
         id,
@@ -91,6 +193,46 @@ pub static RULES: &[Rule] = &[
         "BR-DE-16",
         "XRechnung: seller VAT/tax id or tax representative when category is not O/B.",
         br_de_16,
+    ),
+    r(
+        "BR-DE-1",
+        "XRechnung: Seller contact (BG-6) shall be present.",
+        br_de_1,
+    ),
+    r(
+        "BR-DE-23-a",
+        "XRechnung: BT-81 30/58 requires credit transfer (BG-17).",
+        br_de_23_a,
+    ),
+    r(
+        "BR-DE-24-a",
+        "XRechnung: BT-81 48/54/55 requires payment card (BG-18).",
+        br_de_24_a,
+    ),
+    r(
+        "BR-DE-25-a",
+        "XRechnung: BT-81 59 requires direct debit (BG-19).",
+        br_de_25_a,
+    ),
+    r(
+        "BR-DE-23-b",
+        "XRechnung: BT-81 credit transfer forbids BG-18/BG-19 (type-retired: PaymentMeans enum).",
+        br_de_23_b,
+    ),
+    r(
+        "BR-DE-24-b",
+        "XRechnung: BT-81 card forbids BG-17/BG-19 (type-retired: PaymentMeans enum).",
+        br_de_23_b,
+    ),
+    r(
+        "BR-DE-25-b",
+        "XRechnung: BT-81 direct debit forbids BG-17/BG-18 (type-retired: PaymentMeans enum).",
+        br_de_23_b,
+    ),
+    r(
+        "BR-DE-30",
+        "XRechnung: BG-19 requires creditor identifier (BT-90).",
+        br_de_30,
     ),
 ];
 

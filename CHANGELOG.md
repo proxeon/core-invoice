@@ -17,6 +17,16 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `write_drops` also lists CEN prohibition hits on the written bytes (does not strip). A model-built invoice should produce none.
+- Optional `xrechnung`: `BR-DE-1`, `BR-DE-23-a`/`24-a`/`25-a`, type-retired `-b` (PaymentMeans enum), `BR-DE-30`.
+
+### Changed
+
+- CII maps buyer reference, endpoints, party ids, full postal (line2/subdivision), payee, tax representative, order/contract/project/tender/object refs, supporting docs, remittance, due date, payment terms, preceding invoices, allowance reasons, line note/description, gross price. `CII_DROPPED` shrinks to the remaining unmapped tail. Empty `PostalAddress` vs absent stays named.
+- `Invoice` rustdoc: fields stay `pub` on 2.x; `#[non_exhaustive]` would be 3.0.
+
 ## [2.0.0] — 2026-09-04
 
 **Breaking (Rust API only).** `DocumentTotals.payable` is `Option<InvoiceAmount>`. A missing PayableAmount is not `0.00`, so BR-15 can fire. `Invoice::payable()` was already `Option` (absent BG-22). Callers that wrote `totals.payable` as a required amount, or `DocumentTotals { payable: amt, .. }`, need `Some(amt)`. The C ABI is unchanged.
