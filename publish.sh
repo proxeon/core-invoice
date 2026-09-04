@@ -13,8 +13,8 @@ fi
 crates=(
   core-invoice
   core-invoice-formats
-  core-invoice-cli
   core-invoice-fixtures
+  core-invoice-cli
   core-invoice-sys
 )
 
