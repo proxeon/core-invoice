@@ -6,8 +6,8 @@ one version and one entry per release.
 
 The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-Before 1.0, a minor bump may break: the promise is that a break is **written
-down here**, not that there are none.
+1.x may add APIs; breaking changes are 2.0. The C ABI is the 0/1/2 verbs, not
+`Invoice` layout.
 
 [`core-invoice`]: https://crates.io/crates/core-invoice
 [`core-invoice-formats`]: https://crates.io/crates/core-invoice-formats
@@ -16,6 +16,10 @@ down here**, not that there are none.
 [`core-invoice-sys`]: https://crates.io/crates/core-invoice-sys
 
 ## [Unreleased]
+
+## [1.0.0] — 2026-09-04
+
+Fatal ids comparable to pinned ConnectingEurope EN 16931 `validation-1.3.16` and PINT-MY 1.3.0 as evidenced by `task svrl`. Peppol BIS v3.0.20 is `.sch` only — not OpenPEPPOL Valid. Still **not** IRBM Valid / MyInvois submit.
 
 ### Added
 
@@ -156,6 +160,7 @@ PINT-MY as profiles.
 - **`core-invoice-sys`** — C ABI `core_invoice_validate_ubl` and
   `include/core_invoice.h`.
 
-[Unreleased]: https://github.com/proxeon/core-invoice/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/proxeon/core-invoice/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/proxeon/core-invoice/compare/v0.2.0...v1.0.0
 [0.2.0]: https://github.com/proxeon/core-invoice/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/proxeon/core-invoice/releases/tag/v0.1.0

@@ -1,6 +1,6 @@
 # Rule matrix
 
-Ids **we** emit. Not ConnectingEurope / OpenPEPPOL / IRBM Valid. Not a legal validator.
+Ids **we** emit. Fatal ids comparable to pinned ConnectingEurope / PINT-MY as evidenced by `task svrl`. Not OpenPEPPOL Valid (BIS pin is .sch). Not IRBM Valid.
 
 CORE runs on every profile. Extra rules are `Profile::extra_rules`.
 

@@ -59,7 +59,7 @@ pub fn conformance_matrix() -> String {
         Profile::PintMy,
     ];
     let mut s = String::from(
-        "# Rule matrix\n\nIds **we** emit. Not ConnectingEurope / OpenPEPPOL / IRBM Valid. Not a legal validator.\n\nCORE runs on every profile. Extra rules are `Profile::extra_rules`.\n\n| id | en16931 | peppol | pint | pint-my |\n|---|---|---|---|---|\n",
+        "# Rule matrix\n\nIds **we** emit. Fatal ids comparable to pinned ConnectingEurope / PINT-MY as evidenced by `task svrl`. Not OpenPEPPOL Valid (BIS pin is .sch). Not IRBM Valid.\n\nCORE runs on every profile. Extra rules are `Profile::extra_rules`.\n\n| id | en16931 | peppol | pint | pint-my |\n|---|---|---|---|---|\n",
     );
     for rule in catalogue() {
         s.push_str("| ");
@@ -2158,7 +2158,7 @@ mod tests {
                 rule.id
             );
         }
-        assert!(matrix.contains("Not a legal validator"));
+        assert!(matrix.contains("Not IRBM Valid"));
         assert!(matrix.contains("CORE"));
     }
 

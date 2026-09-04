@@ -1,8 +1,6 @@
 # core-invoice
 
-**0.2.x is a development engine. Do not validate legal invoices with it yet.**
-
-Fatal ids can be compared to pinned ConnectingEurope EN 16931 `validation-1.3.16` and PINT-MY 1.3.0 Schematron via `task svrl` (Saxon-HE, or Docker Compose Java when the host has no JDK). Peppol BIS v3.0.20 in `refers/` is `.sch` (no compiled XSLT). `validate().ok()` is **not** ConnectingEurope / OpenPEPPOL / IRBM Valid.
+Fatal ids are comparable to pinned ConnectingEurope EN 16931 `validation-1.3.16` and PINT-MY 1.3.0 Schematron as evidenced by `task svrl` (Saxon-HE, or Docker Compose Java when the host has no JDK). Peppol BIS v3.0.20 in `refers/` is `.sch` (no compiled XSLT). `validate().ok()` is **not** OpenPEPPOL Valid.
 
 `validate --profile pint-my` is PINT-MY Schematron-shaped. It is **not** IRBM Valid / MyInvois submit. This crate never talks to LHDN, a Peppol AP, or an accounting UI.
 
@@ -32,5 +30,5 @@ Install the orchestrator: `brew install go-task`.
 MSRV 1.88.0, pinned by [`rust-toolchain.toml`](rust-toolchain.toml).
 
 License: MIT OR Apache-2.0. Releases: [CHANGELOG.md](CHANGELOG.md).
-crates.io **0.1.0** is the published skeleton. This tree is git tag **v0.2.0** (development engine, still not-legal). It is not published as 0.1.1 and is not 1.0.0.
+crates.io **0.1.0** is the published skeleton. This tree is git tag **v1.0.0**. Not IRBM Valid. Peppol BIS pin has no compiled XSLT.
 Official artefacts (CEN / Peppol / PINT): [docs/spec.md](docs/spec.md) and [`refers/`](refers/) (`task spec`; clones and zips are gitignored).
