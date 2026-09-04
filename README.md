@@ -59,6 +59,6 @@ A German XRechnung BT-24 is ingested as **EN 16931**. There is no shipped `Profi
 - EN 16931-1:2026 rules (`Edition::En2026` stays unimplemented until **its** artefacts exist)
 - CII write of a PINT-MY invoice
 
-License: MIT OR Apache-2.0. Releases: [CHANGELOG.md](CHANGELOG.md). crates.io: [core-invoice 1.0.0](https://crates.io/crates/core-invoice). Git tag **v1.0.0**.
+License: MIT OR Apache-2.0. Releases: [CHANGELOG.md](CHANGELOG.md). crates.io: [core-invoice 2.0.0](https://crates.io/crates/core-invoice). Git tag **v2.0.0**. crates.io **1.0.0** remains (not yanked).
 
 Official artefacts (CEN / Peppol / PINT): [docs/spec.md](docs/spec.md) and [`refers/`](refers/) (`task spec`; clones and zips are gitignored).
