@@ -26,3 +26,31 @@ pub fn validate(invoice: &Invoice) -> Report {
     report.sort_stable();
     report
 }
+
+#[cfg(all(test, not(feature = "xrechnung")))]
+mod tests {
+    use super::*;
+    use crate::invoice::{Invoice, Party};
+    use crate::profile::Profile;
+
+    #[test]
+    fn xrechnung_claim_without_feature_does_not_emit_br_de() {
+        let mut inv = Invoice::blank(
+            Profile::En16931,
+            "1",
+            "EUR",
+            Party::new("S", "DE"),
+            Party::new("B", "DE"),
+        );
+        inv.specification_id =
+            Some("urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0".into());
+        let report = validate(&inv);
+        assert!(
+            report
+                .findings
+                .iter()
+                .all(|f| !f.id.starts_with("BR-DE-") && f.id != "BR-TMP-2"),
+            "{report}"
+        );
+    }
+}

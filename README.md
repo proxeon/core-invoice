@@ -54,7 +54,7 @@ You do not `widen()` PINT or PINT-MY into EN or Peppol BIS.
 | PINT | `pint` | International. Tax is not only VAT. **Not** a CIUS. Pin Billing **1.1.2**. | UBL; CII subset |
 | PINT-MY | `pint-my` | Specialises PINT (SST / TTx). Pin **1.3.0**. Wire TaxScheme is `VAT` / `AAL`, never `SST`. | **UBL only** |
 
-A German XRechnung BT-24 is ingested as **EN 16931**. There is no `Profile::XRechnung`. Optional Cargo feature `xrechnung` adds some `BR-DE-*` rules; it is **off by default** and is not CORE.
+A German XRechnung BT-24 is ingested as **EN 16931**. There is no `Profile::XRechnung`. Optional Cargo feature `xrechnung` adds CIUS `BR-DE-*` rules (including Skonto `BR-DE-18` and warnings `BR-DE-21`/`26`/`27`/`28`); it is **off by default** and is not CORE. Not KoSIT Valid. Extension / CVD are not registered.
 
 ## Crates
 

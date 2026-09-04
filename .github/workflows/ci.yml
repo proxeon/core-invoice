@@ -22,8 +22,12 @@ jobs:
         run: cargo fmt --all -- --check
       - name: clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: clippy xrechnung
+        run: cargo clippy -p core-invoice --all-targets --features xrechnung -- -D warnings
       - name: test
         run: cargo test --workspace --locked
+      - name: test xrechnung overlay
+        run: cargo test -p core-invoice --locked --features xrechnung
       - name: python validate_xml
         run: |
           cargo build -p core-invoice-sys --locked

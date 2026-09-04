@@ -10,7 +10,7 @@ use crate::report::{Finding, Report, Severity, Source};
 pub struct Rule {
     /// Registered id (`BR-02`, `PEPPOL-EN16931-R010`).
     pub id: &'static str,
-    /// Fatal fails [`Report::ok`]; Warning does not.
+    /// Fatal fails [`Report::ok`]; Warning and Info do not.
     pub severity: Severity,
     /// Authority text returned by [`explain`].
     pub text: &'static str,
@@ -2184,6 +2184,38 @@ mod tests {
         }
         assert!(matrix.contains("Not IRBM Valid"));
         assert!(matrix.contains("CORE"));
+        assert!(
+            matrix.contains("| id | en16931 | peppol | pint | pint-my |"),
+            "{matrix}"
+        );
+        assert!(
+            !matrix.contains("| xrechnung |"),
+            "XRechnung is not a matrix column"
+        );
+        for id in ["BR-DE-1", "BR-DE-15", "BR-DE-18", "BR-TMP-2"] {
+            assert!(
+                !matrix.contains(&format!("| {id} |")),
+                "{id} is overlay, not a catalogue row"
+            );
+        }
+        assert_eq!(crate::profile::Profile::parse("xrechnung"), None);
+        assert!(!crate::profile::Profile::known_slugs().contains("xrechnung"));
+    }
+
+    #[cfg(feature = "xrechnung")]
+    #[test]
+    fn explain_br_de_15_with_feature() {
+        assert!(explain("BR-DE-15").is_some());
+        assert!(explain("BR-DE-18").is_some());
+        assert!(explain("BR-TMP-2").is_some());
+    }
+
+    #[cfg(not(feature = "xrechnung"))]
+    #[test]
+    fn explain_br_de_15_without_feature() {
+        assert!(explain("BR-DE-15").is_none());
+        assert!(explain("BR-DE-18").is_none());
+        assert!(explain("BR-TMP-2").is_none());
     }
 
     #[test]

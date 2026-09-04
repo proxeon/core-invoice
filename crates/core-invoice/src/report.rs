@@ -68,6 +68,18 @@ impl Finding {
             hint: None,
         }
     }
+
+    /// Info finding. Does not fail [`Report::ok`].
+    pub fn info(id: &'static str, path: Path, message: impl Into<String>) -> Self {
+        Self {
+            id,
+            severity: Severity::Info,
+            path,
+            message: message.into(),
+            detail: None,
+            hint: None,
+        }
+    }
 }
 
 /// Validation result. [`Self::ok`] is “no Fatal”, not “no findings”.

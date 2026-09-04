@@ -13,6 +13,6 @@ Fatal ids are comparable to pinned ConnectingEurope `validation-1.3.16` and PINT
 `validate --profile pint-my` (via the formats/CLI crates) is PINT-MY Schematron-shaped
 (Peppol PINT-MY 1.3.0). It is **not** IRBM Valid / MyInvois submit. This crate never talks to LHDN.
 
-An XRechnung BT-24 is ingested as EN 16931. There is no `Profile::XRechnung`. Optional Cargo feature `xrechnung` (`BR-DE-1`…`11`, `14`–`17`, `23-a`/`24-a`/`25-a`, type-retired `-b`, `30`) is off by default and is not CORE.
+An XRechnung BT-24 is ingested as EN 16931. There is no `Profile::XRechnung`. Optional Cargo feature `xrechnung` (`BR-DE-1`…`11`, `14`–`22`, `23-a`/`24-a`/`25-a`, type-retired `-b`, `26`–`28`, `30`/`31`, `BR-DE-TMP-32`, `BR-TMP-2`) is off by default and is not CORE. Not KoSIT Valid. Extension / CVD are not registered.
 
 Full guide: <https://github.com/proxeon/core-invoice>
