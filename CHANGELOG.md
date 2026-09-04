@@ -17,6 +17,10 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- CII maps BT-15/16 despatch and receiving advice, BT-19 buyer accounting, BT-7/8 tax point on each header `ApplicableTradeTax`, line BG-26/27/28, BT-155…159, BT-132/133/128, and BT-147 inside gross price. `CII_DROPPED` shrinks to empty `PostalAddress` vs absent plus PINT-MY line extras (`lines.extra_tax`, `lines.tax_total`). Discount without gross is not written (no D16B home). PINT-MY stays UBL-only.
+
 ## [2.0.2] — 2026-09-04
 
 Additive. No Rust API break.

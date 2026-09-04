@@ -148,6 +148,11 @@ pub fn write_unchecked(invoice: &Invoice) -> Result<String, FormatError> {
     write_payment_terms(&mut s, invoice);
     write_totals(&mut s, invoice);
     write_preceding(&mut s, invoice);
+    if let Some(acc) = invoice.buyer_accounting.as_deref() {
+        s.push_str("      <ram:ReceivableSpecifiedTradeAccountingAccount>\n");
+        leaf_ram(&mut s, 4, "ID", acc, None);
+        s.push_str("      </ram:ReceivableSpecifiedTradeAccountingAccount>\n");
+    }
     s.push_str("    </ram:ApplicableHeaderTradeSettlement>\n");
     s.push_str("  </rsm:SupplyChainTradeTransaction>\n");
     s.push_str("</rsm:CrossIndustryInvoice>\n");
@@ -302,11 +307,29 @@ pub fn read(xml: &str) -> Result<Read, FormatError> {
                 address: ship.and_then(|n| child(n, "PostalTradeAddress").map(read_postal)),
             });
         }
+        invoice.despatch = child(del, "DespatchAdviceReferencedDocument")
+            .and_then(|n| child_text(n, "IssuerAssignedID"))
+            .map(DocumentReference::new);
+        invoice.receiving_advice = child(del, "ReceivingAdviceReferencedDocument")
+            .and_then(|n| child_text(n, "IssuerAssignedID"))
+            .map(DocumentReference::new);
     }
     if let Some(st) = settlement {
         invoice.tax_breakdown = children(st, "ApplicableTradeTax")
             .filter_map(|n| read_tax(n, profile, &mut malformed))
             .collect();
+        for n in children(st, "ApplicableTradeTax") {
+            if invoice.tax_point_code.is_none() {
+                invoice.tax_point_code = child_text(n, "DueDateTypeCode").map(Code::new);
+            }
+            if invoice.tax_point_date.is_none() {
+                invoice.tax_point_date = child(n, "TaxPointDate")
+                    .and_then(|n| child(n, "DateTimeString"))
+                    .and_then(|n| from_102_node(n, &mut malformed));
+            }
+        }
+        invoice.buyer_accounting = child(st, "ReceivableSpecifiedTradeAccountingAccount")
+            .and_then(|n| child_text(n, "ID"));
         if let Some(ms) = child(st, "SpecifiedTradeSettlementHeaderMonetarySummation") {
             invoice.totals = Some(read_totals(ms, &mut malformed));
         }
@@ -439,12 +462,48 @@ fn write_line(s: &mut String, line: &Line, invoice: &Invoice) {
     }
     s.push_str("      </ram:AssociatedDocumentLineDocument>\n");
     s.push_str("      <ram:SpecifiedTradeProduct>\n");
+    if let Some(id) = line.standard_id.as_ref() {
+        write_ident(s, 4, "GlobalID", id);
+    }
+    if let Some(id) = line.item_id.as_ref() {
+        write_ident(s, 4, "SellerAssignedID", id);
+    }
+    if let Some(id) = line.buyer_id.as_ref() {
+        write_ident(s, 4, "BuyerAssignedID", id);
+    }
     leaf_ram(s, 4, "Name", &line.name, None);
     if let Some(d) = line.description.as_deref() {
         leaf_ram(s, 4, "Description", d, None);
     }
+    for a in &line.attributes {
+        s.push_str("        <ram:ApplicableProductCharacteristic>\n");
+        leaf_ram(s, 5, "Description", &a.name, None);
+        leaf_ram(s, 5, "Value", &a.value, None);
+        s.push_str("        </ram:ApplicableProductCharacteristic>\n");
+    }
+    for c in &line.classifications {
+        s.push_str("        <ram:DesignatedProductClassification>\n");
+        leaf_ram(
+            s,
+            5,
+            "ClassCode",
+            &c.value,
+            c.scheme.as_deref().map(|sc| ("listID", sc)),
+        );
+        s.push_str("        </ram:DesignatedProductClassification>\n");
+    }
+    if let Some(cc) = line.origin_country.as_ref() {
+        s.push_str("        <ram:OriginTradeCountry>\n");
+        leaf_ram(s, 5, "ID", cc.as_str(), None);
+        s.push_str("        </ram:OriginTradeCountry>\n");
+    }
     s.push_str("      </ram:SpecifiedTradeProduct>\n");
     s.push_str("      <ram:SpecifiedLineTradeAgreement>\n");
+    if let Some(ol) = line.order_line.as_deref() {
+        s.push_str("        <ram:BuyerOrderReferencedDocument>\n");
+        leaf_ram(s, 5, "LineID", ol, None);
+        s.push_str("        </ram:BuyerOrderReferencedDocument>\n");
+    }
     if let Some(price) = line.price.as_ref() {
         if let Some(g) = price.gross {
             s.push_str("        <ram:GrossPriceProductTradePrice>\n");
@@ -455,6 +514,21 @@ fn write_line(s: &mut String, line: &Line, invoice: &Invoice) {
                 &g.to_string(),
                 Some(("currencyID", invoice.currency.as_str())),
             );
+            write_basis_qty(s, 5, price.base_qty, price.base_unit.as_ref());
+            if let Some(disc) = price.discount {
+                s.push_str("          <ram:AppliedTradeAllowanceCharge>\n");
+                s.push_str("            <ram:ChargeIndicator>\n");
+                s.push_str("              <udt:Indicator>false</udt:Indicator>\n");
+                s.push_str("            </ram:ChargeIndicator>\n");
+                leaf_ram(
+                    s,
+                    6,
+                    "ActualAmount",
+                    &disc.to_string(),
+                    Some(("currencyID", invoice.currency.as_str())),
+                );
+                s.push_str("          </ram:AppliedTradeAllowanceCharge>\n");
+            }
             s.push_str("        </ram:GrossPriceProductTradePrice>\n");
         }
         s.push_str("        <ram:NetPriceProductTradePrice>\n");
@@ -465,6 +539,7 @@ fn write_line(s: &mut String, line: &Line, invoice: &Invoice) {
             &price.net.to_string(),
             Some(("currencyID", invoice.currency.as_str())),
         );
+        write_basis_qty(s, 5, price.base_qty, price.base_unit.as_ref());
         s.push_str("        </ram:NetPriceProductTradePrice>\n");
     }
     s.push_str("      </ram:SpecifiedLineTradeAgreement>\n");
@@ -488,9 +563,37 @@ fn write_line(s: &mut String, line: &Line, invoice: &Invoice) {
         leaf_ram(s, 5, "RateApplicablePercent", &p.to_string(), None);
     }
     s.push_str("        </ram:ApplicableTradeTax>\n");
+    if let Some(p) = line.period.as_ref() {
+        write_billing_period(s, 4, p);
+    }
+    for a in &line.allowances {
+        write_line_ac(s, a, false, &invoice.currency);
+    }
+    for a in &line.charges {
+        write_line_ac(s, a, true, &invoice.currency);
+    }
     s.push_str("        <ram:SpecifiedTradeSettlementLineMonetarySummation>\n");
     amount_ram(s, 5, "LineTotalAmount", line.net, &invoice.currency);
     s.push_str("        </ram:SpecifiedTradeSettlementLineMonetarySummation>\n");
+    if let Some(obj) = line.invoiced_object.as_ref() {
+        s.push_str("        <ram:AdditionalReferencedDocument>\n");
+        leaf_ram(s, 5, "IssuerAssignedID", &obj.value, None);
+        let tc = line
+            .invoiced_object_code
+            .as_ref()
+            .map(Code::as_str)
+            .unwrap_or("130");
+        leaf_ram(s, 5, "TypeCode", tc, None);
+        if let Some(sc) = obj.scheme.as_deref() {
+            leaf_ram(s, 5, "ReferenceTypeCode", sc, None);
+        }
+        s.push_str("        </ram:AdditionalReferencedDocument>\n");
+    }
+    if let Some(acc) = line.accounting_reference.as_deref() {
+        s.push_str("        <ram:ReceivableSpecifiedTradeAccountingAccount>\n");
+        leaf_ram(s, 5, "ID", acc, None);
+        s.push_str("        </ram:ReceivableSpecifiedTradeAccountingAccount>\n");
+    }
     s.push_str("      </ram:SpecifiedLineTradeSettlement>\n");
     s.push_str("    </ram:IncludedSupplyChainTradeLineItem>\n");
 }
@@ -503,6 +606,72 @@ fn write_ident(s: &mut String, indent: usize, tag: &str, id: &Identifier) {
         &id.value,
         id.scheme.as_deref().map(|sc| ("schemeID", sc)),
     );
+}
+
+fn write_basis_qty(
+    s: &mut String,
+    indent: usize,
+    qty: Option<core_invoice::Quantity>,
+    unit: Option<&Code>,
+) {
+    let Some(q) = qty else {
+        return;
+    };
+    let attr = unit
+        .filter(|c| !c.as_str().is_empty())
+        .map(|c| ("unitCode", c.as_str()));
+    leaf_ram(s, indent, "BasisQuantity", &q.to_string(), attr);
+}
+
+fn write_billing_period(s: &mut String, indent: usize, p: &core_invoice::Period) {
+    if p.start.is_none() && p.end.is_none() {
+        return;
+    }
+    let pad = "  ".repeat(indent);
+    let pad1 = "  ".repeat(indent + 1);
+    let pad2 = "  ".repeat(indent + 2);
+    s.push_str(&format!("{pad}<ram:BillingSpecifiedPeriod>\n"));
+    if let Some(d) = p.start {
+        s.push_str(&format!("{pad1}<ram:StartDateTime>\n"));
+        s.push_str(&format!(
+            "{pad2}<udt:DateTimeString format=\"102\">{}</udt:DateTimeString>\n",
+            to_102(d)
+        ));
+        s.push_str(&format!("{pad1}</ram:StartDateTime>\n"));
+    }
+    if let Some(d) = p.end {
+        s.push_str(&format!("{pad1}<ram:EndDateTime>\n"));
+        s.push_str(&format!(
+            "{pad2}<udt:DateTimeString format=\"102\">{}</udt:DateTimeString>\n",
+            to_102(d)
+        ));
+        s.push_str(&format!("{pad1}</ram:EndDateTime>\n"));
+    }
+    s.push_str(&format!("{pad}</ram:BillingSpecifiedPeriod>\n"));
+}
+
+fn write_line_ac(s: &mut String, a: &core_invoice::LineAllowanceCharge, charge: bool, cur: &str) {
+    s.push_str("        <ram:SpecifiedTradeAllowanceCharge>\n");
+    s.push_str("          <ram:ChargeIndicator>\n");
+    s.push_str(&format!(
+        "            <udt:Indicator>{}</udt:Indicator>\n",
+        if charge { "true" } else { "false" }
+    ));
+    s.push_str("          </ram:ChargeIndicator>\n");
+    if let Some(p) = a.percent {
+        leaf_ram(s, 5, "CalculationPercent", &p.to_string(), None);
+    }
+    if let Some(b) = a.base {
+        amount_ram(s, 5, "BasisAmount", b, cur);
+    }
+    amount_ram(s, 5, "ActualAmount", a.amount, cur);
+    if let Some(c) = a.reason_code.as_ref() {
+        leaf_ram(s, 5, "ReasonCode", c.as_str(), None);
+    }
+    if let Some(r) = a.reason.as_deref() {
+        leaf_ram(s, 5, "Reason", r, None);
+    }
+    s.push_str("        </ram:SpecifiedTradeAllowanceCharge>\n");
 }
 
 fn write_doc_ref(s: &mut String, tag: &str, r: Option<&DocumentReference>) {
@@ -676,27 +845,7 @@ fn write_period(s: &mut String, invoice: &Invoice) {
     let Some(p) = invoice.period.as_ref() else {
         return;
     };
-    if p.start.is_none() && p.end.is_none() {
-        return;
-    }
-    s.push_str("      <ram:BillingSpecifiedPeriod>\n");
-    if let Some(d) = p.start {
-        s.push_str("        <ram:StartDateTime>\n");
-        s.push_str(&format!(
-            "          <udt:DateTimeString format=\"102\">{}</udt:DateTimeString>\n",
-            to_102(d)
-        ));
-        s.push_str("        </ram:StartDateTime>\n");
-    }
-    if let Some(d) = p.end {
-        s.push_str("        <ram:EndDateTime>\n");
-        s.push_str(&format!(
-            "          <udt:DateTimeString format=\"102\">{}</udt:DateTimeString>\n",
-            to_102(d)
-        ));
-        s.push_str("        </ram:EndDateTime>\n");
-    }
-    s.push_str("      </ram:BillingSpecifiedPeriod>\n");
+    write_billing_period(s, 3, p);
 }
 
 fn write_payment_terms(s: &mut String, invoice: &Invoice) {
@@ -727,13 +876,21 @@ fn write_preceding(s: &mut String, invoice: &Invoice) {
 }
 
 fn write_delivery(s: &mut String, invoice: &Invoice) {
-    let Some(d) = invoice.delivery.as_ref() else {
+    let d = invoice.delivery.as_ref();
+    let has_party =
+        d.is_some_and(|d| d.address.is_some() || d.name.is_some() || d.location_id.is_some());
+    let has_date = d.and_then(|d| d.date).is_some();
+    let has_despatch = invoice.despatch.is_some();
+    let has_receiving = invoice.receiving_advice.is_some();
+    if !has_party && !has_date && !has_despatch && !has_receiving {
         s.push_str("    <ram:ApplicableHeaderTradeDelivery/>\n");
         return;
-    };
+    }
     s.push_str("    <ram:ApplicableHeaderTradeDelivery>\n");
-    // HeaderTradeDeliveryType: ShipToTradeParty before ActualDeliverySupplyChainEvent.
-    if d.address.is_some() || d.name.is_some() || d.location_id.is_some() {
+    // HeaderTradeDeliveryType: ShipTo, ActualDelivery, DespatchAdvice, ReceivingAdvice.
+    if let Some(d) = d
+        && has_party
+    {
         s.push_str("      <ram:ShipToTradeParty>\n");
         if let Some(id) = d.location_id.as_ref() {
             if id.scheme.is_some() {
@@ -750,7 +907,7 @@ fn write_delivery(s: &mut String, invoice: &Invoice) {
         }
         s.push_str("      </ram:ShipToTradeParty>\n");
     }
-    if let Some(date) = d.date {
+    if let Some(date) = d.and_then(|d| d.date) {
         s.push_str("      <ram:ActualDeliverySupplyChainEvent>\n");
         s.push_str("        <ram:OccurrenceDateTime>\n");
         s.push_str(&format!(
@@ -760,6 +917,16 @@ fn write_delivery(s: &mut String, invoice: &Invoice) {
         s.push_str("        </ram:OccurrenceDateTime>\n");
         s.push_str("      </ram:ActualDeliverySupplyChainEvent>\n");
     }
+    write_doc_ref(
+        s,
+        "DespatchAdviceReferencedDocument",
+        invoice.despatch.as_ref(),
+    );
+    write_doc_ref(
+        s,
+        "ReceivingAdviceReferencedDocument",
+        invoice.receiving_advice.as_ref(),
+    );
     s.push_str("    </ram:ApplicableHeaderTradeDelivery>\n");
 }
 
@@ -831,8 +998,25 @@ fn write_tax(s: &mut String, invoice: &Invoice) {
             wire_scheme(invoice.profile, row.system, row.category.as_str()),
             None,
         );
+        if let Some(r) = row.exemption_reason.as_deref() {
+            leaf_ram(s, 4, "ExemptionReason", r, None);
+        }
         amount_ram(s, 4, "BasisAmount", row.taxable, &invoice.currency);
         leaf_ram(s, 4, "CategoryCode", row.category.as_str(), None);
+        if let Some(c) = row.exemption_code.as_ref() {
+            leaf_ram(s, 4, "ExemptionReasonCode", c.as_str(), None);
+        }
+        if let Some(c) = invoice.tax_point_code.as_ref() {
+            leaf_ram(s, 4, "DueDateTypeCode", c.as_str(), None);
+        }
+        if let Some(d) = invoice.tax_point_date {
+            s.push_str("        <ram:TaxPointDate>\n");
+            s.push_str(&format!(
+                "          <udt:DateTimeString format=\"102\">{}</udt:DateTimeString>\n",
+                to_102(d)
+            ));
+            s.push_str("        </ram:TaxPointDate>\n");
+        }
         if let Some(r) = row.rate {
             leaf_ram(s, 4, "RateApplicablePercent", &r.to_string(), None);
         }
@@ -994,27 +1178,129 @@ fn read_line(
         }
         line.unit = q.attribute("unitCode").map(Code::new);
     }
-    if let Some(agr) = child(node, "SpecifiedLineTradeAgreement")
-        && let Some(price) = child(agr, "NetPriceProductTradePrice")
-        && let Some(amt) = child_text(price, "ChargeAmount")
-        && let Ok(net) = core_invoice::UnitPriceAmount::parse(&amt)
-    {
-        let gross = child(agr, "GrossPriceProductTradePrice")
-            .and_then(|n| child_text(n, "ChargeAmount"))
-            .and_then(|t| core_invoice::UnitPriceAmount::parse(&t).ok());
-        line.price = Some(core_invoice::Price {
-            net,
-            discount: None,
-            gross,
-            base_qty: None,
-            base_unit: None,
-        });
+    if let Some(agr) = child(node, "SpecifiedLineTradeAgreement") {
+        line.order_line =
+            child(agr, "BuyerOrderReferencedDocument").and_then(|n| child_text(n, "LineID"));
+        if let Some(price) = child(agr, "NetPriceProductTradePrice")
+            && let Some(amt) = child_text(price, "ChargeAmount")
+            && let Ok(net) = core_invoice::UnitPriceAmount::parse(&amt)
+        {
+            let gross_el = child(agr, "GrossPriceProductTradePrice");
+            let gross = gross_el
+                .and_then(|n| child_text(n, "ChargeAmount"))
+                .and_then(|t| core_invoice::UnitPriceAmount::parse(&t).ok());
+            let discount = gross_el
+                .and_then(|n| child(n, "AppliedTradeAllowanceCharge"))
+                .and_then(|n| child_text(n, "ActualAmount"))
+                .and_then(|t| core_invoice::UnitPriceAmount::parse(&t).ok());
+            let bq = gross_el
+                .and_then(|n| child(n, "BasisQuantity"))
+                .or_else(|| child(price, "BasisQuantity"));
+            line.price = Some(core_invoice::Price {
+                net,
+                discount,
+                gross,
+                base_qty: bq
+                    .and_then(text)
+                    .and_then(|t| core_invoice::Quantity::parse(&t).ok()),
+                base_unit: bq.and_then(|n| n.attribute("unitCode")).map(Code::new),
+            });
+        }
     }
-    line.description = product.and_then(|n| child_text(n, "Description"));
+    if let Some(product) = product {
+        line.description = child_text(product, "Description");
+        if let Some(g) = child(product, "GlobalID") {
+            line.standard_id = Some(read_ident_node(g));
+        }
+        if let Some(g) = child(product, "SellerAssignedID") {
+            line.item_id = Some(read_ident_node(g));
+        }
+        if let Some(g) = child(product, "BuyerAssignedID") {
+            line.buyer_id = Some(read_ident_node(g));
+        }
+        line.attributes = children(product, "ApplicableProductCharacteristic")
+            .filter_map(|n| {
+                Some(core_invoice::ItemAttribute {
+                    name: child_text(n, "Description")?,
+                    value: child_text(n, "Value").unwrap_or_default(),
+                })
+            })
+            .collect();
+        line.classifications = children(product, "DesignatedProductClassification")
+            .filter_map(|n| {
+                let code = child(n, "ClassCode")?;
+                Some(Identifier {
+                    value: text(code)?,
+                    scheme: code
+                        .attribute("listID")
+                        .or_else(|| code.attribute("schemeID"))
+                        .map(str::to_owned),
+                    scheme_version: None,
+                })
+            })
+            .collect();
+        line.origin_country = child(product, "OriginTradeCountry")
+            .and_then(|n| child_text(n, "ID"))
+            .map(Code::new);
+    }
     line.note = child(node, "AssociatedDocumentLineDocument")
         .and_then(|n| child(n, "IncludedNote"))
         .and_then(|n| child_text(n, "Content"));
+    if let Some(st) = child(node, "SpecifiedLineTradeSettlement") {
+        if let Some(per) = child(st, "BillingSpecifiedPeriod") {
+            line.period = Some(core_invoice::Period {
+                start: child(per, "StartDateTime")
+                    .and_then(|n| child(n, "DateTimeString"))
+                    .and_then(|n| from_102_node(n, malformed)),
+                end: child(per, "EndDateTime")
+                    .and_then(|n| child(n, "DateTimeString"))
+                    .and_then(|n| from_102_node(n, malformed)),
+            });
+        }
+        for ac in children(st, "SpecifiedTradeAllowanceCharge") {
+            let charge = child(ac, "ChargeIndicator")
+                .and_then(|n| child_text(n, "Indicator"))
+                .is_some_and(|s| s.eq_ignore_ascii_case("true"));
+            let Some(amount) = child_amount(ac, "ActualAmount", malformed, "CII-line-ac") else {
+                continue;
+            };
+            let row = core_invoice::LineAllowanceCharge {
+                amount,
+                base: child_amount(ac, "BasisAmount", malformed, "CII-line-ac"),
+                percent: child_text(ac, "CalculationPercent")
+                    .and_then(|s| Decimal::from_str(&s).ok())
+                    .map(Percentage::new),
+                reason: child_text(ac, "Reason"),
+                reason_code: child_text(ac, "ReasonCode").map(Code::new),
+            };
+            if charge {
+                line.charges.push(row);
+            } else {
+                line.allowances.push(row);
+            }
+        }
+        if let Some(adr) = child(st, "AdditionalReferencedDocument")
+            && let Some(id) = child_text(adr, "IssuerAssignedID")
+        {
+            line.invoiced_object = Some(Identifier {
+                value: id,
+                scheme: child_text(adr, "ReferenceTypeCode"),
+                scheme_version: None,
+            });
+            line.invoiced_object_code = child_text(adr, "TypeCode").map(Code::new);
+        }
+        line.accounting_reference = child(st, "ReceivableSpecifiedTradeAccountingAccount")
+            .and_then(|n| child_text(n, "ID"));
+    }
     Some(line)
+}
+
+fn read_ident_node(node: roxmltree::Node<'_, '_>) -> Identifier {
+    Identifier {
+        value: text(node).unwrap_or_default(),
+        scheme: node.attribute("schemeID").map(str::to_owned),
+        scheme_version: None,
+    }
 }
 
 fn read_tax(
@@ -1039,8 +1325,8 @@ fn read_tax(
         rate: percent,
         taxable: child_amount(node, "BasisAmount", malformed, "CII-tax").unwrap_or(Amount::ZERO),
         tax: child_amount(node, "CalculatedAmount", malformed, "CII-tax").unwrap_or(Amount::ZERO),
-        exemption_reason: None,
-        exemption_code: None,
+        exemption_reason: child_text(node, "ExemptionReason"),
+        exemption_code: child_text(node, "ExemptionReasonCode").map(Code::new),
     })
 }
 
@@ -1181,7 +1467,7 @@ mod tests {
             "EUR",
             {
                 let mut p = Party::new("Seller GmbH", "DE");
-                p.vat_identifier = Some(Identifier::new("DE123456789"));
+                p.vat_identifier = Some(Identifier::schemed("DE123456789", "VA"));
                 p
             },
             Party::new("Buyer SARL", "FR"),
@@ -1236,5 +1522,356 @@ mod tests {
         assert_eq!(back.lines[0].id, "1");
         assert_eq!(back.lines[0].tax.code, "S");
         assert_eq!(back.issue_date, inv.issue_date);
+    }
+
+    fn with_tail() -> Invoice {
+        let mut inv = sample();
+        inv.despatch = Some(DocumentReference::new("DES-1"));
+        inv.receiving_advice = Some(DocumentReference::new("REC-1"));
+        inv.buyer_accounting = Some("ACC-19".into());
+        inv.tax_point_date = Date::parse("2026-01-10").ok();
+        inv.tax_point_code = Some(Code::new("3"));
+        inv.tax_breakdown = vec![
+            TaxBreakdown {
+                system: TaxSystem::Vat,
+                scheme: "VAT".into(),
+                category: Code::new("S"),
+                rate: Some(Percentage::new(Decimal::from(19))),
+                taxable: Amount::parse("100.00").unwrap(),
+                tax: Amount::parse("19.00").unwrap(),
+                exemption_reason: None,
+                exemption_code: None,
+            },
+            TaxBreakdown {
+                system: TaxSystem::Vat,
+                scheme: "VAT".into(),
+                category: Code::new("E"),
+                rate: Some(Percentage::new(Decimal::ZERO)),
+                taxable: Amount::parse("0.00").unwrap(),
+                tax: Amount::parse("0.00").unwrap(),
+                exemption_reason: None,
+                exemption_code: None,
+            },
+        ];
+        let line = &mut inv.lines[0];
+        line.note = Some("line note".into());
+        line.description = Some("desc".into());
+        line.standard_id = Some(Identifier::schemed("01234567890128", "0160"));
+        line.item_id = Some(Identifier::new("SELL-1"));
+        line.buyer_id = Some(Identifier::new("BUY-1"));
+        line.attributes = vec![core_invoice::ItemAttribute {
+            name: "Color".into(),
+            value: "Blue".into(),
+        }];
+        line.classifications = vec![Identifier::schemed("12345678", "STI")];
+        line.origin_country = Some(Code::new("DE"));
+        line.order_line = Some("PO-L-1".into());
+        line.period = Some(core_invoice::Period {
+            start: Date::parse("2026-01-01").ok(),
+            end: Date::parse("2026-01-31").ok(),
+        });
+        line.allowances = vec![core_invoice::LineAllowanceCharge {
+            amount: Amount::parse("1.00").unwrap(),
+            base: Some(Amount::parse("10.00").unwrap()),
+            percent: Some(Percentage::new(Decimal::from(10))),
+            reason: Some("rebate".into()),
+            reason_code: Some(Code::new("95")),
+        }];
+        line.charges = vec![core_invoice::LineAllowanceCharge {
+            amount: Amount::parse("0.50").unwrap(),
+            base: None,
+            percent: None,
+            reason: Some("pack".into()),
+            reason_code: None,
+        }];
+        line.invoiced_object = Some(Identifier::new("OBJ-1"));
+        line.invoiced_object_code = Some(Code::new("130"));
+        line.accounting_reference = Some("COST-133".into());
+        line.price = Some(core_invoice::Price {
+            net: core_invoice::UnitPriceAmount::parse("100.00").unwrap(),
+            discount: Some(core_invoice::UnitPriceAmount::parse("5.00").unwrap()),
+            gross: Some(core_invoice::UnitPriceAmount::parse("105.00").unwrap()),
+            base_qty: Some(core_invoice::Quantity::parse("1").unwrap()),
+            base_unit: Some(Code::new("C62")),
+        });
+        inv
+    }
+
+    #[test]
+    fn cii_round_trip_keeps_despatch_and_receiving_advice() {
+        let inv = with_tail();
+        let xml = write_unchecked(&inv).unwrap();
+        let back = read(&xml).unwrap().invoice;
+        assert_eq!(back.despatch, inv.despatch);
+        assert_eq!(back.receiving_advice, inv.receiving_advice);
+        let ship = xml.find("ShipToTradeParty");
+        let actual = xml.find("ActualDeliverySupplyChainEvent");
+        let des = xml.find("DespatchAdviceReferencedDocument").unwrap();
+        let rec = xml.find("ReceivingAdviceReferencedDocument").unwrap();
+        if let (Some(s), Some(a)) = (ship, actual) {
+            assert!(s < a && a < des && des < rec, "{xml}");
+        } else {
+            assert!(des < rec, "{xml}");
+        }
+    }
+
+    #[test]
+    fn cii_despatch_without_delivery_does_not_self_close_away_the_ref() {
+        let mut inv = sample();
+        inv.delivery = None;
+        inv.despatch = Some(DocumentReference::new("DES-ONLY"));
+        let xml = write_unchecked(&inv).unwrap();
+        assert!(xml.contains("DespatchAdviceReferencedDocument"), "{xml}");
+        assert!(
+            !xml.contains("<ram:ApplicableHeaderTradeDelivery/>"),
+            "{xml}"
+        );
+        let back = read(&xml).unwrap().invoice;
+        assert_eq!(back.despatch.as_ref().map(|d| d.as_str()), Some("DES-ONLY"));
+        assert!(back.delivery.is_none());
+    }
+
+    #[test]
+    fn cii_round_trip_keeps_buyer_accounting() {
+        let inv = with_tail();
+        let xml = write_unchecked(&inv).unwrap();
+        assert!(xml.contains("ReceivableSpecifiedTradeAccountingAccount"));
+        let back = read(&xml).unwrap().invoice;
+        assert_eq!(back.buyer_accounting.as_deref(), Some("ACC-19"));
+    }
+
+    #[test]
+    fn cii_round_trip_keeps_tax_point_on_each_applicable_trade_tax() {
+        let inv = with_tail();
+        let xml = write_unchecked(&inv).unwrap();
+        assert_eq!(
+            xml.matches("<ram:DueDateTypeCode>3</ram:DueDateTypeCode>")
+                .count(),
+            2
+        );
+        assert_eq!(xml.matches("<ram:TaxPointDate>").count(), 2);
+        let back = read(&xml).unwrap().invoice;
+        assert_eq!(back.tax_point_code.as_ref().map(Code::as_str), Some("3"));
+        assert_eq!(back.tax_point_date, inv.tax_point_date);
+    }
+
+    #[test]
+    fn cii_tax_point_sits_before_rate_applicable_percent() {
+        let xml = write_unchecked(&with_tail()).unwrap();
+        let header = xml.split("ApplicableHeaderTradeSettlement").nth(1).unwrap();
+        let due = header.find("DueDateTypeCode").unwrap();
+        let tp = header.find("TaxPointDate").unwrap();
+        let rate = header.find("RateApplicablePercent").unwrap();
+        assert!(due < tp && tp < rate, "{header}");
+    }
+
+    #[test]
+    fn cii_round_trip_keeps_line_item_ids_attributes_origin() {
+        let inv = with_tail();
+        let xml = write_unchecked(&inv).unwrap();
+        let gid = xml.find("GlobalID").unwrap();
+        let name = xml.find("<ram:Name>Service</ram:Name>").unwrap();
+        let origin = xml.find("OriginTradeCountry").unwrap();
+        let class = xml.find("DesignatedProductClassification").unwrap();
+        assert!(gid < name && class < origin, "{xml}");
+        let back = read(&xml).unwrap().invoice;
+        let l = &back.lines[0];
+        assert_eq!(l.standard_id, inv.lines[0].standard_id);
+        assert_eq!(l.item_id, inv.lines[0].item_id);
+        assert_eq!(l.buyer_id, inv.lines[0].buyer_id);
+        assert_eq!(l.attributes, inv.lines[0].attributes);
+        assert_eq!(l.classifications, inv.lines[0].classifications);
+        assert_eq!(l.origin_country, inv.lines[0].origin_country);
+    }
+
+    #[test]
+    fn cii_round_trip_keeps_order_line() {
+        let inv = with_tail();
+        let xml = write_unchecked(&inv).unwrap();
+        let ol = xml.find("BuyerOrderReferencedDocument").unwrap();
+        let gross = xml.find("GrossPriceProductTradePrice").unwrap();
+        assert!(ol < gross, "{xml}");
+        assert!(
+            !xml.split("SpecifiedLineTradeAgreement")
+                .nth(1)
+                .unwrap()
+                .contains("IssuerAssignedID")
+        );
+        let back = read(&xml).unwrap().invoice;
+        assert_eq!(back.lines[0].order_line.as_deref(), Some("PO-L-1"));
+    }
+
+    #[test]
+    fn cii_order_line_precedes_gross_and_net_price() {
+        let xml = write_unchecked(&with_tail()).unwrap();
+        let agr = xml.find("SpecifiedLineTradeAgreement").unwrap();
+        let slice = &xml[agr..];
+        let ol = slice.find("BuyerOrderReferencedDocument").unwrap();
+        let g = slice.find("GrossPriceProductTradePrice").unwrap();
+        let n = slice.find("NetPriceProductTradePrice").unwrap();
+        assert!(ol < g && g < n, "{slice}");
+    }
+
+    #[test]
+    fn cii_round_trip_keeps_price_discount_inside_gross() {
+        let inv = with_tail();
+        let xml = write_unchecked(&inv).unwrap();
+        assert!(xml.contains("AppliedTradeAllowanceCharge"));
+        let back = read(&xml).unwrap().invoice;
+        let p = back.lines[0].price.as_ref().unwrap();
+        assert_eq!(
+            p.discount.as_ref().map(|d| d.to_string()),
+            Some("5.00".into())
+        );
+        assert_eq!(
+            p.gross.as_ref().map(|d| d.to_string()),
+            Some("105.00".into())
+        );
+        assert_eq!(p.base_qty, inv.lines[0].price.as_ref().unwrap().base_qty);
+        assert_eq!(p.base_unit, inv.lines[0].price.as_ref().unwrap().base_unit);
+    }
+
+    #[test]
+    fn cii_price_discount_without_gross_is_not_written() {
+        let mut inv = sample();
+        inv.lines[0].price = Some(core_invoice::Price {
+            net: core_invoice::UnitPriceAmount::parse("100.00").unwrap(),
+            discount: Some(core_invoice::UnitPriceAmount::parse("5.00").unwrap()),
+            gross: None,
+            base_qty: None,
+            base_unit: None,
+        });
+        let xml = write_unchecked(&inv).unwrap();
+        assert!(!xml.contains("AppliedTradeAllowanceCharge"), "{xml}");
+        let back = read(&xml).unwrap().invoice;
+        assert!(back.lines[0].price.as_ref().unwrap().discount.is_none());
+    }
+
+    #[test]
+    fn cii_round_trip_keeps_line_period() {
+        let inv = with_tail();
+        let xml = write_unchecked(&inv).unwrap();
+        let back = read(&xml).unwrap().invoice;
+        assert_eq!(back.lines[0].period, inv.lines[0].period);
+    }
+
+    #[test]
+    fn cii_empty_line_period_is_not_written() {
+        let mut inv = sample();
+        inv.lines[0].period = Some(core_invoice::Period {
+            start: None,
+            end: None,
+        });
+        let xml = write_unchecked(&inv).unwrap();
+        assert!(!xml.contains("BillingSpecifiedPeriod"), "{xml}");
+    }
+
+    #[test]
+    fn cii_round_trip_keeps_line_allowances_and_charges() {
+        let inv = with_tail();
+        let xml = write_unchecked(&inv).unwrap();
+        let back = read(&xml).unwrap().invoice;
+        assert_eq!(back.lines[0].allowances, inv.lines[0].allowances);
+        assert_eq!(back.lines[0].charges, inv.lines[0].charges);
+        let line_xml = xml.split("SpecifiedLineTradeSettlement").nth(1).unwrap();
+        assert!(!line_xml.contains("CategoryTradeTax"), "{line_xml}");
+    }
+
+    #[test]
+    fn cii_line_allowance_has_no_category_trade_tax() {
+        let xml = write_unchecked(&with_tail()).unwrap();
+        let after_tax = xml.split("SpecifiedLineTradeSettlement").nth(1).unwrap();
+        let ac = after_tax
+            .split("SpecifiedTradeAllowanceCharge")
+            .nth(1)
+            .unwrap();
+        assert!(!ac.contains("CategoryTradeTax"), "{ac}");
+    }
+
+    #[test]
+    fn cii_round_trip_keeps_line_invoiced_object() {
+        let inv = with_tail();
+        let xml = write_unchecked(&inv).unwrap();
+        let back = read(&xml).unwrap().invoice;
+        assert_eq!(back.lines[0].invoiced_object, inv.lines[0].invoiced_object);
+        assert_eq!(
+            back.lines[0]
+                .invoiced_object_code
+                .as_ref()
+                .map(Code::as_str),
+            Some("130")
+        );
+    }
+
+    #[test]
+    fn cii_line_invoiced_object_typecode_defaults_to_130() {
+        let xml = write_unchecked(&with_tail()).unwrap();
+        let settle = xml.split("SpecifiedLineTradeSettlement").nth(1).unwrap();
+        assert!(
+            settle.contains("<ram:TypeCode>130</ram:TypeCode>"),
+            "{settle}"
+        );
+    }
+
+    #[test]
+    fn cii_round_trip_keeps_line_accounting_reference() {
+        let inv = with_tail();
+        let xml = write_unchecked(&inv).unwrap();
+        let back = read(&xml).unwrap().invoice;
+        assert_eq!(
+            back.lines[0].accounting_reference.as_deref(),
+            Some("COST-133")
+        );
+    }
+
+    #[test]
+    fn cii_line_settlement_child_order() {
+        let xml = write_unchecked(&with_tail()).unwrap();
+        let settle = xml.split("SpecifiedLineTradeSettlement").nth(1).unwrap();
+        let tax = settle.find("ApplicableTradeTax").unwrap();
+        let per = settle.find("BillingSpecifiedPeriod").unwrap();
+        let ac = settle.find("SpecifiedTradeAllowanceCharge").unwrap();
+        let sum = settle
+            .find("SpecifiedTradeSettlementLineMonetarySummation")
+            .unwrap();
+        let obj = settle.find("AdditionalReferencedDocument").unwrap();
+        let acc = settle
+            .find("ReceivableSpecifiedTradeAccountingAccount")
+            .unwrap();
+        assert!(
+            tax < per && per < ac && ac < sum && sum < obj && obj < acc,
+            "{settle}"
+        );
+    }
+
+    #[test]
+    fn cii_round_trip_keeps_mapped_line_tail() {
+        let inv = with_tail();
+        let xml = write_unchecked(&inv).unwrap();
+        let back = read(&xml).unwrap().invoice;
+        let out = crate::diff_invoices(&inv, &back);
+        for line in out.lines() {
+            if line == "no semantic difference" {
+                continue;
+            }
+            assert!(
+                crate::CII_DROPPED.iter().any(|p| line.contains(p)),
+                "unexpected CII drop {line:?} in {out}"
+            );
+        }
+        let line_sum = xml
+            .split("SpecifiedTradeSettlementLineMonetarySummation")
+            .nth(1)
+            .unwrap();
+        assert!(
+            !line_sum.contains("TaxTotalAmount"),
+            "CII-SR-200: {line_sum}"
+        );
+        assert_eq!(back.despatch, inv.despatch);
+        assert_eq!(back.lines[0].order_line, inv.lines[0].order_line);
+        assert_eq!(
+            back.lines[0].price.as_ref().and_then(|p| p.discount),
+            inv.lines[0].price.as_ref().and_then(|p| p.discount)
+        );
     }
 }

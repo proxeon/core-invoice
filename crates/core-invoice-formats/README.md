@@ -8,8 +8,8 @@ lossless. `read_with_trace` reports unmapped children and malformed amounts.
 
 **CII D16B** is a three-part envelope (lines before header, format 102) for
 **EN 16931 and Peppol BIS**. `Profile::Pint` (international) may emit the same
-subset. Mapped: qty + net price, payment TypeCode + IBAN, document A/C amount +
-ChargeIndicator, delivery date/country. Remaining CII children are incomplete.
+subset. Header BT-15/16/19 and BT-7/8, line identifiers/A/C/period/object, and
+BT-147-in-gross are mapped. Empty `PostalAddress` vs absent stays a named drop.
 **PINT-MY is UBL-only** — `write_unchecked`/`convert` to CII on that profile
 returns `FormatError::CiiNotForProfile`. Do not wrap UBL in a
 `CrossIndustryInvoice` costume.

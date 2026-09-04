@@ -248,28 +248,12 @@ pub fn diff(left_xml: &str, right_xml: &str) -> Result<String, FormatError> {
 /// Paths the UBL↔CII model diff may still show. Shrink when mapping grows.
 /// Must not name a path the writer+reader restore.
 pub const CII_DROPPED: &[&str] = &[
-    // Empty <PostalAddress/> vs absent is still a model divergence (same as CEN BR-08).
+    // Empty <PostalAddress/> vs absent (CEN BR-08 / BR-10). Do not emit empty PostalTradeAddress.
     "seller.address",
     "buyer.address",
-    "despatch",
-    "receiving_advice",
-    "buyer_accounting",
-    "tax_point",
+    // PINT-MY line extras; CII is EN/Peppol subset. CII-SR-200 forbids line TaxTotalAmount.
     "lines.extra_tax",
     "lines.tax_total",
-    "lines.allowances",
-    "lines.charges",
-    "lines.attributes",
-    "lines.standard_id",
-    "lines.item_id",
-    "lines.buyer_id",
-    "lines.order_line",
-    "lines.accounting_reference",
-    "lines.origin_country",
-    "lines.classifications",
-    "lines.invoiced_object",
-    "lines.period",
-    "price.discount",
 ];
 
 /// Syntax terms the writer will omit, plus CEN prohibition hits on the bytes.
@@ -295,7 +279,7 @@ fn opt_amt(a: Option<core_invoice::Amount>) -> String {
     a.map(|x| x.to_string()).unwrap_or_else(|| "absent".into())
 }
 
-fn diff_invoices(left: &Invoice, right: &Invoice) -> String {
+pub(crate) fn diff_invoices(left: &Invoice, right: &Invoice) -> String {
     let mut lines = Vec::new();
     if left.number != right.number {
         lines.push(format!("number: {} → {}", left.number, right.number));
@@ -386,6 +370,18 @@ fn diff_invoices(left: &Invoice, right: &Invoice) -> String {
             _ => lines.push("delivery: differ".into()),
         }
     }
+    if left.despatch != right.despatch {
+        lines.push("despatch: differ".into());
+    }
+    if left.receiving_advice != right.receiving_advice {
+        lines.push("receiving_advice: differ".into());
+    }
+    if left.buyer_accounting != right.buyer_accounting {
+        lines.push("buyer_accounting: differ".into());
+    }
+    if left.tax_point_date != right.tax_point_date || left.tax_point_code != right.tax_point_code {
+        lines.push("tax_point: differ".into());
+    }
     if left.supporting_documents != right.supporting_documents {
         lines.push("supporting_documents: differ".into());
     }
@@ -472,7 +468,18 @@ fn diff_invoices(left: &Invoice, right: &Invoice) -> String {
             ));
         }
         if a.price != b.price {
-            lines.push(format!("lines[{i}].price: differ"));
+            match (&a.price, &b.price) {
+                (Some(pa), Some(pb))
+                    if pa.net == pb.net
+                        && pa.gross == pb.gross
+                        && pa.base_qty == pb.base_qty
+                        && pa.base_unit == pb.base_unit
+                        && pa.discount != pb.discount =>
+                {
+                    lines.push("price.discount: differ".into());
+                }
+                _ => lines.push(format!("lines[{i}].price: differ")),
+            }
         }
         if a.extra_tax != b.extra_tax {
             lines.push("lines.extra_tax: differ".into());
@@ -480,11 +487,37 @@ fn diff_invoices(left: &Invoice, right: &Invoice) -> String {
         if a.tax_total != b.tax_total {
             lines.push("lines.tax_total: differ".into());
         }
-        if a.allowances != b.allowances || a.charges != b.charges {
-            lines.push(format!("lines[{i}].allowances: differ"));
+        if a.allowances != b.allowances {
+            lines.push("lines.allowances: differ".into());
+        }
+        if a.charges != b.charges {
+            lines.push("lines.charges: differ".into());
+        }
+        if a.attributes != b.attributes {
+            lines.push("lines.attributes: differ".into());
+        }
+        if a.standard_id != b.standard_id {
+            lines.push("lines.standard_id: differ".into());
+        }
+        if a.item_id != b.item_id {
+            lines.push("lines.item_id: differ".into());
+        }
+        if a.buyer_id != b.buyer_id {
+            lines.push("lines.buyer_id: differ".into());
+        }
+        if a.order_line != b.order_line {
+            lines.push("lines.order_line: differ".into());
+        }
+        if a.accounting_reference != b.accounting_reference {
+            lines.push("lines.accounting_reference: differ".into());
         }
         if a.classifications != b.classifications {
-            lines.push(format!("lines[{i}].classifications: differ"));
+            lines.push("lines.classifications: differ".into());
+        }
+        if a.invoiced_object != b.invoiced_object
+            || a.invoiced_object_code != b.invoiced_object_code
+        {
+            lines.push("lines.invoiced_object: differ".into());
         }
         if a.period != b.period {
             lines.push("lines.period: differ".into());
@@ -698,6 +731,22 @@ mod tests {
     fn cii_dtd_is_refused() {
         let xml = r#"<!DOCTYPE CrossIndustryInvoice [<!ENTITY x "a">]><rsm:CrossIndustryInvoice xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100"/>"#;
         assert!(read(xml).is_err());
+    }
+
+    #[test]
+    fn diff_invoices_names_cii_dropped_line_paths() {
+        let mut a = read(
+            r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"><cbc:CustomizationID>urn:cen.eu:en16931:2017</cbc:CustomizationID><cbc:ID>1</cbc:ID><cbc:IssueDate>2026-01-15</cbc:IssueDate><cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode><cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode><cac:InvoiceLine><cbc:ID>1</cbc:ID><cbc:LineExtensionAmount currencyID="EUR">10.00</cbc:LineExtensionAmount><cac:Item><cbc:Name>A</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>S</cbc:ID><cbc:Percent>19</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item></cac:InvoiceLine></Invoice>"#,
+        )
+        .unwrap();
+        let b = a.clone();
+        a.lines[0].order_line = Some("L1".into());
+        a.despatch = Some(core_invoice::DocumentReference::new("D"));
+        a.buyer_accounting = Some("BT19".into());
+        let out = diff_invoices(&a, &b);
+        assert!(out.contains("lines.order_line"), "{out}");
+        assert!(out.contains("despatch"), "{out}");
+        assert!(out.contains("buyer_accounting"), "{out}");
     }
 
     #[test]
