@@ -10,7 +10,7 @@ members = [
 exclude = ["fuzz"]
 
 [workspace.package]
-version = "2.0.0"
+version = "2.0.1"
 edition = "2024"
 rust-version = "1.88"
 authors = ["Proxeon"]
@@ -22,9 +22,9 @@ keywords = ["einvoice", "en16931", "peppol", "pint", "ubl"]
 categories = ["encoding", "parser-implementations"]
 
 [workspace.dependencies]
-core-invoice = { version = "2.0.0", path = "crates/core-invoice" }
-core-invoice-formats = { version = "2.0.0", path = "crates/core-invoice-formats" }
-core-invoice-fixtures = { version = "2.0.0", path = "crates/core-invoice-fixtures" }
+core-invoice = { version = "2.0.1", path = "crates/core-invoice" }
+core-invoice-formats = { version = "2.0.1", path = "crates/core-invoice-formats" }
+core-invoice-fixtures = { version = "2.0.1", path = "crates/core-invoice-fixtures" }
 rust_decimal = { version = "1.39", default-features = false, features = ["std"] }
 thiserror = "2"
 clap = { version = "4", features = ["derive"] }

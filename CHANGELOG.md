@@ -17,6 +17,10 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.0.1] — 2026-09-04
+
+Additive. No Rust API break.
+
 ### Added
 
 - `write_drops` also lists CEN prohibition hits on the written bytes (does not strip). A model-built invoice should produce none.
@@ -189,7 +193,8 @@ PINT-MY as profiles.
 - **`core-invoice-sys`** — C ABI `core_invoice_validate_ubl` and
   `include/core_invoice.h`.
 
-[Unreleased]: https://github.com/proxeon/core-invoice/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/proxeon/core-invoice/compare/v2.0.1...HEAD
+[2.0.1]: https://github.com/proxeon/core-invoice/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/proxeon/core-invoice/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/proxeon/core-invoice/compare/v0.2.0...v1.0.0
 [0.2.0]: https://github.com/proxeon/core-invoice/compare/v0.1.0...v0.2.0
