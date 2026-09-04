@@ -12,6 +12,11 @@ keywords.workspace = true
 categories.workspace = true
 description = "EN 16931 + Peppol PINT semantic model (VAT, GST, SST, consumption tax)"
 
+[features]
+default = []
+# German CIUS extra rules (BR-DE-*). Never CORE. Off unless the embedder asks.
+xrechnung = []
+
 [dependencies]
 rust_decimal.workspace = true
 thiserror.workspace = true

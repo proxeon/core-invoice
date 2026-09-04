@@ -12,6 +12,10 @@ keywords.workspace = true
 categories.workspace = true
 description = "UBL 2.1 and UN/CEFACT CII codecs for core-invoice"
 
+[features]
+default = []
+xrechnung = ["core-invoice/xrechnung"]
+
 [dependencies]
 core-invoice.workspace = true
 roxmltree = "0.20"

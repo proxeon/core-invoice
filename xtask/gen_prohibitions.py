@@ -1,0 +1,191 @@
+#!/usr/bin/env python3
+"""Extract UBL/CII syntax prohibitions from CEN preprocessed Schematron.
+
+Context is half the rule: `not(cbc:UUID)` on `/ubl:Invoice` is not a blanket
+ban on `cbc:UUID`. Do not drop the context. Generated files are MIT OR Apache-2.0
+(code points / paths only).
+"""
+from __future__ import annotations
+
+import re
+import sys
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+NS = {"sch": "http://purl.oclc.org/dsdl/schematron"}
+ARTEFACTS = {
+    "ubl": ROOT
+    / "refers/en16931/ubl/schematron/preprocessed/EN16931-UBL-validation-preprocessed.sch",
+    "cii": ROOT
+    / "refers/en16931/cii/schematron/preprocessed/EN16931-CII-validation-preprocessed.sch",
+}
+OUT = {
+    "ubl": ROOT / "crates/core-invoice-formats/src/prohibitions_ubl.rs",
+    "cii": ROOT / "crates/core-invoice-formats/src/prohibitions_cii.rs",
+}
+
+
+def is_syntax_rule(rid: str) -> bool:
+    parts = rid.split("-")
+    if len(parts) != 3:
+        return False
+    prefix, kind, num = parts
+    return (
+        prefix.isascii()
+        and prefix.isupper()
+        and kind in {"CR", "SR", "DT"}
+        and num.isdigit()
+    )
+
+
+def is_element_chain(s: str) -> bool:
+    if not s:
+        return False
+    for seg in s.split("/"):
+        halves = seg.split(":")
+        if len(halves) != 2:
+            return False
+        prefix, local = halves
+        if not prefix or not prefix[0].isalpha():
+            return False
+        if not all(c.isalnum() or c in "_.-" for c in prefix):
+            return False
+        if not local or not all(c.isalnum() or c in "_.-" for c in local):
+            return False
+    return True
+
+
+def strip_not(test: str) -> str | None:
+    test = test.strip()
+    if test.startswith("not(") and test.endswith(")"):
+        return test[4:-1].strip()
+    return None
+
+
+def expand_alternation(inner: str) -> list[str] | None:
+    if is_element_chain(inner):
+        return [inner]
+    if inner.startswith("(") and ")" in inner:
+        head, _, rest = inner[1:].partition(")")
+        if "(" in head:
+            return None
+        tail = rest.strip()
+        if tail.startswith("/"):
+            suffix = tail[1:]
+            if not is_element_chain(suffix):
+                return None
+        elif tail:
+            return None
+        else:
+            suffix = None
+        out = []
+        for branch in (b.strip() for b in head.split("|")):
+            if not is_element_chain(branch):
+                return None
+            out.append(f"{branch}/{suffix}" if suffix else branch)
+        return out or None
+    if "|" in inner:
+        branches = [b.strip() for b in inner.split("|")]
+        if all(is_element_chain(b) for b in branches):
+            return branches
+    return None
+
+
+def rust_escape(s: str) -> str:
+    return s.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def extract(syntax: str) -> tuple[list[str], list[str], int, int]:
+    path = ARTEFACTS[syntax]
+    tree = ET.parse(path)
+    root = tree.getroot()
+    paths: set[str] = set()
+    attrs: set[str] = set()
+    unextracted = 0
+    assertions = 0
+    for rule in root.findall(".//sch:rule", NS):
+        context = (rule.get("context") or "").strip()
+        for assertion in rule.findall("sch:assert", NS):
+            rid = assertion.get("id")
+            if not rid or not is_syntax_rule(rid):
+                continue
+            test = (assertion.get("test") or "").strip()
+            inner = strip_not(test)
+            if inner is None:
+                continue
+            assertions += 1
+            m = re.fullmatch(r"//@([A-Za-z0-9_]+)", inner)
+            if m:
+                attrs.add(f'("{rust_escape(rid)}", "{rust_escape(m.group(1))}"),')
+                continue
+            forbidden = expand_alternation(inner)
+            if forbidden is None:
+                unextracted += 1
+                continue
+            branches = [b.strip() for b in context.split("|")]
+            usable = all(
+                b and is_element_chain(b.lstrip("/")) for b in branches
+            )
+            if not usable:
+                unextracted += 1
+                continue
+            for b in branches:
+                for rel in forbidden:
+                    paths.add(
+                        f'("{rust_escape(rid)}", "{rust_escape(b)}", "{rust_escape(rel)}"),'
+                    )
+    if not paths and not attrs:
+        raise SystemExit(f"{path}: no prohibitions extracted")
+    return sorted(paths), sorted(attrs), unextracted, assertions
+
+
+def render(syntax: str, paths: list[str], attrs: list[str], unextracted: int, assertions: int) -> str:
+    label = syntax.upper()
+    checked = assertions - unextracted
+    body_p = "".join(f"    {l}\n" for l in paths)
+    body_a = "".join(f"    {l}\n" for l in attrs)
+    return f"""//! {label} prohibitions, extracted from CEN's preprocessed Schematron.
+//!
+//! **Generated by `python3 xtask/gen_prohibitions.py`. Do not edit.**
+//!
+//! Each entry is `(rule, context, relative path)`. `not(x)` forbids `x` only
+//! under that context, not everywhere. Source is the preprocessed artefact
+//! (resolved `rule/@context`).
+//!
+//! {checked} of {assertions} `not(…)` assertions; {len(paths)} element rows,
+//! {len(attrs)} attribute rows. [`UNEXTRACTED`] = {unextracted} need an XPath
+//! engine (predicates, wildcards).
+
+/// `(rule id, context, forbidden path relative to that context)`.
+pub static FORBIDDEN_PATHS: &[(&str, &str, &str)] = &[
+{body_p}];
+
+/// `(rule id, attribute local name)` forbidden anywhere (`//@attr`).
+pub static FORBIDDEN_ATTRIBUTES: &[(&str, &str)] = &[
+{body_a}];
+
+pub const TOTAL_PARAMS: usize = {assertions};
+pub const UNEXTRACTED: usize = {unextracted};
+"""
+
+
+def main() -> None:
+    missing = [p for p in ARTEFACTS.values() if not p.is_file()]
+    if missing:
+        print("missing preprocessed Schematron:", *missing, file=sys.stderr)
+        sys.exit(1)
+    for syntax in ("ubl", "cii"):
+        paths, attrs, unextracted, assertions = extract(syntax)
+        OUT[syntax].write_text(
+            render(syntax, paths, attrs, unextracted, assertions), encoding="utf-8"
+        )
+        print(
+            f"{syntax}: {len(paths)} paths, {len(attrs)} attrs, "
+            f"{assertions - unextracted}/{assertions} extracted, "
+            f"unextracted={unextracted} → {OUT[syntax].relative_to(ROOT)}"
+        )
+
+
+if __name__ == "__main__":
+    main()

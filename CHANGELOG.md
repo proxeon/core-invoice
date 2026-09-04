@@ -19,12 +19,17 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- CEN UBL unit-test runner (`refers/en16931/test/{Invoice,CreditNote}-unit-UBL`). Ratchet: ≥1000 run, ≥790 agreed, ≤263 unexplained disagreements. Skip unless `refers/` is present.
+- CEN UBL unit-test runner (`refers/en16931/test/{Invoice,CreditNote}-unit-UBL`). Ratchet: ≥1000 run, ≥1055 agreed, **0** unexplained disagreements. Six named divergences remain (empty `PostalAddress` / empty `BillingReference`). Skip unless `refers/` is present.
+- Generated UBL/CII prohibition tables from preprocessed Schematron (`task prohibitions`). Context is kept; 32 UBL / 75 CII `not(…)` assertions stay `UNEXTRACTED`.
+- Optional `xrechnung` Cargo feature (never default, never CORE): `BR-DE-15` / `BR-DE-16` overlay when BT-24 claims KoSIT/xeinkauf. Remaining KoSIT rules stay in UNCOVERED.
 
 ### Changed
 
-- UBL `AllowanceCharge` without `Amount` is kept (amount 0) so BT-95/102 on CEN fragments still evaluate.
+- UBL `AllowanceCharge` without `Amount` is kept (amount 0) so BT-95/102 on CEN fragments still evaluate. Line A/C, empty PayeeFinancialAccount, empty item attributes, Price without `PriceAmount`, TaxSubtotal without category, and supporting documents without `ID` are kept so presence rules can fire.
+- `DocumentTotals.payable` is `Option` (missing PayableAmount is not 0). **Breaking** for 1.x callers that stored a required `InvoiceAmount`.
+- VAT family rows apply as soon as the category appears (not only once BG-22/BG-23 exist). Dual `TaxTotal` subtotals are concatenated. PartyTaxScheme `TAX`/`GST`/`AAL` vs `VAT` is distinguished.
 - CII maps party street/city/postcode and contact (phone/email/name). `seller.contact` / `buyer.contact` leave `CII_DROPPED`.
+- Peppol pin test: `rules/sch/` must not contain compiled Schematron XSLT. `stylesheet/stylesheet-ubl.xslt` is presentation, not OpenPEPPOL Valid.
 
 ## [1.0.0] — 2026-09-04
 

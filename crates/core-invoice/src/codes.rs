@@ -194,6 +194,9 @@ fn br_cl_17(inv: &Invoice, report: &mut Report) {
         return;
     }
     for (i, e) in inv.tax_breakdown.iter().enumerate() {
+        if e.category.as_str().trim().is_empty() {
+            continue;
+        }
         if !uncl_5305(e.category.as_str()) {
             report.push(Finding::fatal(
                 "BR-CL-17",
@@ -209,7 +212,7 @@ fn br_cl_18(inv: &Invoice, report: &mut Report) {
         return;
     }
     for (i, line) in inv.lines.iter().enumerate() {
-        if line.tax.system != TaxSystem::Vat {
+        if line.tax.system != TaxSystem::Vat || line.tax.code.trim().is_empty() {
             continue;
         }
         if !uncl_5305(&line.tax.code) {
@@ -257,6 +260,9 @@ fn br_cl_24(inv: &Invoice, report: &mut Report) {
         let Some(att) = doc.attachment.as_ref() else {
             continue;
         };
+        if att.mime.trim().is_empty() {
+            continue;
+        }
         if !mime(att.mime.as_str()) {
             report.push(Finding::fatal(
                 "BR-CL-24",

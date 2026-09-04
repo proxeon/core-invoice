@@ -8,6 +8,7 @@ use core_invoice::{
 };
 
 pub mod cii;
+pub mod prohibitions;
 pub mod ubl;
 pub mod xml;
 
@@ -884,5 +885,31 @@ mod tests {
         inv.kind = core_invoice::DocumentKind::CreditNote;
         let drops = write_drops(&inv, Syntax::Ubl);
         assert!(drops.iter().any(|d| d == "CreditNote/DueDate"), "{drops:?}");
+    }
+
+    #[test]
+    fn peppol_pin_has_no_compiled_schematron_xslt() {
+        // v3.0.20 ships `.sch` under rules/sch/ and a presentation stylesheet.
+        // Compiling .sch ourselves is not OpenPEPPOL Valid. When a later pin
+        // ships compiled Schematron XSLT here, wire an @id compare.
+        let sch = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../refers/peppol-bis-invoice-3/rules/sch");
+        if !sch.is_dir() {
+            return;
+        }
+        let compiled: Vec<_> = std::fs::read_dir(&sch)
+            .unwrap()
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| {
+                p.extension().and_then(|e| e.to_str()).is_some_and(|e| {
+                    e.eq_ignore_ascii_case("xsl") || e.eq_ignore_ascii_case("xslt")
+                })
+            })
+            .collect();
+        assert!(
+            compiled.is_empty(),
+            "Peppol pin shipped compiled XSLT {compiled:?} — compare @id, do not compile .sch"
+        );
     }
 }

@@ -153,7 +153,10 @@ fn families_ready(inv: &Invoice) -> bool {
 }
 
 fn vat_families_apply(inv: &Invoice) -> bool {
-    families_ready(inv) && !matches!(inv.profile, Profile::PintMy | Profile::Unknown)
+    // Identifier / rate / group rows apply as soon as the category appears on a
+    // line, allowance or charge. CEN unit-test fragments often have neither
+    // BG-22 nor BG-23.
+    !matches!(inv.profile, Profile::PintMy | Profile::Unknown)
 }
 
 fn my_families_apply(inv: &Invoice) -> bool {
@@ -173,6 +176,7 @@ fn uses_category(inv: &Invoice, cat: VatCategory) -> bool {
     uses_in(inv, cat, RateContext::Line)
         || uses_in(inv, cat, RateContext::Allowance)
         || uses_in(inv, cat, RateContext::Charge)
+        || breakdown_of(inv, cat).next().is_some()
 }
 
 fn uses_in(inv: &Invoice, cat: VatCategory, ctx: RateContext) -> bool {
@@ -233,7 +237,7 @@ fn rate_ok(rule: RateRule, rate: Option<Percentage>) -> bool {
         RateRule::Positive => rate.is_some_and(Percentage::is_positive),
         RateRule::Zero => rate.is_some_and(Percentage::is_zero),
         RateRule::ZeroOrPositive => rate.is_some_and(|r| !r.is_negative()),
-        RateRule::Absent => rate.is_none() || rate.is_some_and(Percentage::is_zero),
+        RateRule::Absent => rate.is_none(),
     }
 }
 
@@ -246,29 +250,14 @@ fn check_rate_line(inv: &Invoice, report: &mut Report, p: CategoryProfile, id: &
         if line.tax.system != TaxSystem::Vat || !line.tax.code.eq_ignore_ascii_case(code) {
             continue;
         }
-        let rate = if p.category == VatCategory::OutOfScope {
-            None
-        } else {
-            line.tax.percent
-        };
-        if !rate_ok(p.rate, rate) && p.category != VatCategory::OutOfScope {
-            if !rate_ok(p.rate, line.tax.percent) {
-                report.push(Finding::fatal(
-                    id,
-                    Path::at_term(Group::Line, i, BtId(152)),
-                    format!(
-                        "BT-152 rate {:?} is not valid for {}",
-                        line.tax.percent, code
-                    ),
-                ));
-            }
-        } else if p.category == VatCategory::OutOfScope
-            && line.tax.percent.is_some_and(Percentage::is_positive)
-        {
+        if !rate_ok(p.rate, line.tax.percent) {
             report.push(Finding::fatal(
                 id,
                 Path::at_term(Group::Line, i, BtId(152)),
-                "category O shall not contain a positive rate",
+                format!(
+                    "BT-152 rate {:?} is not valid for {}",
+                    line.tax.percent, code
+                ),
             ));
         }
     }
@@ -575,8 +564,14 @@ fn check_b_not_with_s(inv: &Invoice, report: &mut Report) {
 }
 
 fn br_co_18(inv: &Invoice, report: &mut Report) {
-    // BR-CO-18: at least one BG-23. Not gated on the caller having run reconcile.
-    if inv.tax_breakdown.is_empty() && !inv.lines.is_empty() {
+    // BR-CO-18: at least one BG-23. A TaxTotal without TaxSubtotal still counts
+    // as "this invoice used tax" once the reader materialises BG-22 from it.
+    if inv.tax_breakdown.is_empty()
+        && (!inv.lines.is_empty()
+            || inv.totals.is_some()
+            || !inv.document_allowances.is_empty()
+            || !inv.document_charges.is_empty())
+    {
         report.push(Finding::fatal(
             "BR-CO-18",
             Path::group(Group::TaxBreakdown),
@@ -1727,7 +1722,7 @@ mod tests {
             with_tax: Some(amt("110.00")),
             paid: None,
             rounding: None,
-            payable: amt("110.00"),
+            payable: Some(amt("110.00")),
         });
         let report = validate(&inv);
         assert!(

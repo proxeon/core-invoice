@@ -14,7 +14,7 @@ BR-CO-25
 
 ## Peppol BIS pin is Schematron-only
 
-Peppol BIS **v3.0.20** in `refers/peppol-bis-invoice-3` is `.sch` (`rules/sch/PEPPOL-EN16931-UBL.sch`). This pin has **no compiled XSLT**. `task svrl` does **not** diff Peppol `@id`. SA-as-Peppol is **our** Fatal set only (must be non-empty). Compiling `.sch` ourselves is not OpenPEPPOL Valid. If a later pin ships XSLT, compare then.
+Peppol BIS **v3.0.20** in `refers/peppol-bis-invoice-3` is `.sch` (`rules/sch/PEPPOL-EN16931-UBL.sch`). This pin has **no compiled Schematron XSLT** under `rules/sch/` (`stylesheet/stylesheet-ubl.xslt` is a presentation stylesheet). `task svrl` does **not** diff Peppol `@id`. SA-as-Peppol is **our** Fatal set only (must be non-empty). Compiling `.sch` ourselves is not OpenPEPPOL Valid. A formats test fails if a later pin drops compiled XSLT into `rules/sch/` so we notice.
 
 ## Code lists (generated; remaining holes)
 
@@ -57,7 +57,15 @@ Family A/C rows and IC-11/12: in catalogue. Presence evals registered: BR-12…1
 
 ## CEN UBL unit tests (pin validation-1.3.16)
 
-`cargo test -p core-invoice-formats --test cen_conformance` when `refers/en16931/test` is present. Floor **790** agreed / **1000** run; ceiling **263** unexplained disagreements (VAT family identifier rows, BR-15 payable-as-zero, BR-50 empty PayeeFinancialAccount, …). Named divergences: empty `PostalAddress` / empty `BillingReference` / dual `TaxTotal`. Raise the floor when a rule starts agreeing.
+`cargo test -p core-invoice-formats --test cen_conformance` when `refers/en16931/test` is present. Floor **1055** agreed / **1000** run; ceiling **0** unexplained disagreements. Named divergences (6): empty `PostalAddress`, empty `BillingReference`. Raise the floor when a skipped unevaluated rule starts agreeing.
+
+## Syntax prohibition tables
+
+Generated from preprocessed ConnectingEurope Schematron (`task prohibitions`). UBL: 664/696 `not(…)` assertions (32 UNEXTRACTED). CII: 447/522 (75 UNEXTRACTED). Conditional XPath is counted, not guessed.
+
+## XRechnung (optional feature)
+
+`core-invoice` feature `xrechnung` is **off** by default and is **not CORE**. Evaluated when BT-24 claims KoSIT/xeinkauf: `BR-DE-15`, `BR-DE-16`. Remaining KoSIT `BR-DE-*` / Extension / CVD are not registered. Do not treat `validate().ok()` on an XRechnung claim as KoSIT Valid.
 
 ## P14 / P18
 

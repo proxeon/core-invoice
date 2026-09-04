@@ -342,7 +342,7 @@ pub struct TaxBreakdown {
 }
 
 /// BG-22 document totals. Absent optional amounts are `None`, not 0.00.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct DocumentTotals {
     /// BT-106 sum of invoice line net amounts.
     pub line_net: Option<InvoiceAmount>,
@@ -362,8 +362,8 @@ pub struct DocumentTotals {
     pub paid: Option<InvoiceAmount>,
     /// BT-114 rounding amount.
     pub rounding: Option<InvoiceAmount>,
-    /// BT-115 amount due for payment.
-    pub payable: InvoiceAmount,
+    /// BT-115 amount due for payment. Missing PayableAmount is `None`, not 0 (BR-15).
+    pub payable: Option<InvoiceAmount>,
 }
 
 /// BG-24 additional supporting document.
@@ -511,9 +511,9 @@ impl Invoice {
         }
     }
 
-    /// BT-115 from [`DocumentTotals`]. Absent BG-22 is not 0.00 (BR-CO-16).
+    /// BT-115 from [`DocumentTotals`]. Absent BG-22 or absent PayableAmount is not 0.00 (BR-15).
     pub fn payable(&self) -> Option<Amount> {
-        self.totals.as_ref().map(|t| t.payable)
+        self.totals.as_ref().and_then(|t| t.payable)
     }
 
     /// BT-110 from [`DocumentTotals`]. Absent totals is not 0.00.

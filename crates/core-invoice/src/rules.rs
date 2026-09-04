@@ -30,10 +30,21 @@ fn canonical(id: &str) -> String {
 }
 
 pub fn explain(id: &str) -> Option<&'static str> {
-    catalogue()
+    if let Some(text) = catalogue()
         .iter()
         .find(|r| matches_id(r.id, id))
         .map(|r| r.text)
+    {
+        return Some(text);
+    }
+    #[cfg(feature = "xrechnung")]
+    if let Some(r) = crate::xrechnung::RULES
+        .iter()
+        .find(|r| matches_id(r.id, id))
+    {
+        return Some(r.text);
+    }
+    None
 }
 
 /// CORE rules only. Peppol extras are `Profile::extra_rules`, not this list.
@@ -86,6 +97,7 @@ pub fn conformance_matrix() -> String {
 pub fn catalogue() -> &'static [Rule] {
     static CELL: std::sync::OnceLock<Vec<Rule>> = std::sync::OnceLock::new();
     CELL.get_or_init(|| {
+        #[allow(unused_mut)]
         core_rules()
             .iter()
             .copied()
@@ -584,9 +596,9 @@ fn br_14(invoice: &Invoice, report: &mut Report) {
 }
 
 fn br_15(invoice: &Invoice, report: &mut Report) {
-    // BR-15: PayableAmount (BT-115). Present once BG-22 exists (non-Option on DocumentTotals);
-    // missing whole BG-22 still fires.
-    if invoice.totals.is_none() {
+    // BR-15: PayableAmount (BT-115). Missing BG-22 or missing PayableAmount both fire.
+    // A stated 0.00 is present; do not treat it as absent.
+    if invoice.totals.as_ref().and_then(|t| t.payable).is_none() {
         report.push(Finding::fatal(
             "BR-15",
             Path::term(BtId(115)),
@@ -1363,14 +1375,14 @@ fn br_co_16(invoice: &Invoice, report: &mut Report) {
         overflow(report, "BR-CO-16", 115, "BT-115");
         return;
     };
-    if totals.payable != expected {
+    let Some(stated) = totals.payable else {
+        return;
+    };
+    if stated != expected {
         report.push(Finding::fatal(
             "BR-CO-16",
             Path::group_term(Group::Totals, BtId(115)),
-            format!(
-                "BT-115 {} ≠ BT-112 − BT-113 + BT-114 = {expected}",
-                totals.payable
-            ),
+            format!("BT-115 {stated} ≠ BT-112 − BT-113 + BT-114 = {expected}"),
         ));
     }
 }
@@ -2261,6 +2273,7 @@ mod tests {
             include_str!("peppol.rs"),
             include_str!("category.rs"),
             include_str!("codes.rs"),
+            include_str!("xrechnung.rs"),
         ]
         .concat();
         for rule in catalogue() {

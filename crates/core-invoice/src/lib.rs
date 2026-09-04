@@ -26,6 +26,8 @@ pub mod report;
 pub mod rules;
 pub mod tax;
 pub mod validate;
+#[cfg(feature = "xrechnung")]
+pub mod xrechnung;
 
 pub use amount::{Amount, InvoiceAmount, UnitPriceAmount};
 pub use attachment::Attachment;
@@ -184,7 +186,7 @@ mod tests {
     #[test]
     fn stuffed_payable_emits_br_co_16_when_totals_exist() {
         let mut inv = sst_invoice(Profile::Pint);
-        inv.totals.as_mut().unwrap().payable = Amount::parse("999.00").unwrap();
+        inv.totals.as_mut().unwrap().payable = Some(Amount::parse("999.00").unwrap());
         let report = validate(&inv);
         assert!(
             report.findings.iter().any(|f| f.id == "BR-CO-16"),

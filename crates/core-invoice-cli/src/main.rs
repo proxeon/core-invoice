@@ -353,7 +353,9 @@ fn run() -> Result<ExitCode, String> {
             println!("buyer={}", inv.buyer.name);
             println!("lines={}", inv.lines.len());
             if let Some(t) = inv.totals.as_ref() {
-                println!("payable={}", t.payable);
+                if let Some(p) = t.payable {
+                    println!("payable={p}");
+                }
             }
             for u in &traced.unmapped {
                 println!("unmapped={u}");

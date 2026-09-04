@@ -506,7 +506,9 @@ fn write_totals(s: &mut String, invoice: &Invoice) {
     if let Some(v) = t.with_tax {
         amount_ram(s, 4, "GrandTotalAmount", v, cur);
     }
-    amount_ram(s, 4, "DuePayableAmount", t.payable, cur);
+    if let Some(v) = t.payable {
+        amount_ram(s, 4, "DuePayableAmount", v, cur);
+    }
     s.push_str("      </ram:SpecifiedTradeSettlementHeaderMonetarySummation>\n");
 }
 
@@ -655,8 +657,7 @@ fn read_totals(node: roxmltree::Node<'_, '_>, malformed: &mut Vec<String>) -> Do
         with_tax: child_amount(node, "GrandTotalAmount", malformed, "CII-totals"),
         paid: child_amount(node, "TotalPrepaidAmount", malformed, "CII-totals"),
         rounding: child_amount(node, "RoundingAmount", malformed, "CII-totals"),
-        payable: child_amount(node, "DuePayableAmount", malformed, "CII-totals")
-            .unwrap_or(Amount::ZERO),
+        payable: child_amount(node, "DuePayableAmount", malformed, "CII-totals"),
     }
 }
 

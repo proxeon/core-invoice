@@ -240,7 +240,7 @@ impl Reconciler {
             with_tax: Some(with_tax),
             paid: self.paid,
             rounding: self.rounding,
-            payable,
+            payable: Some(payable),
         })
     }
 }
@@ -529,7 +529,7 @@ mod tests {
         assert_eq!(totals.charge_total, None);
         assert_eq!(totals.tax_total.unwrap(), amt("22.50"));
         assert_eq!(totals.with_tax.unwrap(), amt("172.50"));
-        assert_eq!(totals.payable, amt("172.50"));
+        assert_eq!(totals.payable, Some(amt("172.50")));
         assert!(validate(&inv).ok(), "{}", validate(&inv));
     }
 
@@ -567,7 +567,7 @@ mod tests {
         let t = inv.totals.as_ref().unwrap();
         assert_eq!(t.with_tax.unwrap(), amt("137.50"));
         assert_eq!(t.paid, Some(amt("250.00")));
-        assert_eq!(t.payable, amt("-112.50"));
+        assert_eq!(t.payable, Some(amt("-112.50")));
         assert!(validate(&inv).ok(), "{}", validate(&inv));
     }
 
@@ -587,7 +587,7 @@ mod tests {
             .paid(amt("250.00"))
             .apply(&mut inv)
             .unwrap();
-        inv.totals.as_mut().unwrap().payable = amt("137.50");
+        inv.totals.as_mut().unwrap().payable = Some(amt("137.50"));
         let report = validate(&inv);
         assert!(
             report.findings.iter().any(|f| f.id == "BR-CO-16"),

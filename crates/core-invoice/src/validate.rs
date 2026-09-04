@@ -14,6 +14,13 @@ pub fn validate(invoice: &Invoice) -> Report {
     for rule in core.iter().chain(extra) {
         (rule.eval)(invoice, &mut report);
     }
+    #[cfg(feature = "xrechnung")]
+    if crate::xrechnung::claimed(invoice) {
+        for rule in crate::xrechnung::RULES {
+            (rule.eval)(invoice, &mut report);
+        }
+        report.rules_checked += crate::xrechnung::RULES.len();
+    }
     report.sort_stable();
     report
 }

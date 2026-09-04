@@ -8,9 +8,9 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use core_invoice::Profile;
 use core_invoice::rules::{self, catalogue};
-use core_invoice::{Profile, validate};
-use core_invoice_formats::read;
+use core_invoice_formats::validate_xml;
 
 struct Case {
     file: String,
@@ -161,28 +161,22 @@ const DIVERGENCES: &[(&str, &str, &str)] = &[
 ];
 
 fn fired(xml: &str, rule: &str) -> Result<bool, String> {
-    let inv = match read(xml) {
-        Ok(i) => i,
-        Err(e) => return Err(format!("unreadable: {e}")),
-    };
-    let mut inv = inv;
-    // Suite fragments often have no / unknown BT-24. CORE still runs; force EN
-    // so Peppol extras and PINT-TAX do not colour the verdict.
-    if matches!(inv.profile, Profile::Unknown) {
-        inv.profile = Profile::En16931;
+    // Suite fragments often have no / unknown BT-24. Force EN so Peppol extras
+    // and PINT-TAX do not colour the verdict. validate_xml also walks @currencyID (BR-CL-03).
+    match validate_xml(xml, Some(Profile::En16931)) {
+        Ok(report) => Ok(report
+            .findings
+            .iter()
+            .any(|f| rules::matches_id(f.id, rule))),
+        Err(e) => Err(format!("unreadable: {e}")),
     }
-    let report = validate(&inv);
-    Ok(report
-        .findings
-        .iter()
-        .any(|f| rules::matches_id(f.id, rule)))
 }
 
 /// Floor: coverage must not shrink. Raise when agreement grows; never lower without a commit note.
 const MIN_CEN_RUN: usize = 1_000;
-const MIN_CEN_AGREED: usize = 790;
-/// Ceiling: named remaining disagreements. Shrink when a rule starts agreeing.
-const MAX_CEN_DISAGREED: usize = 263;
+const MIN_CEN_AGREED: usize = 1_055;
+/// Ceiling: unexplained disagreements. Named DIVERGENCES are counted separately.
+const MAX_CEN_DISAGREED: usize = 0;
 
 #[test]
 fn cen_ubl_unit_tests_agree() {
@@ -261,6 +255,19 @@ fn cen_ubl_unit_tests_agree() {
     for (why, n) in &diverged {
         eprintln!("    {n} × {why}");
     }
+    {
+        let mut by: BTreeMap<&str, usize> = BTreeMap::new();
+        for d in &disagreed {
+            let rule = d.split(['[', ']']).nth(1).unwrap_or("?");
+            *by.entry(rule).or_default() += 1;
+        }
+        for (rule, n) in &by {
+            eprintln!("  remain {n:3} {rule}");
+        }
+        for d in &disagreed {
+            eprintln!("    {d}");
+        }
+    }
     assert!(
         run_count >= MIN_CEN_RUN,
         "only {run_count} CEN assertions ran (floor {MIN_CEN_RUN})"
@@ -270,7 +277,7 @@ fn cen_ubl_unit_tests_agree() {
         "only {agreed} agreed (floor {MIN_CEN_AGREED}); CEN agreement shrank"
     );
     assert!(
-        disagreed.len() <= MAX_CEN_DISAGREED,
+        disagreed.is_empty(),
         "{} disagreements (ceiling {MAX_CEN_DISAGREED}):\n  {}",
         disagreed.len(),
         disagreed.join("\n  ")
