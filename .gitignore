@@ -5,6 +5,8 @@
 /mutants.out*
 .task/
 xtask/.saxon/
+__pycache__/
+*.pyc
 
 plans/
 
