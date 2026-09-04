@@ -281,6 +281,17 @@ mod tests {
             !xml.contains("<Invoice "),
             "CII example must not be a UBL wrapper"
         );
+        assert!(
+            traced
+                .invoice
+                .lines
+                .iter()
+                .all(|l| l.tax.code != "S" || l.tax.system == core_invoice::TaxSystem::Vat)
+                || traced.invoice.lines.is_empty()
+                || traced.invoice.lines.iter().any(|l| !l.tax.code.is_empty()),
+            "must not invent category S as SST"
+        );
+        let _report = core_invoice::validate(&traced.invoice);
     }
 
     #[test]

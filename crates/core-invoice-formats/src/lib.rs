@@ -224,7 +224,8 @@ pub fn diff(left_xml: &str, right_xml: &str) -> Result<String, FormatError> {
     Ok(diff_invoices(&left, &right))
 }
 
-/// Model paths allowed to differ after UBL↔CII round-trip (D16B subset). Shrink when mapping grows.
+/// Paths the UBL↔CII model diff may still show. Shrink when mapping grows.
+/// Must not name a path the writer+reader restore.
 pub const CII_DROPPED: &[&str] = &[
     "business_process",
     "seller.endpoint",
@@ -235,14 +236,14 @@ pub const CII_DROPPED: &[&str] = &[
     "buyer.contact",
     "seller.address",
     "buyer.address",
-    "notes",
-    "notes.subject",
     "payee",
     "tax_representative",
-    "delivery",
-    "payment",
-    "document_allowances",
-    "document_charges",
+    "delivery.location_id",
+    "delivery.address",
+    "payment.remittance",
+    "payment.means_text",
+    "document_allowances.reason",
+    "document_charges.reason",
     "supporting_documents",
     "preceding",
     "purchase_order",
@@ -363,22 +364,72 @@ fn diff_invoices(left: &Invoice, right: &Invoice) -> String {
         lines.push("tax_representative: differ".into());
     }
     if left.delivery != right.delivery {
-        lines.push("delivery: differ".into());
+        match (&left.delivery, &right.delivery) {
+            (Some(a), Some(b)) => {
+                if a.date != b.date {
+                    lines.push("delivery.date: differ".into());
+                }
+                if a.name != b.name {
+                    lines.push("delivery.name: differ".into());
+                }
+                if a.location_id != b.location_id {
+                    lines.push("delivery.location_id: differ".into());
+                }
+                if a.address != b.address {
+                    lines.push("delivery.address: differ".into());
+                }
+            }
+            _ => lines.push("delivery: differ".into()),
+        }
     }
     if left.supporting_documents != right.supporting_documents {
         lines.push("supporting_documents: differ".into());
     }
     if left.document_allowances != right.document_allowances {
-        lines.push("document_allowances: differ".into());
+        if left.document_allowances.len() != right.document_allowances.len()
+            || left
+                .document_allowances
+                .iter()
+                .zip(&right.document_allowances)
+                .any(|(a, b)| a.amount != b.amount)
+        {
+            lines.push("document_allowances: differ".into());
+        } else {
+            lines.push("document_allowances.reason: differ".into());
+        }
     }
     if left.document_charges != right.document_charges {
-        lines.push("document_charges: differ".into());
+        if left.document_charges.len() != right.document_charges.len()
+            || left
+                .document_charges
+                .iter()
+                .zip(&right.document_charges)
+                .any(|(a, b)| a.amount != b.amount)
+        {
+            lines.push("document_charges: differ".into());
+        } else {
+            lines.push("document_charges.reason: differ".into());
+        }
     }
     if left.preceding != right.preceding {
         lines.push("preceding: differ".into());
     }
     if left.payment != right.payment {
-        lines.push("payment: differ".into());
+        match (&left.payment, &right.payment) {
+            (Some(a), Some(b)) => {
+                if a.means_code != b.means_code || a.means != b.means {
+                    lines.push("payment: differ".into());
+                } else {
+                    if a.remittance != b.remittance {
+                        lines.push("payment.remittance: differ".into());
+                    }
+                    if a.means_text != b.means_text {
+                        lines.push("payment.means_text: differ".into());
+                    }
+                }
+            }
+            _ => lines.push("payment: differ".into()),
+        }
     }
     if left.tax_breakdown != right.tax_breakdown {
         lines.push(format!(
@@ -692,6 +743,52 @@ mod tests {
             );
         }
         assert!(!cii.contains("<Invoice "));
+    }
+
+    #[test]
+    fn cii_round_trip_keeps_mapped_header() {
+        let ubl = r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"><cbc:CustomizationID>urn:cen.eu:en16931:2017</cbc:CustomizationID><cbc:ID>1</cbc:ID><cbc:IssueDate>2026-01-15</cbc:IssueDate><cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode><cbc:Note>#AAA#hello</cbc:Note><cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode><cac:AccountingSupplierParty><cac:Party><cac:PostalAddress><cbc:CountrySubentity>DE</cbc:CountrySubentity><cac:Country><cbc:IdentificationCode>DE</cbc:IdentificationCode></cac:Country></cac:PostalAddress><cac:PartyLegalEntity><cbc:RegistrationName>Seller GmbH</cbc:RegistrationName></cac:PartyLegalEntity></cac:Party></cac:AccountingSupplierParty><cac:AccountingCustomerParty><cac:Party><cac:PostalAddress><cac:Country><cbc:IdentificationCode>FR</cbc:IdentificationCode></cac:Country></cac:PostalAddress><cac:PartyLegalEntity><cbc:RegistrationName>Buyer SARL</cbc:RegistrationName></cac:PartyLegalEntity></cac:Party></cac:AccountingCustomerParty><cac:Delivery><cbc:ActualDeliveryDate>2026-01-20</cbc:ActualDeliveryDate><cac:DeliveryLocation><cac:Address><cac:Country><cbc:IdentificationCode>FR</cbc:IdentificationCode></cac:Country></cac:Address></cac:DeliveryLocation></cac:Delivery><cac:PaymentMeans><cbc:PaymentMeansCode>30</cbc:PaymentMeansCode><cac:PayeeFinancialAccount><cbc:ID>DE89370400440532013000</cbc:ID></cac:PayeeFinancialAccount></cac:PaymentMeans><cac:AllowanceCharge><cbc:ChargeIndicator>false</cbc:ChargeIndicator><cbc:Amount currencyID="EUR">1.00</cbc:Amount></cac:AllowanceCharge><cac:InvoiceLine><cbc:ID>1</cbc:ID><cbc:InvoicedQuantity unitCode="C62">2</cbc:InvoicedQuantity><cbc:LineExtensionAmount currencyID="EUR">10.00</cbc:LineExtensionAmount><cac:Item><cbc:Name>A</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>S</cbc:ID><cbc:Percent>19</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item><cac:Price><cbc:PriceAmount currencyID="EUR">5.00</cbc:PriceAmount></cac:Price></cac:InvoiceLine></Invoice>"#;
+        let inv = read(ubl).unwrap();
+        assert!(inv.delivery.as_ref().and_then(|d| d.date).is_some());
+        assert!(inv.payment.is_some());
+        assert!(!inv.notes.is_empty());
+        assert!(!inv.document_allowances.is_empty());
+        let cii = write_unchecked(&inv, Syntax::Cii).unwrap();
+        let back = read(&cii).unwrap();
+        assert_eq!(
+            back.notes.len(),
+            inv.notes.len(),
+            "notes Content round-trips"
+        );
+        assert_eq!(
+            back.delivery.as_ref().and_then(|d| d.date),
+            inv.delivery.as_ref().and_then(|d| d.date)
+        );
+        assert_eq!(
+            back.payment.as_ref().and_then(|p| p.means_code.clone()),
+            inv.payment.as_ref().and_then(|p| p.means_code.clone())
+        );
+        assert_eq!(
+            back.document_allowances[0].amount,
+            inv.document_allowances[0].amount
+        );
+        let out = diff_invoices(&inv, &back);
+        for line in out.lines() {
+            if line == "no semantic difference" {
+                continue;
+            }
+            assert!(
+                CII_DROPPED.iter().any(|p| line.contains(p)),
+                "unexpected CII drop {line:?} in {out}"
+            );
+            assert!(
+                !line.starts_with("notes:")
+                    || line.contains("notes.subject")
+                    || CII_DROPPED.iter().any(|p| line.contains(p)),
+                "{line}"
+            );
+        }
+        assert!(!out.contains("quantity"), "{out}");
     }
 
     #[test]
