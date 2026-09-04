@@ -17,6 +17,10 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.0.2] — 2026-09-04
+
+Additive. No Rust API break.
+
 ### Added
 
 - Git-tracked `testdata/` (~2 MB): CEN UBL unit-test XML and official EN/Peppol/PINT-MY samples so `cargo test` on a fresh clone does not skip. EUPL/Peppol terms in `testdata/NOTICE`. Not copied into `crates/`. Full Schematron/XSLT still `task spec`.
@@ -197,7 +201,8 @@ PINT-MY as profiles.
 - **`core-invoice-sys`** — C ABI `core_invoice_validate_ubl` and
   `include/core_invoice.h`.
 
-[Unreleased]: https://github.com/proxeon/core-invoice/compare/v2.0.1...HEAD
+[Unreleased]: https://github.com/proxeon/core-invoice/compare/v2.0.2...HEAD
+[2.0.2]: https://github.com/proxeon/core-invoice/compare/v2.0.1...v2.0.2
 [2.0.1]: https://github.com/proxeon/core-invoice/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/proxeon/core-invoice/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/proxeon/core-invoice/compare/v0.2.0...v1.0.0
