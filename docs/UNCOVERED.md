@@ -55,6 +55,10 @@ Family A/C rows and IC-11/12: in catalogue. Presence evals registered: BR-12…1
 - Pint international 1.1.2 zip has no official example XML (`refers/pint-billing-1.1.2/unpacked/trn-invoice/` is genericode + Schematron only). Authored `pint_gst_sr` is not an oracle.
 - `pint_gst_category` helper exists; GST family table on `Profile::Pint` is not a full IBR set. Owner: P13.09.
 
+## CEN UBL unit tests (pin validation-1.3.16)
+
+`cargo test -p core-invoice-formats --test cen_conformance` when `refers/en16931/test` is present. Floor **790** agreed / **1000** run; ceiling **263** unexplained disagreements (VAT family identifier rows, BR-15 payable-as-zero, BR-50 empty PayeeFinancialAccount, …). Named divergences: empty `PostalAddress` / empty `BillingReference` / dual `TaxTotal`. Raise the floor when a rule starts agreeing.
+
 ## P14 / P18
 
 - ConnectingEurope XSLT SVRL job: `task svrl` / `xtask/svrl_oracle.py`. Default EN corpus is TC434 examples 1–10 + credit note + guide 1–3 + `sample-discount-price` + BR-03 mutant. PINT-MY official Invoice/CreditNote samples SA/SE/HVG/LVG/TTX. BIS3/G2G/`issue116` and LHDN-shaped zip samples are named skips. v0.2.0 tag baseline (example1/5/discount+mutant+SA) was comparable. Peppol BIS pin is `.sch` only (see above).

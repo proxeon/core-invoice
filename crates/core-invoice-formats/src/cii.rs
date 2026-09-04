@@ -335,8 +335,38 @@ fn write_trade_party(s: &mut String, tag: &str, party: &Party, _profile: Profile
         leaf_ram(s, 5, "ID", &legal.value, None);
         s.push_str("        </ram:SpecifiedLegalOrganization>\n");
     }
+    if let Some(c) = party.contact.as_ref() {
+        s.push_str("        <ram:DefinedTradeContact>\n");
+        if let Some(p) = c.point.as_deref() {
+            leaf_ram(s, 5, "PersonName", p, None);
+        }
+        if let Some(ph) = c.phone.as_deref() {
+            s.push_str("          <ram:TelephoneUniversalCommunication>\n");
+            leaf_ram(s, 6, "CompleteNumber", ph, None);
+            s.push_str("          </ram:TelephoneUniversalCommunication>\n");
+        }
+        if let Some(em) = c.email.as_deref() {
+            s.push_str("          <ram:EmailURIUniversalCommunication>\n");
+            leaf_ram(s, 6, "URIID", em, None);
+            s.push_str("          </ram:EmailURIUniversalCommunication>\n");
+        }
+        s.push_str("        </ram:DefinedTradeContact>\n");
+    }
     s.push_str("        <ram:PostalTradeAddress>\n");
-    if !party.country().is_empty() {
+    if let Some(addr) = party.address.as_ref() {
+        if let Some(pc) = addr.post_code.as_deref() {
+            leaf_ram(s, 5, "PostcodeCode", pc, None);
+        }
+        if let Some(line) = addr.line1.as_deref() {
+            leaf_ram(s, 5, "LineOne", line, None);
+        }
+        if let Some(city) = addr.city.as_deref() {
+            leaf_ram(s, 5, "CityName", city, None);
+        }
+        if let Some(c) = addr.country.as_ref() {
+            leaf_ram(s, 5, "CountryID", c.as_str(), None);
+        }
+    } else if !party.country().is_empty() {
         leaf_ram(s, 5, "CountryID", party.country(), None);
     }
     s.push_str("        </ram:PostalTradeAddress>\n");
@@ -482,10 +512,28 @@ fn write_totals(s: &mut String, invoice: &Invoice) {
 
 fn read_party(node: roxmltree::Node<'_, '_>, _profile: Profile) -> Party {
     let name = child_text(node, "Name").unwrap_or_default();
-    let country = child(node, "PostalTradeAddress")
+    let addr = child(node, "PostalTradeAddress");
+    let country = addr
         .and_then(|n| child_text(n, "CountryID"))
         .unwrap_or_default();
     let mut party = Party::new(name, country);
+    if let Some(a) = addr {
+        let pa = party.address.get_or_insert_with(Default::default);
+        pa.line1 = child_text(a, "LineOne");
+        pa.city = child_text(a, "CityName");
+        pa.post_code = child_text(a, "PostcodeCode");
+        if pa.country.is_none() {
+            pa.country = child_text(a, "CountryID").map(Code::new);
+        }
+    }
+    if let Some(ct) = child(node, "DefinedTradeContact") {
+        party.contact = Some(core_invoice::Contact {
+            point: child_text(ct, "PersonName"),
+            phone: child(ct, "TelephoneUniversalCommunication")
+                .and_then(|n| child_text(n, "CompleteNumber")),
+            email: child(ct, "EmailURIUniversalCommunication").and_then(|n| child_text(n, "URIID")),
+        });
+    }
     if let Some(org) = child(node, "SpecifiedLegalOrganization")
         && let Some(id) = child_text(org, "ID")
     {

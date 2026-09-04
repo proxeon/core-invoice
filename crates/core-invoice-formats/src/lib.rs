@@ -232,8 +232,6 @@ pub const CII_DROPPED: &[&str] = &[
     "buyer.endpoint",
     "seller.identifiers",
     "buyer.identifiers",
-    "seller.contact",
-    "buyer.contact",
     "seller.address",
     "buyer.address",
     "payee",

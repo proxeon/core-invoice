@@ -17,3 +17,6 @@ core-invoice.workspace = true
 roxmltree = "0.20"
 rust_decimal.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+roxmltree = "0.20"

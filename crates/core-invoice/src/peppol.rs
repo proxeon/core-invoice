@@ -665,7 +665,8 @@ fn f001(_inv: &Invoice, _report: &mut Report) {
 }
 
 fn syntax_or_option_pass(_inv: &Invoice, _report: &mut Report) {
-    // Syntax-only or Option-at-most-one: explainable so SVRL unmatched is intentional, not missing from catalogue.
+    // Syntax-only or Option-at-most-one (R006/R008/R043/R044/R051/R053/R080/R100/CL007).
+    // Registered so explain works. They do not walk XML; UNCOVERED names them.
 }
 
 fn p0101(inv: &Invoice, report: &mut Report) {
@@ -1751,5 +1752,22 @@ mod tests {
                 .any(|f| f.id == "PEPPOL-EN16931-R061"),
             "{report}"
         );
+    }
+
+    #[test]
+    fn syntax_extras_are_explainable_constant_pass() {
+        for id in [
+            "PEPPOL-EN16931-R006",
+            "PEPPOL-EN16931-R008",
+            "PEPPOL-EN16931-R043",
+            "PEPPOL-EN16931-R044",
+            "PEPPOL-EN16931-R051",
+            "PEPPOL-EN16931-R053",
+            "PEPPOL-EN16931-R080",
+            "PEPPOL-EN16931-R100",
+            "PEPPOL-EN16931-CL007",
+        ] {
+            assert!(crate::explain(id).is_some(), "{id}");
+        }
     }
 }

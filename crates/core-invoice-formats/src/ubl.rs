@@ -1437,7 +1437,8 @@ fn read_allowance(
     profile: Profile,
     malformed: &mut Vec<String>,
 ) -> Option<core_invoice::AllowanceCharge> {
-    let amount = child_amount(node, "Amount", malformed, "AllowanceCharge")?;
+    // Amount may be absent on CEN unit-test fragments; keep the row so BT-95/102 still evaluate.
+    let amount = child_amount(node, "Amount", malformed, "AllowanceCharge").unwrap_or(Amount::ZERO);
     let tax = child(node, "TaxCategory").map(|n| read_tax_cat(n, profile));
     Some(core_invoice::AllowanceCharge {
         amount,

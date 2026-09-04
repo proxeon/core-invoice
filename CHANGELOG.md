@@ -17,6 +17,15 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- CEN UBL unit-test runner (`refers/en16931/test/{Invoice,CreditNote}-unit-UBL`). Ratchet: ≥1000 run, ≥790 agreed, ≤263 unexplained disagreements. Skip unless `refers/` is present.
+
+### Changed
+
+- UBL `AllowanceCharge` without `Amount` is kept (amount 0) so BT-95/102 on CEN fragments still evaluate.
+- CII maps party street/city/postcode and contact (phone/email/name). `seller.contact` / `buyer.contact` leave `CII_DROPPED`.
+
 ## [1.0.0] — 2026-09-04
 
 Fatal ids comparable to pinned ConnectingEurope EN 16931 `validation-1.3.16` and PINT-MY 1.3.0 as evidenced by `task svrl`. Peppol BIS v3.0.20 is `.sch` only — not OpenPEPPOL Valid. Still **not** IRBM Valid / MyInvois submit.
