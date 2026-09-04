@@ -1,0 +1,1 @@
+<!DOCTYPE Invoice [<!ENTITY x SYSTEM "file:///etc/passwd">]><Invoice/>

@@ -1,6 +1,7 @@
 """Python bindings over the core-invoice C ABI (ctypes). Not a second parser.
 
-1.0 Python surface is ``validate_xml`` only; convert, diff, and version are C/CLI.
+1.0 / 2.x Python surface is ``validate_xml`` only; convert, diff, and version
+are C/CLI. ctypes 0/1/2 is CI-tested (``python/test_validate_xml.py``).
 """
 
 from __future__ import annotations

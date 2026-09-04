@@ -82,6 +82,7 @@ Generated from preprocessed ConnectingEurope Schematron (`task prohibitions`). U
 
 - ConnectingEurope XSLT SVRL job: `task svrl` / `xtask/svrl_oracle.py`. Default EN corpus is TC434 examples 1–10 + credit note + guide 1–3 + `sample-discount-price` + BR-03 mutant. PINT-MY official Invoice/CreditNote samples SA/SE/HVG/LVG/TTX. BIS3/G2G/`issue116` and LHDN-shaped zip samples are named skips. v0.2.0 tag baseline (example1/5/discount+mutant+SA) was comparable. Peppol BIS pin is `.sch` only (see above).
 - Mustang: only if `MUSTANG_JAR` is set; VAT CII; never default CI.
-- nix flake: Later (P18.03 / P19).
-- cargo-fuzz target `fuzz/fuzz_targets/formats_read.rs` is run locally (`cargo fuzz run formats_read`); not default CI. Unit smoke `random_bytes_do_not_panic` stays.
+- nix flake: Later (P18.03 / P19). No `flake.nix`.
+- cargo-fuzz target `fuzz/fuzz_targets/formats_read.rs` is run locally (`cargo fuzz run formats_read`); **not** default CI. Unit smoke `random_bytes_do_not_panic` stays. MIT seeds only (no EUPL corpus).
+- Python ctypes is `validate_xml` only (CI: `cargo build -p core-invoice-sys` then `python3 python/test_validate_xml.py`). convert / diff / version stay C/CLI. No PyPI wheel.
 - `#![warn(missing_docs)]` is on the model crate. Public Table 2 fields cite BT numbers.

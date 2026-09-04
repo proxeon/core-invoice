@@ -26,7 +26,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - crates.io README is the workspace page: members set `readme.workspace = true` (`[workspace.package] readme = "README.md"` is workspace-root relative). Crate-level `crates/*/README.md` removed so `cargo package` does not ship the short local copy. Honesty fences unchanged (not OpenPEPPOL Valid, not IRBM Valid, XRechnung not CORE). `testdata/` still not in the crate tarball.
 - PINT GST honesty: `pint_gst_sr` stays authored MIT, not a 1.1.2 oracle. Helper rustdoc no longer claims the zip lists `SR`/`ZR`. UNCOVERED names the missing tax-category CL and removed `ibr-cl-27`. No official PINT international XML.
 - `core-invoice` enables `missing_docs` (rustdoc on public items).
-- Artefact tripwires: Peppol `rules/sch` panics under `CORE_INVOICE_REQUIRE_SPEC` if missing; PINT 1.1.2 pin must not grow official instance XML unnoticed; pin consts include PINT 1.1.2; Python `validate_xml` ctypes smoke in CI.
+- Artefact tripwires: Peppol `rules/sch` panics under `CORE_INVOICE_REQUIRE_SPEC` if missing; PINT 1.1.2 pin must not grow official instance XML unnoticed; pin consts include PINT 1.1.2; Python `validate_xml` ctypes 0/1/2 (DTD, unknown profile, Peppol example) in CI — fail if the cdylib is missing. convert/diff stay C/CLI. Fuzz and nix stay parked.
 
 ## [2.0.2] — 2026-09-04
 
