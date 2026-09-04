@@ -9,6 +9,7 @@ use core_invoice::{
 use std::path::{Path, PathBuf};
 
 pub mod cii;
+pub mod peppol_syntax;
 pub mod prohibitions;
 pub mod ubl;
 pub mod xml;
@@ -182,6 +183,7 @@ pub fn validate_xml(xml: &str, profile: Option<Profile>) -> Result<Report, Forma
     }
     let mut report = core_invoice::validate(&invoice);
     apply_wire_currency_lists(xml, &invoice, &mut report);
+    peppol_syntax::apply(xml, &invoice, &mut report);
     report.profile_slug = invoice.profile.slug();
     Ok(report)
 }
@@ -205,6 +207,13 @@ fn walk_currency(node: roxmltree::Node<'_, '_>, invoice: &Invoice, report: &mut 
                 core_invoice::Path::term(core_invoice::BtId(5)),
                 format!("currencyID {cid} is not an ISO 4217 alpha-3 code"),
             ));
+            if invoice.profile == Profile::PeppolBis3 && cl007_applies(node) {
+                report.push(core_invoice::Finding::fatal(
+                    "PEPPOL-EN16931-CL007",
+                    core_invoice::Path::term(core_invoice::BtId(5)),
+                    format!("currencyID {cid} is not an ISO 4217 alpha-3 code"),
+                ));
+            }
         }
         if invoice.profile == Profile::PeppolBis3
             && !cid.is_empty()
@@ -223,6 +232,22 @@ fn walk_currency(node: roxmltree::Node<'_, '_>, invoice: &Invoice, report: &mut 
     }
     for child in node.children() {
         walk_currency(child, invoice, report);
+    }
+}
+
+fn cl007_applies(node: roxmltree::Node<'_, '_>) -> bool {
+    // UBL: every amount @currencyID (syntax mapping). CII sch: TaxTotalAmount only.
+    let mut n = node;
+    loop {
+        match n.tag_name().name() {
+            "CrossIndustryInvoice" => return node.tag_name().name() == "TaxTotalAmount",
+            "Invoice" | "CreditNote" => return true,
+            _ => {}
+        }
+        match n.parent() {
+            Some(p) if p.is_element() => n = p,
+            _ => return true,
+        }
     }
 }
 
@@ -697,6 +722,75 @@ mod tests {
                 .any(|f| f.id == "PEPPOL-EN16931-R051"),
             "{report}"
         );
+    }
+
+    fn has_id(report: &core_invoice::Report, id: &str) -> bool {
+        report.findings.iter().any(|f| f.id == id)
+    }
+
+    #[test]
+    fn peppol_empty_note_is_r008_not_on_en() {
+        let xml = r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"><cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0</cbc:CustomizationID><cbc:ID>1</cbc:ID><cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode><cbc:Note></cbc:Note><cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode></Invoice>"#;
+        let peppol = validate_xml(xml, Some(Profile::PeppolBis3)).unwrap();
+        assert!(has_id(&peppol, "PEPPOL-EN16931-R008"), "{peppol}");
+        let en = validate_xml(xml, Some(Profile::En16931)).unwrap();
+        assert!(!has_id(&en, "PEPPOL-EN16931-R008"), "{en}");
+    }
+
+    #[test]
+    fn peppol_charge_indicator_one_is_r043() {
+        let xml = r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"><cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0</cbc:CustomizationID><cbc:ID>1</cbc:ID><cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode><cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode><cac:AllowanceCharge><cbc:ChargeIndicator>1</cbc:ChargeIndicator><cbc:Amount currencyID="EUR">1.00</cbc:Amount></cac:AllowanceCharge></Invoice>"#;
+        let peppol = validate_xml(xml, Some(Profile::PeppolBis3)).unwrap();
+        assert!(has_id(&peppol, "PEPPOL-EN16931-R043"), "{peppol}");
+        let en = validate_xml(xml, Some(Profile::En16931)).unwrap();
+        assert!(!has_id(&en, "PEPPOL-EN16931-R043"), "{en}");
+    }
+
+    #[test]
+    fn peppol_price_charge_true_is_r044() {
+        let xml = r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"><cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0</cbc:CustomizationID><cbc:ID>1</cbc:ID><cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode><cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode><cac:InvoiceLine><cbc:ID>1</cbc:ID><cbc:LineExtensionAmount currencyID="EUR">10.00</cbc:LineExtensionAmount><cac:Item><cbc:Name>A</cbc:Name></cac:Item><cac:Price><cbc:PriceAmount currencyID="EUR">10.00</cbc:PriceAmount><cac:AllowanceCharge><cbc:ChargeIndicator>true</cbc:ChargeIndicator><cbc:Amount currencyID="EUR">1.00</cbc:Amount></cac:AllowanceCharge></cac:Price></cac:InvoiceLine></Invoice>"#;
+        let peppol = validate_xml(xml, Some(Profile::PeppolBis3)).unwrap();
+        assert!(has_id(&peppol, "PEPPOL-EN16931-R044"), "{peppol}");
+        let en = validate_xml(xml, Some(Profile::En16931)).unwrap();
+        assert!(!has_id(&en, "PEPPOL-EN16931-R044"), "{en}");
+    }
+
+    #[test]
+    fn peppol_two_taxtotal_with_subtotals_is_r053() {
+        let xml = r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"><cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0</cbc:CustomizationID><cbc:ID>1</cbc:ID><cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode><cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode><cac:TaxTotal><cbc:TaxAmount currencyID="EUR">1.00</cbc:TaxAmount><cac:TaxSubtotal><cbc:TaxableAmount currencyID="EUR">10.00</cbc:TaxableAmount><cbc:TaxAmount currencyID="EUR">1.00</cbc:TaxAmount></cac:TaxSubtotal></cac:TaxTotal><cac:TaxTotal><cbc:TaxAmount currencyID="EUR">2.00</cbc:TaxAmount><cac:TaxSubtotal><cbc:TaxableAmount currencyID="EUR">20.00</cbc:TaxableAmount><cbc:TaxAmount currencyID="EUR">2.00</cbc:TaxAmount></cac:TaxSubtotal></cac:TaxTotal></Invoice>"#;
+        let peppol = validate_xml(xml, Some(Profile::PeppolBis3)).unwrap();
+        assert!(has_id(&peppol, "PEPPOL-EN16931-R053"), "{peppol}");
+        let en = validate_xml(xml, Some(Profile::En16931)).unwrap();
+        assert!(!has_id(&en, "PEPPOL-EN16931-R053"), "{en}");
+    }
+
+    #[test]
+    fn peppol_non_iso_currencyid_is_cl007_and_br_cl_03() {
+        let xml = r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"><cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0</cbc:CustomizationID><cbc:ID>1</cbc:ID><cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode><cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode><cac:LegalMonetaryTotal><cbc:PayableAmount currencyID="US$">1.00</cbc:PayableAmount></cac:LegalMonetaryTotal></Invoice>"#;
+        let peppol = validate_xml(xml, Some(Profile::PeppolBis3)).unwrap();
+        assert!(has_id(&peppol, "BR-CL-03"), "{peppol}");
+        assert!(has_id(&peppol, "PEPPOL-EN16931-CL007"), "{peppol}");
+        let en = validate_xml(xml, Some(Profile::En16931)).unwrap();
+        assert!(has_id(&en, "BR-CL-03"), "{en}");
+        assert!(!has_id(&en, "PEPPOL-EN16931-CL007"), "{en}");
+    }
+
+    #[test]
+    fn peppol_cii_two_invoiced_objects_is_r006() {
+        let xml = r#"<?xml version="1.0"?><rsm:CrossIndustryInvoice xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100" xmlns:ram="urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100"><rsm:ExchangedDocumentContext><ram:GuidelineSpecifiedDocumentContextParameter><ram:ID>urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0</ram:ID></ram:GuidelineSpecifiedDocumentContextParameter></rsm:ExchangedDocumentContext><rsm:ExchangedDocument><ram:ID>1</ram:ID><ram:TypeCode>380</ram:TypeCode></rsm:ExchangedDocument><rsm:SupplyChainTradeTransaction><ram:ApplicableHeaderTradeAgreement><ram:AdditionalReferencedDocument><ram:IssuerAssignedID>A</ram:IssuerAssignedID><ram:TypeCode>130</ram:TypeCode></ram:AdditionalReferencedDocument><ram:AdditionalReferencedDocument><ram:IssuerAssignedID>B</ram:IssuerAssignedID><ram:TypeCode>130</ram:TypeCode></ram:AdditionalReferencedDocument></ram:ApplicableHeaderTradeAgreement><ram:ApplicableHeaderTradeDelivery/><ram:ApplicableHeaderTradeSettlement><ram:InvoiceCurrencyCode>EUR</ram:InvoiceCurrencyCode></ram:ApplicableHeaderTradeSettlement></rsm:SupplyChainTradeTransaction></rsm:CrossIndustryInvoice>"#;
+        let peppol = validate_xml(xml, Some(Profile::PeppolBis3)).unwrap();
+        assert!(has_id(&peppol, "PEPPOL-EN16931-R006"), "{peppol}");
+        let en = validate_xml(xml, Some(Profile::En16931)).unwrap();
+        assert!(!has_id(&en, "PEPPOL-EN16931-R006"), "{en}");
+    }
+
+    #[test]
+    fn peppol_two_line_document_refs_is_r100() {
+        let xml = r#"<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"><cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0</cbc:CustomizationID><cbc:ID>1</cbc:ID><cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode><cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode><cac:InvoiceLine><cbc:ID>1</cbc:ID><cbc:LineExtensionAmount currencyID="EUR">10.00</cbc:LineExtensionAmount><cac:Item><cbc:Name>A</cbc:Name></cac:Item><cac:DocumentReference><cbc:ID>A</cbc:ID><cbc:DocumentTypeCode>130</cbc:DocumentTypeCode></cac:DocumentReference><cac:DocumentReference><cbc:ID>B</cbc:ID><cbc:DocumentTypeCode>130</cbc:DocumentTypeCode></cac:DocumentReference></cac:InvoiceLine></Invoice>"#;
+        let peppol = validate_xml(xml, Some(Profile::PeppolBis3)).unwrap();
+        assert!(has_id(&peppol, "PEPPOL-EN16931-R100"), "{peppol}");
+        let en = validate_xml(xml, Some(Profile::En16931)).unwrap();
+        assert!(!has_id(&en, "PEPPOL-EN16931-R100"), "{en}");
     }
 
     #[test]

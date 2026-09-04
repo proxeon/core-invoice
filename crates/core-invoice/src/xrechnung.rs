@@ -10,7 +10,6 @@ use crate::invoice::Invoice;
 use crate::payment::PaymentMeans;
 use crate::report::{Finding, Report, Severity, Source};
 use crate::rules::Rule;
-use crate::tax::TaxSystem;
 
 /// KoSIT / xeinkauf XRechnung specification identifiers (any 1.x/2.x/3.x).
 pub fn claimed(inv: &Invoice) -> bool {
@@ -43,14 +42,17 @@ fn br_de_15(inv: &Invoice, report: &mut Report) {
 }
 
 fn taxed_vat(inv: &Invoice) -> bool {
-    let hit = |code: &str| {
-        let c = code.trim();
-        !c.is_empty() && !c.eq_ignore_ascii_case("O") && !c.eq_ignore_ascii_case("B")
-    };
-    inv.lines
-        .iter()
-        .any(|l| l.tax.system == TaxSystem::Vat && hit(&l.tax.code))
-        || inv.tax_breakdown.iter().any(|e| hit(e.category.as_str()))
+    const CODES: &[&str] = &["S", "Z", "E", "AE", "K", "G", "L", "M"];
+    let hit = |code: &str| CODES.iter().any(|c| c.eq_ignore_ascii_case(code.trim()));
+    inv.lines.iter().any(|l| hit(&l.tax.code))
+        || inv
+            .document_allowances
+            .iter()
+            .any(|a| a.tax.as_ref().is_some_and(|t| hit(&t.code)))
+        || inv
+            .document_charges
+            .iter()
+            .any(|a| a.tax.as_ref().is_some_and(|t| hit(&t.code)))
 }
 
 fn br_de_16(inv: &Invoice, report: &mut Report) {
@@ -58,33 +60,222 @@ fn br_de_16(inv: &Invoice, report: &mut Report) {
         return;
     }
     let seller_id = inv.seller.vat_identifier.is_some() || inv.seller.tax_registration.is_some();
-    let rep = inv
-        .tax_representative
-        .as_ref()
-        .is_some_and(|r| r.vat_identifier.is_some());
+    let rep = inv.tax_representative.is_some();
     if !seller_id && !rep {
         report.push(Finding::fatal(
             "BR-DE-16",
             Path::group_term(Group::Seller, BtId(31)),
-            "XRechnung: BT-31, BT-32 or BT-63 shall be present when VAT category is not O/B",
+            "XRechnung: BT-31, BT-32 or tax representative shall be present for listed VAT categories",
         ));
     }
+}
+
+fn blank(s: Option<&str>) -> bool {
+    s.map(|t| t.trim().is_empty()).unwrap_or(true)
 }
 
 fn br_de_1(inv: &Invoice, report: &mut Report) {
     if !claimed(inv) {
         return;
     }
+    if inv.payment.is_none() {
+        report.push(Finding::fatal(
+            "BR-DE-1",
+            Path::group(Group::Payment),
+            "XRechnung: Payment instructions (BG-16) shall be present",
+        ));
+    }
+}
+
+fn br_de_2(inv: &Invoice, report: &mut Report) {
+    if !claimed(inv) {
+        return;
+    }
     let empty = inv.seller.contact.as_ref().is_none_or(|c| {
-        c.point.as_deref().unwrap_or("").trim().is_empty()
-            && c.phone.as_deref().unwrap_or("").trim().is_empty()
-            && c.email.as_deref().unwrap_or("").trim().is_empty()
+        blank(c.point.as_deref()) && blank(c.phone.as_deref()) && blank(c.email.as_deref())
     });
     if empty {
         report.push(Finding::fatal(
-            "BR-DE-1",
+            "BR-DE-2",
             Path::group_term(Group::Seller, BtId(41)),
             "XRechnung: Seller contact (BG-6) shall be present",
+        ));
+    }
+}
+
+fn br_de_3(inv: &Invoice, report: &mut Report) {
+    if !claimed(inv) {
+        return;
+    }
+    if blank(inv.seller.address.as_ref().and_then(|a| a.city.as_deref())) {
+        report.push(Finding::fatal(
+            "BR-DE-3",
+            Path::group_term(Group::Seller, BtId(37)),
+            "XRechnung: Seller city (BT-37) shall be present",
+        ));
+    }
+}
+
+fn br_de_4(inv: &Invoice, report: &mut Report) {
+    if !claimed(inv) {
+        return;
+    }
+    if blank(
+        inv.seller
+            .address
+            .as_ref()
+            .and_then(|a| a.post_code.as_deref()),
+    ) {
+        report.push(Finding::fatal(
+            "BR-DE-4",
+            Path::group_term(Group::Seller, BtId(38)),
+            "XRechnung: Seller post code (BT-38) shall be present",
+        ));
+    }
+}
+
+fn br_de_5(inv: &Invoice, report: &mut Report) {
+    if !claimed(inv) {
+        return;
+    }
+    let Some(c) = inv.seller.contact.as_ref() else {
+        return;
+    };
+    if blank(c.point.as_deref()) {
+        report.push(Finding::fatal(
+            "BR-DE-5",
+            Path::group_term(Group::Seller, BtId(41)),
+            "XRechnung: Seller contact point (BT-41) shall be present",
+        ));
+    }
+}
+
+fn br_de_6(inv: &Invoice, report: &mut Report) {
+    if !claimed(inv) {
+        return;
+    }
+    let Some(c) = inv.seller.contact.as_ref() else {
+        return;
+    };
+    if blank(c.phone.as_deref()) {
+        report.push(Finding::fatal(
+            "BR-DE-6",
+            Path::group_term(Group::Seller, BtId(42)),
+            "XRechnung: Seller contact telephone (BT-42) shall be present",
+        ));
+    }
+}
+
+fn br_de_7(inv: &Invoice, report: &mut Report) {
+    if !claimed(inv) {
+        return;
+    }
+    let Some(c) = inv.seller.contact.as_ref() else {
+        return;
+    };
+    if blank(c.email.as_deref()) {
+        report.push(Finding::fatal(
+            "BR-DE-7",
+            Path::group_term(Group::Seller, BtId(43)),
+            "XRechnung: Seller contact email (BT-43) shall be present",
+        ));
+    }
+}
+
+fn br_de_8(inv: &Invoice, report: &mut Report) {
+    if !claimed(inv) {
+        return;
+    }
+    if blank(inv.buyer.address.as_ref().and_then(|a| a.city.as_deref())) {
+        report.push(Finding::fatal(
+            "BR-DE-8",
+            Path::group_term(Group::Buyer, BtId(52)),
+            "XRechnung: Buyer city (BT-52) shall be present",
+        ));
+    }
+}
+
+fn br_de_9(inv: &Invoice, report: &mut Report) {
+    if !claimed(inv) {
+        return;
+    }
+    if blank(
+        inv.buyer
+            .address
+            .as_ref()
+            .and_then(|a| a.post_code.as_deref()),
+    ) {
+        report.push(Finding::fatal(
+            "BR-DE-9",
+            Path::group_term(Group::Buyer, BtId(53)),
+            "XRechnung: Buyer post code (BT-53) shall be present",
+        ));
+    }
+}
+
+fn br_de_10(inv: &Invoice, report: &mut Report) {
+    if !claimed(inv) {
+        return;
+    }
+    let Some(addr) = inv.delivery.as_ref().and_then(|d| d.address.as_ref()) else {
+        return;
+    };
+    if blank(addr.city.as_deref()) {
+        report.push(Finding::fatal(
+            "BR-DE-10",
+            Path::group_term(Group::Delivery, BtId(77)),
+            "XRechnung: Deliver-to city (BT-77) shall be present when BG-15 is present",
+        ));
+    }
+}
+
+fn br_de_11(inv: &Invoice, report: &mut Report) {
+    if !claimed(inv) {
+        return;
+    }
+    let Some(addr) = inv.delivery.as_ref().and_then(|d| d.address.as_ref()) else {
+        return;
+    };
+    if blank(addr.post_code.as_deref()) {
+        report.push(Finding::fatal(
+            "BR-DE-11",
+            Path::group_term(Group::Delivery, BtId(78)),
+            "XRechnung: Deliver-to post code (BT-78) shall be present when BG-15 is present",
+        ));
+    }
+}
+
+fn br_de_14(inv: &Invoice, report: &mut Report) {
+    if !claimed(inv) {
+        return;
+    }
+    for (i, row) in inv.tax_breakdown.iter().enumerate() {
+        if row.rate.is_none() {
+            report.push(Finding::fatal(
+                "BR-DE-14",
+                Path::at_term(Group::TaxBreakdown, i, BtId(119)),
+                "XRechnung: VAT category rate (BT-119) shall be present",
+            ));
+        }
+    }
+}
+
+fn br_de_17(inv: &Invoice, report: &mut Report) {
+    if !claimed(inv) {
+        return;
+    }
+    let Some(code) = inv.type_code.as_ref() else {
+        return;
+    };
+    const ALLOWED: &[&str] = &["326", "380", "384", "389", "381", "875", "876", "877"];
+    if !ALLOWED.contains(&code.as_str()) {
+        report.push(Finding::warning(
+            "BR-DE-17",
+            Path::term(BtId(3)),
+            format!(
+                "XRechnung: invoice type code {} is not in the German supported set",
+                code.as_str()
+            ),
         ));
     }
 }
@@ -182,8 +373,78 @@ const fn r(id: &'static str, text: &'static str, eval: fn(&Invoice, &mut Report)
     }
 }
 
-/// Extra rules. Not CORE. Remaining KoSIT BR-DE-* stay in UNCOVERED until evaluated.
+const fn rw(id: &'static str, text: &'static str, eval: fn(&Invoice, &mut Report)) -> Rule {
+    Rule {
+        id,
+        severity: Severity::Warning,
+        text,
+        source: Source::Crate,
+        eval,
+    }
+}
+
+/// Extra rules. Not CORE. Remaining KoSIT BR-DE-* / Extension / CVD stay in UNCOVERED.
 pub static RULES: &[Rule] = &[
+    r(
+        "BR-DE-1",
+        "XRechnung: Payment instructions (BG-16) shall be present.",
+        br_de_1,
+    ),
+    r(
+        "BR-DE-2",
+        "XRechnung: Seller contact (BG-6) shall be present.",
+        br_de_2,
+    ),
+    r(
+        "BR-DE-3",
+        "XRechnung: Seller city (BT-37) shall be present.",
+        br_de_3,
+    ),
+    r(
+        "BR-DE-4",
+        "XRechnung: Seller post code (BT-38) shall be present.",
+        br_de_4,
+    ),
+    r(
+        "BR-DE-5",
+        "XRechnung: Seller contact point (BT-41) shall be present when BG-6 exists.",
+        br_de_5,
+    ),
+    r(
+        "BR-DE-6",
+        "XRechnung: Seller contact telephone (BT-42) shall be present when BG-6 exists.",
+        br_de_6,
+    ),
+    r(
+        "BR-DE-7",
+        "XRechnung: Seller contact email (BT-43) shall be present when BG-6 exists.",
+        br_de_7,
+    ),
+    r(
+        "BR-DE-8",
+        "XRechnung: Buyer city (BT-52) shall be present.",
+        br_de_8,
+    ),
+    r(
+        "BR-DE-9",
+        "XRechnung: Buyer post code (BT-53) shall be present.",
+        br_de_9,
+    ),
+    r(
+        "BR-DE-10",
+        "XRechnung: Deliver-to city (BT-77) when BG-15 is present.",
+        br_de_10,
+    ),
+    r(
+        "BR-DE-11",
+        "XRechnung: Deliver-to post code (BT-78) when BG-15 is present.",
+        br_de_11,
+    ),
+    r(
+        "BR-DE-14",
+        "XRechnung: VAT category rate (BT-119) shall be present on every BG-23 row.",
+        br_de_14,
+    ),
     r(
         "BR-DE-15",
         "XRechnung: Buyer reference (BT-10) shall be present.",
@@ -191,13 +452,13 @@ pub static RULES: &[Rule] = &[
     ),
     r(
         "BR-DE-16",
-        "XRechnung: seller VAT/tax id or tax representative when category is not O/B.",
+        "XRechnung: seller VAT/tax id or tax representative when listed VAT categories are used.",
         br_de_16,
     ),
-    r(
-        "BR-DE-1",
-        "XRechnung: Seller contact (BG-6) shall be present.",
-        br_de_1,
+    rw(
+        "BR-DE-17",
+        "XRechnung: invoice type code should be one of 326/380/384/389/381/875/876/877 (warning).",
+        br_de_17,
     ),
     r(
         "BR-DE-23-a",
@@ -316,5 +577,54 @@ mod tests {
                 .all(|f| f.id != "BR-DE-15" && f.id != "BR-DE-16"),
             "{report}"
         );
+    }
+
+    #[test]
+    fn br_de_1_is_payment_not_contact() {
+        let inv = xr();
+        let report = validate(&inv);
+        assert!(
+            report.findings.iter().any(|f| f.id == "BR-DE-1"),
+            "{report}"
+        );
+        assert!(
+            report.findings.iter().any(|f| f.id == "BR-DE-2"),
+            "{report}"
+        );
+        let mut inv = inv;
+        inv.payment = Some(crate::invoice::PaymentInstructions {
+            means_code: Some(Code::new("30")),
+            means_text: None,
+            remittance: None,
+            means: None,
+        });
+        let report = validate(&inv);
+        assert!(
+            report.findings.iter().all(|f| f.id != "BR-DE-1"),
+            "{report}"
+        );
+    }
+
+    #[test]
+    fn br_de_3_requires_seller_city() {
+        let inv = xr();
+        let report = validate(&inv);
+        assert!(
+            report.findings.iter().any(|f| f.id == "BR-DE-3"),
+            "{report}"
+        );
+    }
+
+    #[test]
+    fn br_de_17_is_warning_not_fatal() {
+        let mut inv = xr();
+        inv.type_code = Some(Code::new("393"));
+        let report = validate(&inv);
+        let f = report
+            .findings
+            .iter()
+            .find(|f| f.id == "BR-DE-17")
+            .unwrap_or_else(|| panic!("{report}"));
+        assert_eq!(f.severity, Severity::Warning);
     }
 }

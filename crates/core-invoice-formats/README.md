@@ -13,3 +13,5 @@ BT-147-in-gross are mapped. Empty `PostalAddress` vs absent stays a named drop.
 **PINT-MY is UBL-only** — `write_unchecked`/`convert` to CII on that profile
 returns `FormatError::CiiNotForProfile`. Do not wrap UBL in a
 `CrossIndustryInvoice` costume.
+
+Full guide: <https://github.com/proxeon/core-invoice>

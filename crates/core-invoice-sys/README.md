@@ -19,3 +19,5 @@ int main(void) {
 **1.0 Python surface is `validate_xml` only** ([`python/core_invoice.py`](../../python/core_invoice.py) via ctypes, `0|1|2`). convert / diff / version are C and CLI. Not a second parser. No PyPI wheel.
 
 The semantic crate (`core-invoice`) is the WASM target — `cargo build -p core-invoice --target wasm32-unknown-unknown` — the model, not a browser AP. Formats/sys are not that job.
+
+Full guide: <https://github.com/proxeon/core-invoice>

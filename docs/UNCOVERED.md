@@ -20,9 +20,12 @@ Peppol BIS **v3.0.20** in `refers/peppol-bis-invoice-3` is `.sch` (`rules/sch/PE
 
 - none of BR-CL-03 / BR-CL-08: BR-CL-03 is a formats wire walk (`@currencyID` ∈ ISO 4217). BR-CL-08 uses UNCL 4451 extracted from EN UBL preprocessed Schematron (no `.gc` in the PINT-MY zip).
 
-## Peppol extra_rules not modelled (syntax-only or Option-at-most-one)
+## Peppol extra_rules (syntax walks vs Option-at-most-one)
 
-R006/R008/R043/R044/R053/R080/R100/CL007 are **registered constant-pass** so `explain` works; they do not walk XML. R051 is a formats wire walk (`@currencyID` = BT-5 except BT-111).
+Model evals stay `syntax_or_option_pass` (`explain` works; `validate(&Invoice)` has no XML). Formats `validate_xml` walks Peppol BIS only:
+
+- **Walked:** R008 (UBL empty elements), R043 (`ChargeIndicator`/`Indicator` must be `true`/`false`), R044 (price-level charge), R051 (`@currencyID` = BT-5 except BT-111), R053 (exactly one TaxTotal with subtotals / CII document-currency `TaxTotalAmount`), R006 (CII TypeCode 130 cardinality), R080 (UBL CreditNote TypeCode 50), R100 (per-line DocumentReference / CII TypeCode 130), CL007 (Peppol `@currencyID` ∈ ISO 4217, dual with CORE BR-CL-03).
+- **Still constant-pass / named:** CII R080 (artefact XPath counts TypeCode 50; we map 50 as tender BT-17, project as `SpecifiedProcuringProject`). R006 is not asserted on UBL (removed in BIS v3.0.16). ISO 4217 `STD` vs `STN` list-pin mismatch. Compiling `.sch` is not OpenPEPPOL Valid.
 
 COMMON-R040–R050/R052/R053 ICD checksums evaluate (R048 is commented out in the artefact — not registered). R044–R047/R052/R053 are **warning**.
 
@@ -52,8 +55,8 @@ Family A/C rows and IC-11/12: in catalogue. Presence evals registered: BR-12…1
 
 ## Pint GST
 
-- Pint international 1.1.2 zip has no official example XML (`refers/pint-billing-1.1.2/unpacked/trn-invoice/` is genericode + Schematron only). Authored `pint_gst_sr` is not an oracle.
-- `pint_gst_category` helper exists; GST family table on `Profile::Pint` is not a full IBR set. Owner: P13.09.
+- Pint international **1.1.2** zip has **no official invoice XML** (genericode + Schematron + PDFs only). Authored MIT fixture `pint_gst_sr` is **not an oracle** and must not be billed as one.
+- `pint_gst_category` helper exists; GST family table on `Profile::Pint` is not a full IBR set. Official instance XML is artefact-blocked.
 
 ## CEN UBL unit tests (pin validation-1.3.16)
 
@@ -65,7 +68,7 @@ Generated from preprocessed ConnectingEurope Schematron (`task prohibitions`). U
 
 ## XRechnung (optional feature)
 
-`core-invoice` feature `xrechnung` is **off** by default and is **not CORE**. Evaluated when BT-24 claims KoSIT/xeinkauf: `BR-DE-1`, `BR-DE-15`, `BR-DE-16`, `BR-DE-23-a`/`24-a`/`25-a`, `BR-DE-30`. `-b` payment exclusivity is type-retired (`PaymentMeans` enum). Remaining KoSIT `BR-DE-*` / Extension / CVD are not registered. Do not treat `validate().ok()` on an XRechnung claim as KoSIT Valid.
+`core-invoice` feature `xrechnung` is **off** by default and is **not CORE**. Evaluated when BT-24 claims KoSIT/xeinkauf: `BR-DE-1` (BG-16), `BR-DE-2` (BG-6), `BR-DE-3`/`4` seller city/postcode, `BR-DE-5`/`6`/`7` contact children, `BR-DE-8`/`9` buyer city/postcode, `BR-DE-10`/`11` deliver-to when BG-15 present, `BR-DE-14` (BT-119 on every BG-23 row), `BR-DE-15`, `BR-DE-16` (listed VAT categories), `BR-DE-17` (warning), `BR-DE-23-a`/`24-a`/`25-a`, type-retired `-b`, `BR-DE-30`. Remaining KoSIT `BR-DE-*` (Skonto `BR-DE-18`, warnings `BR-DE-21`/`26`/`27`/`28`, Extension / CVD) are not registered. Do not treat `validate().ok()` on an XRechnung claim as KoSIT Valid. No KoSIT pin in `refers/`.
 
 ## P14 / P18
 

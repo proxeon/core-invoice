@@ -1498,6 +1498,13 @@ mod tests {
     }
 
     #[test]
+    fn model_built_en_cii_has_no_prohibition_hits() {
+        let xml = write_unchecked(&sample()).unwrap();
+        let hits = crate::prohibitions::scan_written(&xml, crate::Syntax::Cii);
+        assert!(hits.is_empty(), "{hits:?}\n{xml}");
+    }
+
+    #[test]
     fn lines_come_before_header_in_the_transaction() {
         let xml = write_unchecked(&sample()).unwrap();
         let line_at = xml.find("IncludedSupplyChainTradeLineItem").unwrap();

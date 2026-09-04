@@ -665,8 +665,9 @@ fn f001(_inv: &Invoice, _report: &mut Report) {
 }
 
 fn syntax_or_option_pass(_inv: &Invoice, _report: &mut Report) {
-    // Syntax-only or Option-at-most-one (R006/R008/R043/R044/R051/R053/R080/R100/CL007).
-    // Registered so explain works. They do not walk XML; UNCOVERED names them.
+    // Syntax-only or Option-at-most-one. Registered so explain works.
+    // Formats `peppol_syntax` / `walk_currency` walk XML for R006/R008/R043/R044/R051/R053/R080(UBL CN)/R100/CL007.
+    // Model has no XML. CII R080 (TypeCode 50 vs BT-11) stays unwalked.
 }
 
 fn p0101(inv: &Invoice, report: &mut Report) {
