@@ -1611,7 +1611,11 @@ pub static RULES: &[Rule] = &[
     my("ALIGNED-IBRP-O-09-MY", "PINT-MY O: tax = 0.", my_o_09),
 ];
 
-/// PINT GST subset (not invented): S, Z, AA, O, plus SG SR on Pint only.
+/// Crate convenience for GST category codes. **Not** a PINT Billing 1.1.2 list.
+///
+/// Shared 1.1.2 has no tax-category genericode (`UNCL5305.gc` was removed from
+/// general PINT in v1.1.1). `SR` / `ZR` are SG-shaped extras on this helper
+/// only. No `validate()` eval calls this function.
 pub fn pint_gst_category(code: &str) -> bool {
     matches!(code, "S" | "Z" | "AA" | "O" | "SR" | "ZR")
 }
@@ -1630,6 +1634,19 @@ mod tests {
 
     fn amt(s: &str) -> InvoiceAmount {
         InvoiceAmount::parse(s).unwrap()
+    }
+
+    #[test]
+    fn pint_gst_category_is_helper_membership_only() {
+        // No rule eval calls this. SR/ZR are SG-shaped, not 1.1.2 genericode.
+        assert!(pint_gst_category("S"));
+        assert!(pint_gst_category("Z"));
+        assert!(pint_gst_category("AA"));
+        assert!(pint_gst_category("O"));
+        assert!(pint_gst_category("SR"));
+        assert!(pint_gst_category("ZR"));
+        assert!(!pint_gst_category("SA"));
+        assert!(!pint_gst_category("E"));
     }
 
     fn en_s() -> Invoice {

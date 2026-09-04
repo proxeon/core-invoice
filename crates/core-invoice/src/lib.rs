@@ -211,6 +211,17 @@ mod tests {
     }
 
     #[test]
+    fn gst_on_peppol_is_pint_tax() {
+        let mut inv = sst_invoice(Profile::PeppolBis3);
+        inv.lines[0].tax = TaxCategory::gst("SR", Decimal::from(9));
+        let report = validate(&inv);
+        assert!(
+            report.findings.iter().any(|f| f.id == "PINT-TAX"),
+            "{report}"
+        );
+    }
+
+    #[test]
     fn br_05_is_presence_not_length() {
         let mut inv = sst_invoice(Profile::PintMy);
         inv.currency.clear();

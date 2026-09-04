@@ -432,13 +432,15 @@ mod tests {
     }
 
     #[test]
-    fn pint_gst_sr_is_valid_on_pint_not_pint_my() {
-        assert!(
-            validate(&pint_gst_sr()).ok(),
-            "{}",
-            validate(&pint_gst_sr())
-        );
-        let mut my = pint_gst_sr();
+    fn pint_gst_sr_is_core_ok_on_pint_not_a_1_1_2_oracle() {
+        // CORE + PINT-TAX. Not PINT Schematron Valid (no ibr-076/080/081 on this fixture).
+        let inv = pint_gst_sr();
+        assert_eq!(inv.lines[0].tax.system, core_invoice::TaxSystem::Gst);
+        assert!(validate(&inv).ok(), "{}", validate(&inv));
+        let xml = write_unchecked(&inv, Syntax::Ubl).unwrap();
+        assert!(xml.contains(">GST<"), "{xml}");
+        assert!(!xml.contains(">SST<"), "{xml}");
+        let mut my = inv;
         my.profile = Profile::PintMy;
         my.seller.legal_registration = Some(Identifier::new("2023010000001"));
         my.seller.tax_registration = Some(Identifier::new("C12345678901"));

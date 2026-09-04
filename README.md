@@ -65,7 +65,7 @@ One version across the workspace.
 | [`core-invoice`](https://crates.io/crates/core-invoice) | Semantic model and rules. No XML, no I/O. |
 | [`core-invoice-formats`](https://crates.io/crates/core-invoice-formats) | UBL 2.1 tree walk (Invoice and CreditNote). CII D16B subset for EN/Peppol. PINT-MY is UBL-only (`CiiNotForProfile`). |
 | [`core-invoice-cli`](https://crates.io/crates/core-invoice-cli) | Binary `core-invoice`: validate, convert, diff, explain, rules, inspect. |
-| [`core-invoice-fixtures`](https://crates.io/crates/core-invoice-fixtures) | In-memory PINT-MY SST and Peppol VAT samples (not the official CEN corpus). |
+| [`core-invoice-fixtures`](https://crates.io/crates/core-invoice-fixtures) | In-memory constructors: PINT-MY SST, authored Pint GST (`pint_gst_sr`, not a 1.1.2 oracle), Peppol VAT. Official XML is `testdata/`, not this crate. |
 | [`core-invoice-sys`](https://crates.io/crates/core-invoice-sys) | C ABI: validate / convert / diff / version, exit 0/1/2. |
 
 ## Library
@@ -159,7 +159,7 @@ Pins, fetch, and licence fences: [`docs/spec.md`](https://github.com/proxeon/cor
 |---|---|---|
 | ConnectingEurope EN 16931 | `validation-1.3.16` | Fatal-id compare (`task svrl`) |
 | Peppol BIS Billing 3.0 | `v3.0.20` | `.sch` only — no compiled OpenPEPPOL XSLT in this pin |
-| Peppol PINT Billing | `1.1.2` | International profile; no official example XML in this pin |
+| Peppol PINT Billing | `1.1.2` | International profile. Schematron + genericode; **no official example XML** in the zip. GST IBR families are jurisdiction specialisations, not this pin. |
 | PINT-MY Billing | `1.3.0` | Malaysian specialisation (UBL) |
 
 `task svrl` runs pinned Schematron (Saxon-HE, or Docker Compose Java) and diffs Fatal `Finding.id` against SVRL `@id`. That is an **oracle**, not a crate dependency.

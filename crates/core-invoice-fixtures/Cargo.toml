@@ -10,7 +10,7 @@ homepage.workspace = true
 readme.workspace = true
 keywords.workspace = true
 categories.workspace = true
-description = "Pass/fail UBL corpus for core-invoice (PINT, PINT-MY, EN 16931)"
+description = "In-memory constructors (PINT-MY SST, authored Pint GST, Peppol VAT); official XML lives in testdata/"
 
 [dependencies]
 core-invoice.workspace = true

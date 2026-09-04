@@ -55,8 +55,12 @@ Family A/C rows and IC-11/12: in catalogue. Presence evals registered: BR-12…1
 
 ## Pint GST
 
-- Pint international **1.1.2** zip has **no official invoice XML** (genericode + Schematron + preprocessed XSLT; **no** `example/` instance XML). Authored MIT fixture `pint_gst_sr` is **not an oracle** and must not be billed as one.
-- `pint_gst_category` helper exists; GST family table on `Profile::Pint` is not a full IBR set. Official instance XML is artefact-blocked.
+- Pint international **1.1.2** `resources.zip` has **0** `.xml` (genericode + Schematron + preprocessed XSLT; **no** `example/` instance XML). `testdata/` has PINT-MY samples only. Authored MIT fixture `pint_gst_sr` is **not an oracle** and must not be billed as one.
+- **Helper only, not a GST IBR set.** `pint_gst_category` is exported and unused by any `validate()` eval. Do not treat helper membership as catalogue coverage.
+- 1.1.2 `.sch` has **171** asserts and **no** tax-category code list: no `UNCL5305.gc`, no `ibr-cl-17` / `ibr-cl-18`. **`ibr-cl-27` (IBT-167) was removed in PINT 1.0.2** and is not in this pin. Do not re-invent it. BIS Chapter 3 is an alignment point for specialisations.
+- `SR` / `ZR` on the helper are **SG-shaped extras**, not 1.1.2 genericode.
+- `validate().ok()` on `pint_gst_sr` is CORE + `PINT-TAX`, **not** PINT Schematron Valid (`ibr-076` / `ibr-080` / `ibr-081` would fail on written UBL). Not OpenPEPPOL Valid, not IRAS Valid.
+- Official instance XML and a GST family IBR set (`IBR-SR-08` etc.) are artefact-blocked until a later pin ships examples and ids.
 
 ## EN 16931-1:2026
 
