@@ -466,4 +466,6 @@ fn profiles_prints_pins() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("validation-1.3.16"));
     assert!(stdout.contains("v3.0.20"));
+    assert!(stdout.contains("1.1.2"));
+    assert!(stdout.contains("1.3.0"));
 }

@@ -1,3 +1,5 @@
+//! Semantic checks on the in-memory invoice.
+
 use crate::invoice::Invoice;
 use crate::report::Report;
 use crate::rules;

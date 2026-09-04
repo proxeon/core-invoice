@@ -1,13 +1,21 @@
+//! Usage specification (BT-24). Profiles are siblings, not a ladder.
+
 use crate::tax::TaxSystem;
 
-/// EN 16931 edition. 2026 is classified until CEN artefacts exist.
+/// EN 16931 edition. `En2026` is classified until CEN artefacts exist.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Edition {
+    /// EN 16931:2017+A1. Every shipped profile uses this.
     En2017A1,
+    /// Classified 2026 edition. Unimplemented until CEN artefacts exist.
     En2026,
 }
 
 impl Edition {
+    /// Whether this edition has artefacts in this crate.
+    ///
+    /// [`Edition::En2026`] is `false` until those artefacts exist. No shipped
+    /// profile returns it from [`Profile::edition`].
     pub fn is_implemented(self) -> bool {
         matches!(self, Self::En2017A1)
     }
@@ -16,9 +24,11 @@ impl Edition {
 /// Result of matching BT-24. Profiles are siblings, not a ladder.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProfileLookup {
+    /// A shipped billing profile.
     Profile(Profile),
     /// Self-billing (or other) process URN; do not validate as billing.
     WrongProcess,
+    /// BT-24 did not match a shipped billing or self-billing URN.
     Unknown,
 }
 
@@ -38,6 +48,7 @@ pub enum Profile {
 }
 
 impl Profile {
+    /// CLI / report slug (`en16931`, `peppol`, `pint`, `pint-my`, `unknown`).
     pub fn slug(self) -> &'static str {
         match self {
             Self::En16931 => "en16931",
@@ -48,6 +59,7 @@ impl Profile {
         }
     }
 
+    /// Parse a slug (`en16931`, `peppol`, `pint`, `pint-my`, plus aliases). `None` if unknown.
     pub fn parse(s: &str) -> Option<Self> {
         match s.trim().to_ascii_lowercase().as_str() {
             "en16931" | "en-16931" | "core" => Some(Self::En16931),
@@ -58,6 +70,7 @@ impl Profile {
         }
     }
 
+    /// Canonical BT-24 specification identifier. Empty for [`Profile::Unknown`].
     pub fn specification_id(self) -> &'static str {
         match self {
             Self::En16931 => "urn:cen.eu:en16931:2017",
@@ -96,14 +109,17 @@ impl Profile {
         }
     }
 
+    /// Whether `system` is in [`Self::tax_systems`].
     pub fn allows(self, system: TaxSystem) -> bool {
         self.tax_systems().contains(&system)
     }
 
+    /// Comma-separated known slugs for CLI help.
     pub fn known_slugs() -> &'static str {
         "en16931, peppol, pint, pint-my"
     }
 
+    /// Edition this profile validates. Always [`Edition::En2017A1`] until 2026 artefacts exist.
     pub fn edition(self) -> Edition {
         Edition::En2017A1
     }
@@ -121,6 +137,7 @@ impl Profile {
         }
     }
 
+    /// Canonical Peppol BIS 3.0 BT-24 prefix (the CIUS URN).
     pub const PEPPOL_BIS3_PREFIX: &'static str =
         "urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0";
 
@@ -207,6 +224,16 @@ mod tests {
         assert_eq!(Profile::En16931.process_id(), None);
         assert!(Profile::En16931.edition().is_implemented());
         assert!(!Edition::En2026.is_implemented());
+        for p in [
+            Profile::En16931,
+            Profile::PeppolBis3,
+            Profile::Pint,
+            Profile::PintMy,
+            Profile::Unknown,
+        ] {
+            assert_eq!(p.edition(), Edition::En2017A1);
+            assert!(p.edition().is_implemented());
+        }
     }
 
     #[test]

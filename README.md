@@ -159,7 +159,7 @@ Pins, fetch, and licence fences: [`docs/spec.md`](docs/spec.md). Expected unmatc
 |---|---|---|
 | ConnectingEurope EN 16931 | `validation-1.3.16` | Fatal-id compare (`task svrl`) |
 | Peppol BIS Billing 3.0 | `v3.0.20` | `.sch` only — no compiled OpenPEPPOL XSLT in this pin |
-| Peppol PINT Billing | `1.1.2` | International profile |
+| Peppol PINT Billing | `1.1.2` | International profile; no official example XML in this pin |
 | PINT-MY Billing | `1.3.0` | Malaysian specialisation (UBL) |
 
 `task svrl` runs pinned Schematron (Saxon-HE, or Docker Compose Java) and diffs Fatal `Finding.id` against SVRL `@id`. That is an **oracle**, not a crate dependency.

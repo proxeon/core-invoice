@@ -1,17 +1,26 @@
+//! Rule registry. [`crate::validate()`] and [`explain`] share one table.
+
 use crate::bt::{BtId, Group, Path};
 use crate::invoice::Invoice;
 use crate::numeric::Percentage;
 use crate::report::{Finding, Report, Severity, Source};
 
+/// One registered rule. `eval` is the only emitter of this `id`.
 #[derive(Clone, Copy)]
 pub struct Rule {
+    /// Registered id (`BR-02`, `PEPPOL-EN16931-R010`).
     pub id: &'static str,
+    /// Fatal fails [`Report::ok`]; Warning does not.
     pub severity: Severity,
+    /// Authority text returned by [`explain`].
     pub text: &'static str,
+    /// Provenance of `id`.
     pub source: Source,
+    /// Semantic check. Pushes findings onto the report.
     pub eval: fn(&Invoice, &mut Report),
 }
 
+/// Case-insensitive id match with numeric zero-padding (`br-2` = `BR-02`).
 pub fn matches_id(registered: &str, query: &str) -> bool {
     let a = canonical(registered);
     let b = canonical(query);
@@ -29,6 +38,7 @@ fn canonical(id: &str) -> String {
     id.to_ascii_uppercase()
 }
 
+/// Authority text for `id`, or `None` if unregistered. Same table as [`crate::validate()`].
 pub fn explain(id: &str) -> Option<&'static str> {
     if let Some(text) = catalogue()
         .iter()
@@ -1423,6 +1433,7 @@ fn br_co_17(invoice: &Invoice, report: &mut Report) {
     }
 }
 
+/// Presence, co-occurrence, and totals rows in CORE (before category/codes/DEC).
 pub static ALL: &[Rule] = &[
     Rule {
         id: "CORE-SPEC-01",
@@ -2065,6 +2076,7 @@ macro_rules! dec {
     };
 }
 
+/// Amount.Type decimal rows. Eval is a no-op so [`explain`] resolves artefact ids.
 pub static DEC: &[Rule] = &[
     dec!(
         "BR-DEC-01",

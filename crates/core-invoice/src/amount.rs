@@ -13,12 +13,15 @@ pub struct InvoiceAmount(Decimal);
 pub type Amount = InvoiceAmount;
 
 impl InvoiceAmount {
+    /// Zero amount.
     pub const ZERO: Self = Self(Decimal::ZERO);
 
+    /// Integer minor units (cents) as a two-decimal amount.
     pub fn from_minor(cents: i64) -> Self {
         Self(Decimal::new(cents, 2))
     }
 
+    /// Accepts at most two fraction digits. Refuses excess; never rounds.
     pub fn try_new(value: Decimal) -> Result<Self, AmountError> {
         if value.scale() > 2 {
             return Err(AmountError::TooManyDecimals);
@@ -26,35 +29,42 @@ impl InvoiceAmount {
         Ok(Self(value))
     }
 
+    /// Parse a decimal string. Excess fraction digits are refused; never rounds.
     pub fn parse(s: &str) -> Result<Self, AmountError> {
         let d = Decimal::from_str(s.trim()).map_err(|_| AmountError::TooManyDecimals)?;
         Self::try_new(d)
     }
 
+    /// Underlying decimal.
     pub fn raw(self) -> Decimal {
         self.0
     }
 
+    /// Whether the value is zero.
     pub fn is_zero(self) -> bool {
         self.0.is_zero()
     }
 
+    /// Sum, or `None` on overflow. Does not saturate.
     pub fn checked_add(self, other: Self) -> Option<Self> {
         self.0
             .checked_add(other.0)
             .and_then(|d| Self::try_new(d).ok())
     }
 
+    /// Difference, or `None` on overflow. Does not saturate.
     pub fn checked_sub(self, other: Self) -> Option<Self> {
         self.0
             .checked_sub(other.0)
             .and_then(|d| Self::try_new(d).ok())
     }
 
+    /// Absolute value.
     pub fn abs(self) -> Self {
         Self(self.0.abs())
     }
 
+    /// Sum of amounts, or `None` on overflow. Does not saturate.
     pub fn checked_sum(amounts: impl IntoIterator<Item = Self>) -> Option<Self> {
         let mut acc = Self::ZERO;
         for a in amounts {
@@ -90,16 +100,20 @@ impl FromStr for InvoiceAmount {
 pub struct UnitPriceAmount(Decimal);
 
 impl UnitPriceAmount {
+    /// Zero unit price.
     pub const ZERO: Self = Self(Decimal::ZERO);
 
+    /// Uncapped fraction digits (BT-146, BT-147, BT-148).
     pub fn new(value: Decimal) -> Self {
         Self(value)
     }
 
+    /// Parse a decimal string. No scale cap.
     pub fn parse(s: &str) -> Result<Self, rust_decimal::Error> {
         Ok(Self(Decimal::from_str(s.trim())?))
     }
 
+    /// Underlying decimal.
     pub fn raw(self) -> Decimal {
         self.0
     }

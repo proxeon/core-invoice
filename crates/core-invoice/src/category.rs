@@ -1,4 +1,4 @@
-//! Nine VAT category families plus PINT-MY aligned tables.
+//! Nine UNCL 5305 VAT category families plus PINT-MY aligned tables.
 //!
 //! Finding ids are real (`BR-S-08`, `ALIGNED-IBRP-SA-09`). SST never emits
 //! `BR-S-*`. Reconcile groups with [`grouped_by_rate`] from this table.
@@ -15,21 +15,33 @@ use crate::report::{Finding, Report, Severity, Source};
 use crate::rules::Rule;
 use crate::tax::TaxSystem;
 
+/// UNCL 5305 VAT category. Not PINT-MY SST codes (SA, SE, HVG, LVG, TTX).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VatCategory {
+    /// `S` — standard rate.
     Standard,
+    /// `Z` — zero rated.
     ZeroRated,
+    /// `E` — exempt.
     Exempt,
+    /// `AE` — reverse charge.
     ReverseCharge,
+    /// `K` — intra-community supply.
     IntraCommunity,
+    /// `G` — export.
     Export,
+    /// `O` — not subject to VAT.
     OutOfScope,
+    /// `L` — Canary Islands IGIC.
     CanaryIslands,
+    /// `M` — Ceuta and Melilla IPSI.
     CeutaMelilla,
+    /// `B` — split payment.
     SplitPayment,
 }
 
 impl VatCategory {
+    /// UNCL 5305 letter code (`S`, `AE`).
     pub fn code(self) -> &'static str {
         match self {
             Self::Standard => "S",
@@ -45,6 +57,7 @@ impl VatCategory {
         }
     }
 
+    /// Parse a UNCL 5305 code, case-insensitive. `None` if not in this enum.
     pub fn parse(code: &str) -> Option<Self> {
         Some(match code {
             "S" | "s" => Self::Standard,
@@ -61,6 +74,7 @@ impl VatCategory {
         })
     }
 
+    /// Whether BG-23 must carry an exemption reason or code.
     pub fn requires_exemption_reason(self) -> bool {
         matches!(
             self,
@@ -72,6 +86,7 @@ impl VatCategory {
         )
     }
 
+    /// Whether BG-23 must not carry an exemption reason or code.
     pub fn forbids_exemption_reason(self) -> bool {
         matches!(
             self,
@@ -80,40 +95,58 @@ impl VatCategory {
     }
 }
 
+/// How many BG-23 groups a used category must have.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Groups {
+    /// One group per used rate (`S`, `L`, `M`, `B`).
     AtLeastOne,
+    /// One group for the category (`Z`, `E`, `AE`, `K`, `G`, `O`).
     ExactlyOne,
 }
 
+/// Allowed BT-119 / line rate for the family.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RateRule {
+    /// Rate must be greater than zero.
     Positive,
+    /// Rate must be present and zero.
     Zero,
+    /// Rate must be present and not negative.
     ZeroOrPositive,
+    /// Rate must be absent (`O`).
     Absent,
 }
 
+/// Allowed BT-117 for the family.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TaxRule {
+    /// BT-117 must be 0.
     Zero,
+    /// BT-117 derived from BT-116 × rate.
     Derived,
 }
 
+/// Per-family grouping, rate, and tax constraints.
 #[derive(Debug, Clone, Copy)]
 pub struct CategoryProfile {
+    /// UNCL 5305 family.
     pub category: VatCategory,
+    /// Required BG-23 group count.
     pub groups: Groups,
+    /// Allowed rate.
     pub rate: RateRule,
+    /// Allowed BT-117.
     pub tax: TaxRule,
 }
 
 impl CategoryProfile {
+    /// Whether BG-23 is keyed on rate as well as category.
     pub const fn grouped_by_rate(self) -> bool {
         matches!(self.groups, Groups::AtLeastOne)
     }
 }
 
+/// UNCL 5305 family table: group count, rate, and tax for `category`.
 pub const fn profile(category: VatCategory) -> CategoryProfile {
     use Groups::{AtLeastOne, ExactlyOne};
     use RateRule::{Absent, Positive, Zero as RZero, ZeroOrPositive};
@@ -134,7 +167,7 @@ pub const fn profile(category: VatCategory) -> CategoryProfile {
     }
 }
 
-/// Shared with [`crate::reconcile`]: which families key BG-23 on rate.
+/// Shared with [`crate::reconcile()`]: which families key BG-23 on rate.
 pub fn grouped_by_rate(profile_id: Profile, category: &str) -> bool {
     if profile_id == Profile::PintMy {
         return matches!(
@@ -1190,6 +1223,7 @@ const fn my(id: &'static str, text: &'static str, eval: fn(&Invoice, &mut Report
     }
 }
 
+/// VAT family rules plus PINT-MY aligned rows. Fed into [`crate::rules::core_rules`].
 pub static RULES: &[Rule] = &[
     r(
         "BR-CO-18",

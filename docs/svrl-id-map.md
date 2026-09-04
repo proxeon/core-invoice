@@ -25,4 +25,6 @@ UBL-CR / UBL-SR / UBL-DT failed-asserts are **syntax**; the oracle drops them fr
 
 Peppol-only Fatal ids (`PEPPOL-*`) compared to ConnectingEurope EN XSLT are not unexpected extras (EN cannot emit them). Docker Compose `saxon` (eclipse-temurin:21-jre + Saxon-HE 10.9) is an oracle runner when the host has no JDK.
 
+International PINT 1.1.2 preprocessed XSLT exists on disk after `task spec` and is unused until official instance XML exists. Do not run it on authored fixtures and call that PINT Valid.
+
 `task svrl` (`xtask/svrl_oracle.py`) reads this table. Saxon is an oracle, not a crate dependency. Peppol BIS v3.0.20 in `refers/` is Schematron (`.sch`), not compiled XSLT — EN and PINT-MY XSLT are the live compares.

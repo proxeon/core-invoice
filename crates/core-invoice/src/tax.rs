@@ -1,13 +1,20 @@
+//! Tax system and category. SST is in-memory; [`wire_scheme`] never emits TaxScheme `SST`.
+
 /// Tax system on the invoice. PINT is the reason this is not "VAT or nothing".
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum TaxSystem {
+    /// VAT (UNCL 5305 / TaxScheme `VAT`).
     Vat,
+    /// GST. Wire TaxScheme `GST` on PINT, not PINT-MY.
     Gst,
+    /// SST in memory. Never TaxScheme `SST` on the wire (VAT/AAL via [`wire_scheme`]).
     Sst,
+    /// Consumption tax.
     Consumption,
 }
 
 impl TaxSystem {
+    /// Canonical name (`VAT`, `GST`, `SST`, `CONSUMPTION`).
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Vat => "VAT",
@@ -17,6 +24,7 @@ impl TaxSystem {
         }
     }
 
+    /// Parse a tax-system name. `VAT/CGST` is not VAT.
     pub fn parse(s: &str) -> Option<Self> {
         match s.trim().to_ascii_uppercase().as_str() {
             "VAT" => Some(Self::Vat),
@@ -34,14 +42,17 @@ impl TaxSystem {
 /// Zero is a stated 0 % (EN `Z`), not an absent rate.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaxCategory {
+    /// In-memory tax system. SST is never TaxScheme `SST` on the wire.
     pub system: TaxSystem,
     /// BT-151 / BT-118 category code. `String` (not [`crate::Code`]) so PINT extra
     /// codes (SA, SE, HVG, TTX, …) stay representable without a VAT-only enum.
     pub code: String,
+    /// BT-152 / BT-119 rate. `None` when the family has no IBT-119 (EN `O`, PINT-MY TTX).
     pub percent: Option<crate::numeric::Percentage>,
 }
 
 impl TaxCategory {
+    /// VAT category with a stated rate.
     pub fn vat(code: impl Into<String>, percent: impl Into<crate::numeric::Percentage>) -> Self {
         Self {
             system: TaxSystem::Vat,
@@ -50,6 +61,7 @@ impl TaxCategory {
         }
     }
 
+    /// SST category with a stated rate. Wire TaxScheme is still not `SST`.
     pub fn sst(code: impl Into<String>, percent: impl Into<crate::numeric::Percentage>) -> Self {
         Self {
             system: TaxSystem::Sst,
@@ -58,6 +70,7 @@ impl TaxCategory {
         }
     }
 
+    /// GST category with a stated rate.
     pub fn gst(code: impl Into<String>, percent: impl Into<crate::numeric::Percentage>) -> Self {
         Self {
             system: TaxSystem::Gst,
@@ -105,6 +118,7 @@ pub fn wire_scheme(
     }
 }
 
+/// PINT-MY category codes: `SA`, `SE`, `HVG`, `LVG`, `TTX`, `E`, `O`.
 pub fn pint_my_category(code: &str) -> bool {
     matches!(code, "SA" | "SE" | "HVG" | "LVG" | "TTX" | "E" | "O")
 }

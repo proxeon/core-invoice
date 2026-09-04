@@ -1,15 +1,21 @@
+//! [`Identifier`] (value + optional scheme) and [`DocumentReference`] (content only).
+
 use std::fmt;
 
 /// Identifier.Type: content + optional scheme + optional scheme version.
 /// Lists are profile-scoped; this type does not require EAS.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Identifier {
+    /// Identifier content.
     pub value: String,
+    /// Optional scheme identifier. Not required by this type.
     pub scheme: Option<String>,
+    /// Optional scheme version identifier.
     pub scheme_version: Option<String>,
 }
 
 impl Identifier {
+    /// Unschemed identifier.
     pub fn new(value: impl Into<String>) -> Self {
         Self {
             value: value.into(),
@@ -18,6 +24,7 @@ impl Identifier {
         }
     }
 
+    /// Identifier with scheme, no version.
     pub fn schemed(value: impl Into<String>, scheme: impl Into<String>) -> Self {
         Self {
             value: value.into(),
@@ -26,6 +33,7 @@ impl Identifier {
         }
     }
 
+    /// Identifier with scheme and scheme version.
     pub fn with_version(
         value: impl Into<String>,
         scheme: impl Into<String>,
@@ -41,13 +49,18 @@ impl Identifier {
 
 /// Document reference (PO, contract, preceding invoice id). No scheme.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct DocumentReference(pub String);
+pub struct DocumentReference(
+    /// Reference content. No scheme.
+    pub String,
+);
 
 impl DocumentReference {
+    /// Content-only document reference.
     pub fn new(value: impl Into<String>) -> Self {
         Self(value.into())
     }
 
+    /// Reference as written.
     pub fn as_str(&self) -> &str {
         &self.0
     }

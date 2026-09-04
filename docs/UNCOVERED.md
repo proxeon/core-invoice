@@ -55,8 +55,12 @@ Family A/C rows and IC-11/12: in catalogue. Presence evals registered: BR-12…1
 
 ## Pint GST
 
-- Pint international **1.1.2** zip has **no official invoice XML** (genericode + Schematron + PDFs only). Authored MIT fixture `pint_gst_sr` is **not an oracle** and must not be billed as one.
+- Pint international **1.1.2** zip has **no official invoice XML** (genericode + Schematron + preprocessed XSLT; **no** `example/` instance XML). Authored MIT fixture `pint_gst_sr` is **not an oracle** and must not be billed as one.
 - `pint_gst_category` helper exists; GST family table on `Profile::Pint` is not a full IBR set. Official instance XML is artefact-blocked.
+
+## EN 16931-1:2026
+
+Classified `Edition::En2026`. `is_implemented()` is **false**. `Profile::edition()` is always `En2017A1`. Pin `validation-1.3.16` is 2017+A1. Do not invent rules from drafts or news. Not an oracle unmatched id — do not put `En2026` in the fenced list.
 
 ## CEN UBL unit tests (pin validation-1.3.16)
 
@@ -76,4 +80,4 @@ Generated from preprocessed ConnectingEurope Schematron (`task prohibitions`). U
 - Mustang: only if `MUSTANG_JAR` is set; VAT CII; never default CI.
 - nix flake: Later (P18.03 / P19).
 - cargo-fuzz target `fuzz/fuzz_targets/formats_read.rs` is run locally (`cargo fuzz run formats_read`); not default CI. Unit smoke `random_bytes_do_not_panic` stays.
-- `#![warn(missing_docs)]` on the model crate is deferred until a full rustdoc audit (CI `-D warnings` would fail closed). Public Table 2 fields cite BT numbers.
+- `#![warn(missing_docs)]` is on the model crate. Public Table 2 fields cite BT numbers.

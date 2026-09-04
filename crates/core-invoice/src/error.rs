@@ -1,8 +1,13 @@
+//! Construction errors for amounts, dates, and attachments.
+
 use std::fmt;
 
+/// Error constructing an [`crate::InvoiceAmount`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AmountError {
+    /// More than two fraction digits. The type never rounds.
     TooManyDecimals,
+    /// Decimal overflow.
     Overflow,
 }
 
@@ -17,8 +22,10 @@ impl fmt::Display for AmountError {
 
 impl std::error::Error for AmountError {}
 
+/// Error constructing a [`crate::Date`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DateError {
+    /// Not a calendar day `YYYY-MM-DD` (no time, no zone).
     Invalid,
 }
 
@@ -30,9 +37,12 @@ impl fmt::Display for DateError {
 
 impl std::error::Error for DateError {}
 
+/// Error constructing an [`crate::Attachment`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AttachmentError {
+    /// MIME code is empty or whitespace.
     EmptyMime,
+    /// Filename is empty or whitespace.
     EmptyFilename,
 }
 

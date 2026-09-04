@@ -1,3 +1,5 @@
+//! Semantic invoice: parties, lines, totals, and Table 2 groups.
+
 use crate::amount::{Amount, InvoiceAmount, UnitPriceAmount};
 use crate::attachment::Attachment;
 use crate::code::Code;
@@ -42,7 +44,9 @@ pub struct Contact {
 /// Extra PartyTaxScheme row (PINT-MY SST + TIN + TTx).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PartyTax {
+    /// Tax identifier on this extra PartyTaxScheme row.
     pub id: Identifier,
+    /// TaxScheme ID (`VAT`, `GST`, `AAL`). Never `SST`.
     pub scheme: String,
 }
 
@@ -57,20 +61,32 @@ pub struct PartyTax {
 /// reads that field.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Party {
+    /// BT-27 / BT-44 name.
     pub name: String,
+    /// BT-28 / BT-45 trading name.
     pub trading_name: Option<String>,
+    /// BT-29 / BT-46 party identifiers.
     pub identifiers: Vec<Identifier>,
+    /// BT-30 / BT-47 legal registration (PINT-MY BRN, unschemed).
     pub legal_registration: Option<Identifier>,
+    /// BT-31 / BT-48 VAT identifier.
     pub vat_identifier: Option<Identifier>,
+    /// BT-32 seller tax registration (PINT-MY TIN, scheme `GST`).
     pub tax_registration: Option<Identifier>,
+    /// BT-34 / BT-49 electronic address (PINT-MY endpoint scheme `0230`).
     pub electronic_address: Option<Identifier>,
+    /// Extra PartyTaxScheme rows (PINT-MY SST + TIN + TTX).
     pub party_taxes: Vec<PartyTax>,
+    /// BT-33 additional legal information.
     pub additional_legal: Option<String>,
+    /// BG-5 / BG-8 postal address. Country is BT-40 / BT-55.
     pub address: Option<PostalAddress>,
+    /// BG-6 / BG-9 contact.
     pub contact: Option<Contact>,
 }
 
 impl Party {
+    /// Name plus country on [`PostalAddress::country`]. Empty country leaves `address` absent.
     pub fn new(name: impl Into<String>, country: impl Into<String>) -> Self {
         let country = country.into();
         let address = if country.trim().is_empty() {
@@ -137,6 +153,7 @@ pub struct LineAllowanceCharge {
     pub reason_code: Option<Code>,
 }
 
+/// BG-25 invoice line.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Line {
     /// BT-126 line identifier, not a GTIN (BT-157).
@@ -159,7 +176,9 @@ pub struct Line {
     pub description: Option<String>,
     /// BG-26 invoicing period (BT-134/BT-135). Not [`Invoice::period`] (BG-14).
     pub period: Option<Period>,
+    /// BG-27 line allowances.
     pub allowances: Vec<LineAllowanceCharge>,
+    /// BG-28 line charges.
     pub charges: Vec<LineAllowanceCharge>,
     /// BT-157 Item standard identifier (often GTIN). UBL `StandardItemIdentification`; scheme ICD (BR-64 / BR-CL-21). Not BT-155.
     pub standard_id: Option<Identifier>,
@@ -188,6 +207,7 @@ pub struct Line {
 }
 
 impl Line {
+    /// Line id, name, net (BT-131), and tax category. Does not invent quantity or price.
     pub fn new(
         id: impl Into<String>,
         name: impl Into<String>,
@@ -226,7 +246,9 @@ impl Line {
 /// BG-32 item attribute: BT-160 name + BT-161 value (`AdditionalItemProperty`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ItemAttribute {
+    /// BT-160 item attribute name.
     pub name: String,
+    /// BT-161 item attribute value.
     pub value: String,
 }
 
@@ -302,6 +324,7 @@ pub struct PaymentInstructions {
     pub means_text: Option<String>,
     /// BT-83 Remittance information (UBL PaymentID).
     pub remittance: Option<String>,
+    /// Exclusive BG-17 / BG-18 / BG-19. Several IBANs are several credit-transfer accounts.
     pub means: Option<PaymentMeans>,
 }
 
@@ -325,7 +348,9 @@ pub struct AllowanceCharge {
 /// BG-23 VAT/GST/SST breakdown row.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaxBreakdown {
+    /// In-memory tax system. SST is never TaxScheme `SST` on the wire.
     pub system: TaxSystem,
+    /// TaxScheme/cbc:ID (`VAT`, `GST`, `AAL`). Never `SST`.
     pub scheme: String,
     /// BT-118 category code.
     pub category: Code,
@@ -384,6 +409,7 @@ pub struct SupportingDocument {
 /// be a 3.0 break. A proved document is [`crate::Validated`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Invoice {
+    /// In-memory rule set used by [`crate::validate()`]. Not BT-24; BT-24 is [`Self::specification_id`].
     pub profile: Profile,
     /// BT-24 specification identifier.
     pub specification_id: Option<String>,
@@ -462,6 +488,7 @@ pub struct Invoice {
 }
 
 impl Invoice {
+    /// 2.x constructor. Stamps BT-24 from [`Profile::specification_id`]. Then set `pub` fields.
     pub fn blank(
         profile: Profile,
         number: impl Into<String>,
@@ -535,6 +562,7 @@ impl Invoice {
         }
     }
 
+    /// Sum of line BT-131. Overflow is `None`. Not BT-106 unless totals exist.
     pub fn line_net_sum(&self) -> Option<Amount> {
         self.lines
             .iter()

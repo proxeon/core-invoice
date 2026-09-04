@@ -1009,6 +1009,7 @@ const fn r(id: &'static str, text: &'static str, eval: fn(&Invoice, &mut Report)
     }
 }
 
+/// Peppol BIS Billing 3.0 extra_rules. Not CORE, not inherited by PINT.
 pub static RULES: &[Rule] = &[
     r("PEPPOL-EN16931-R001", "BT-23 shall be present.", r001),
     r(

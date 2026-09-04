@@ -3,6 +3,8 @@
 //! Tax is VAT, GST, SST, or consumption — not VAT only. No I/O, no tax-authority
 //! APIs, no accounting UI.
 
+#![warn(missing_docs)]
+
 pub mod amount;
 pub mod arith;
 pub mod attachment;

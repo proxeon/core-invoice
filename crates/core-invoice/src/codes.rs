@@ -12,58 +12,78 @@ use crate::rules::Rule;
 use crate::tax::TaxSystem;
 
 /// CEN EN 16931 validation artefacts pin. Fully-qualified tag, not the branch.
+///
+/// Pin: workspace `docs/spec.md`.
 pub const ARTEFACT_VERSION: &str = "validation-1.3.16";
+/// OpenPEPPOL peppol-bis-invoice-3 tag. Pin: workspace `docs/spec.md`.
 pub const PEPPOL_BIS_VERSION: &str = "v3.0.20";
+/// PINT-MY Billing `resources.zip` version. Pin: workspace `docs/spec.md`.
 pub const PINT_MY_VERSION: &str = "1.3.0";
-/// ConnectingEurope/eInvoicing-EN16931 release tag commit (docs/spec.md).
+/// ConnectingEurope/eInvoicing-EN16931 release tag commit. Pin: workspace `docs/spec.md`.
 pub const EN16931_GIT: &str = "b6c9e06";
+/// Peppol PINT Billing `resources.zip` version. Pin: workspace `docs/spec.md`.
 pub const PINT_VERSION: &str = "1.1.2";
 
 fn listed(list: &[&str], code: &str) -> bool {
     list.iter().any(|c| c.eq_ignore_ascii_case(code))
 }
 
+/// `true` if `code` is a point in the generated ISO 4217 list.
 pub fn currency(code: &str) -> bool {
     listed(lists::ISO_4217, code)
 }
+/// `true` if `code` is a point in the generated ISO 3166-1 list.
 pub fn country(code: &str) -> bool {
     listed(lists::ISO_3166, code)
 }
+/// `true` if `code` is a point in the generated UNCL 5305 list.
 pub fn uncl_5305(code: &str) -> bool {
     listed(lists::UNCL_5305, code)
 }
+/// `true` if `code` is a point in the generated UNCL 1001 invoice-type list.
 pub fn invoice_type(code: &str) -> bool {
     lists::UNCL_1001_INVOICE.contains(&code)
 }
+/// `true` if `code` is a point in the generated UNCL 1001 credit-note-type list.
 pub fn credit_note_type(code: &str) -> bool {
     lists::UNCL_1001_CREDIT_NOTE.contains(&code)
 }
+/// `true` if `code` is a point in the generated EAS list.
 pub fn eas(code: &str) -> bool {
     lists::EAS.contains(&code)
 }
+/// `true` if `code` is a point in the generated VATEX list.
 pub fn vatex(code: &str) -> bool {
     listed(lists::VATEX, code)
 }
+/// `true` if `code` is a point in the generated UNECE Rec 20 list.
 pub fn unit(code: &str) -> bool {
     lists::REC20.contains(&code)
 }
+/// `true` if `code` is a point in the generated MIME subset.
 pub fn mime(code: &str) -> bool {
     lists::MIME.contains(&code)
 }
+/// `true` if `code` is a point in the generated ISO 6523 ICD list.
 pub fn icd(code: &str) -> bool {
     lists::ICD.contains(&code)
 }
+/// `true` if `code` is a point in the generated UNCL 1153 list.
 pub fn uncl_1153(code: &str) -> bool {
     listed(lists::UNCL_1153, code)
 }
+/// `true` if `code` is a point in the generated UNCL 4451 list.
 pub fn uncl_4451(code: &str) -> bool {
     listed(lists::UNCL_4451, code)
 }
+/// `true` if `code` is a point in the generated PINT-MY tax-category list.
 pub fn pint_my_taxcat(code: &str) -> bool {
     listed(lists::PINT_MY_TAXCAT, code)
 }
 
 pub mod guard {
+    //! Withdrawn-code hints. Not list membership.
+
     use crate::profile::Profile;
 
     /// EAS membership with a withdrawn-successor hint. No network.
@@ -515,6 +535,7 @@ const fn r(id: &'static str, text: &'static str, eval: fn(&Invoice, &mut Report)
     }
 }
 
+/// Code-list membership rules (`BR-CL-*`).
 pub static RULES: &[Rule] = &[
     r(
         "BR-CL-01",
@@ -732,6 +753,8 @@ mod tests {
         assert_eq!(ARTEFACT_VERSION, "validation-1.3.16");
         assert_eq!(PEPPOL_BIS_VERSION, "v3.0.20");
         assert_eq!(PINT_MY_VERSION, "1.3.0");
+        assert_eq!(PINT_VERSION, "1.1.2");
+        assert_eq!(EN16931_GIT, "b6c9e06");
     }
 
     #[test]

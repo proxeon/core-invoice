@@ -1054,6 +1054,12 @@ mod tests {
         let sch = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../refers/peppol-bis-invoice-3/rules/sch");
         if !sch.is_dir() {
+            if std::env::var("CORE_INVOICE_REQUIRE_SPEC").ok().as_deref() == Some("1") {
+                panic!(
+                    "missing Peppol rules/sch after task spec: {}",
+                    sch.display()
+                );
+            }
             return;
         }
         let compiled: Vec<_> = std::fs::read_dir(&sch)
@@ -1069,6 +1075,52 @@ mod tests {
         assert!(
             compiled.is_empty(),
             "Peppol pin shipped compiled XSLT {compiled:?} — compare @id, do not compile .sch"
+        );
+    }
+
+    #[test]
+    fn pint_pin_has_no_official_invoice_xml() {
+        // PINT Billing 1.1.2 zip is genericode + Schematron + XSLT, no instance XML.
+        // If a later zip drops examples, vendor testdata and wire official_pint_*.
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../refers/pint-billing-1.1.2/unpacked");
+        if !root.is_dir() {
+            if std::env::var("CORE_INVOICE_REQUIRE_SPEC").ok().as_deref() == Some("1") {
+                panic!("missing PINT unpacked after task spec: {}", root.display());
+            }
+            return;
+        }
+        fn collect_xml(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+            let Ok(rd) = std::fs::read_dir(dir) else {
+                return;
+            };
+            for e in rd.flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    collect_xml(&p, out);
+                    continue;
+                }
+                let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("");
+                if !ext.eq_ignore_ascii_case("xml") {
+                    continue;
+                }
+                let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                if name.contains("schematron") || name.contains(".sch") {
+                    continue;
+                }
+                if let Ok(head) = std::fs::read_to_string(&p) {
+                    let h = head.chars().take(800).collect::<String>();
+                    if h.contains("Invoice") || h.contains("CreditNote") {
+                        out.push(p);
+                    }
+                }
+            }
+        }
+        let mut xml = Vec::new();
+        collect_xml(&root, &mut xml);
+        assert!(
+            xml.is_empty(),
+            "PINT pin shipped official XML {xml:?} — wire official_pint_* and testdata slice; do not treat pint_gst_sr as official"
         );
     }
 }

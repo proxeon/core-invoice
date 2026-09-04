@@ -21,6 +21,10 @@ task spec
 | Peppol PINT Billing | **1.1.2** `resources.zip` | `refers/pint-billing-1.1.2/` |
 | PINT-MY Billing | **1.3.0** (2025-12-08) `resources.zip` | `refers/pint-my-1.3.0/` |
 
+`Edition::En2026` stays unimplemented until **its** ConnectingEurope artefacts exist. Pin `validation-1.3.16` is EN 16931-1:2017+A1. Do not invent 2026 rules from drafts or news.
+
+PINT Billing 1.1.2 is genericode + Schematron + preprocessed XSLT. **No** official invoice/credit-note instance XML in this pin. Authored `pint_gst_sr` is not an oracle. `task svrl` does not compare international PINT.
+
 The hupe1980 crate at `/Users/akmalfirdaus/Code/lazuar/en16931` is a **shape** reference only (`refers/shape-en16931` after fetch). Schematron + CEN text win if they disagree.
 
 Do not copy CEN example XML into `crates/core-invoice-fixtures/data/`. The git-tracked slice is [`testdata/`](../testdata/) (NOTICE, not crate licence). Synthetic samples we author may be MIT OR Apache-2.0. Never `git add refers/*.zip` or the clones.

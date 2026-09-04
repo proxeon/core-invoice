@@ -18,6 +18,7 @@ pub fn claimed(inv: &Invoice) -> bool {
         .is_some_and(is_xrechnung_spec)
 }
 
+/// True when BT-24 names KoSIT / xeinkauf XRechnung (any 1.x/2.x/3.x).
 pub fn is_xrechnung_spec(id: &str) -> bool {
     let id = id.to_ascii_lowercase();
     id.contains("xrechnung") || id.contains("xeinkauf.de")

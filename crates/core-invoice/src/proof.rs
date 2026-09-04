@@ -9,15 +9,20 @@ use crate::validate;
 
 /// A profile at the type level.
 pub trait ProfileMarker {
+    /// The runtime [`Profile`] this marker proves.
     fn profile() -> Profile;
 }
 
+/// Type-level [`Profile::En16931`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct En16931;
+/// Type-level [`Profile::PeppolBis3`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PeppolBis3;
+/// Type-level [`Profile::Pint`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Pint;
+/// Type-level [`Profile::PintMy`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PintMy;
 
@@ -59,8 +64,10 @@ pub struct Validated<P: ProfileMarker> {
     _profile: PhantomData<P>,
 }
 
+/// Why a proof could not be minted.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProveError {
+    /// Semantic validation produced a fatal.
     Rejected(Report),
     /// `Check::without` was used; prove refuses to mint a proof.
     Suppressed(String),
@@ -79,6 +86,9 @@ impl std::fmt::Display for ProveError {
 impl std::error::Error for ProveError {}
 
 impl<P: ProfileMarker> Validated<P> {
+    /// Stamp BT-24/BT-23 from `P` and validate.
+    ///
+    /// Fails if any fatal, or if the existing BT-24 is a wrong process (self-billing).
     pub fn new(mut invoice: Invoice) -> Result<Self, Box<(Invoice, Report)>> {
         invoice.profile = P::profile();
         if let Some(id) = invoice.specification_id.as_deref() {
@@ -105,10 +115,12 @@ impl<P: ProfileMarker> Validated<P> {
         }
     }
 
+    /// The proved invoice.
     pub fn invoice(&self) -> &Invoice {
         &self.invoice
     }
 
+    /// Unwrap the proved invoice.
     pub fn into_inner(self) -> Invoice {
         self.invoice
     }
@@ -130,15 +142,18 @@ pub struct Check {
 }
 
 impl Check {
+    /// No suppressions.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Record a rule id to suppress. [`Check::prove`] then fails — a proof must see every fatal.
     pub fn without(mut self, id: impl Into<String>) -> Self {
         self.suppressed.push(id.into());
         self
     }
 
+    /// Mint a [`Validated<P>`] only if nothing was suppressed and validation has no fatal.
     pub fn prove<P: ProfileMarker>(self, invoice: Invoice) -> Result<Validated<P>, ProveError> {
         if let Some(id) = self.suppressed.first() {
             return Err(ProveError::Suppressed(id.clone()));

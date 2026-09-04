@@ -28,18 +28,30 @@ use crate::tax::{TaxSystem, wire_scheme};
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[non_exhaustive]
 pub enum ReconcileError {
+    /// An amount overflowed while summing or rounding.
     #[error("{term} overflowed while reconciling; the amounts involved are not representable")]
-    Overflow { term: &'static str },
+    Overflow {
+        /// Business term that overflowed (e.g. `BT-106`).
+        term: &'static str,
+    },
+    /// A rated category has no rate; defaulting to zero would under-declare tax.
     #[error(
         "{at} is a taxed category with no rate; defaulting it to zero would silently under-declare tax"
     )]
-    MissingRate { at: Path, category: String },
+    MissingRate {
+        /// Where the rate is missing.
+        at: Path,
+        /// Category code that needed a rate.
+        category: String,
+    },
 }
 
 /// What reconciliation produced, before it is written back.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Reconciled {
+    /// BG-23 rows, one per group key.
     pub tax_breakdown: Vec<TaxBreakdown>,
+    /// BG-22 totals.
     pub totals: DocumentTotals,
 }
 
@@ -61,6 +73,7 @@ pub struct Reconciler {
 }
 
 impl Reconciler {
+    /// Empty builder: no prepaid, rounding, or supplied exemptions.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
@@ -104,6 +117,7 @@ impl Reconciler {
         self
     }
 
+    /// Compute BG-23 and BG-22 without writing them back.
     pub fn compute(&self, inv: &Invoice) -> Result<Reconciled, ReconcileError> {
         let tax_breakdown = self.breakdown(inv)?;
         let totals = self.totals(inv, &tax_breakdown)?;

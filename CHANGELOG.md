@@ -23,6 +23,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Peppol syntax extras: formats `validate_xml` walks R006 (CII), R008 (UBL empty elements), R043, R044, R053, R080 (UBL CreditNote), R100, and CL007. Model evals stay constant-pass. Not OpenPEPPOL Valid.
 - Optional `xrechnung`: `BR-DE-1` is BG-16 (was mislabelled seller contact). Seller contact is `BR-DE-2`. Added `BR-DE-3`–`11`, `BR-DE-14`, `BR-DE-17` (warning). `BR-DE-16` uses the listed VAT categories. Still never default, never CORE.
 - Crate READMEs point at the GitHub guide. Fixtures README names `pint_gst_sr` as authored, not official.
+- `core-invoice` enables `missing_docs` (rustdoc on public items).
+- Artefact tripwires: Peppol `rules/sch` panics under `CORE_INVOICE_REQUIRE_SPEC` if missing; PINT 1.1.2 pin must not grow official instance XML unnoticed; pin consts include PINT 1.1.2; Python `validate_xml` ctypes smoke in CI.
 
 ## [2.0.2] — 2026-09-04
 

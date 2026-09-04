@@ -1,8 +1,13 @@
+//! Finding locations: [`BtId`], [`Group`], [`Path`]. Repeating-group index is 0-based.
+
 use std::fmt;
 
-/// Business term id `BT-151`.
+/// Business term id (`BT-151`). Finding location, not a typed table-2 field.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct BtId(pub u16);
+pub struct BtId(
+    /// Numeric suffix (`151` in `BT-151`).
+    pub u16,
+);
 
 impl fmt::Display for BtId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -15,23 +20,36 @@ impl fmt::Display for BtId {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub enum Group {
+    /// Invoice root; no BG number.
     Document,
+    /// Seller (BG-4).
     Seller,
+    /// Buyer (BG-7).
     Buyer,
+    /// Payee (BG-10).
     Payee,
+    /// Seller tax representative (BG-11).
     TaxRepresentative,
+    /// Delivery (BG-13).
     Delivery,
+    /// Payment instructions (BG-16).
     Payment,
+    /// Document level allowance (BG-20).
     DocumentAllowance,
+    /// Document level charge (BG-21).
     DocumentCharge,
+    /// Document totals (BG-22).
     Totals,
     /// Tax breakdown (BG-23 / IBG-23), not VAT-only.
     TaxBreakdown,
+    /// Additional supporting document (BG-24).
     Attachment,
+    /// Invoice line (BG-25).
     Line,
 }
 
 impl Group {
+    /// EN 16931 BG number, or `None` for [`Group::Document`].
     pub fn bg_id(self) -> Option<u16> {
         Some(match self {
             Self::Document => return None,
@@ -51,14 +69,21 @@ impl Group {
     }
 }
 
+/// Finding location: group + optional 0-based index + optional [`BtId`].
+///
+/// Display: `BT-1`, `Invoice`, `BG-22`, `BG-22/BT-109`, `BG-25[2]/BT-151`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Path {
+    /// Repeating or distinguishable group.
     pub group: Group,
+    /// 0-based occurrence. `None` if the group is unindexed.
     pub index: Option<usize>,
+    /// Business term, if the finding is on a specific BT.
     pub term: Option<BtId>,
 }
 
 impl Path {
+    /// Document-level term (`BT-1`).
     pub fn term(term: BtId) -> Self {
         Self {
             group: Group::Document,
@@ -67,6 +92,7 @@ impl Path {
         }
     }
 
+    /// Repeating group at `index` (0-based) plus term (`BG-25[2]/BT-151`).
     pub fn at_term(group: Group, index: usize, term: BtId) -> Self {
         Self {
             group,
@@ -75,6 +101,7 @@ impl Path {
         }
     }
 
+    /// Whole group, no term (`BG-22`).
     pub fn group(group: Group) -> Self {
         Self {
             group,
@@ -83,6 +110,7 @@ impl Path {
         }
     }
 
+    /// Group plus term, no index (`BG-22/BT-109`).
     pub fn group_term(group: Group, term: BtId) -> Self {
         Self {
             group,

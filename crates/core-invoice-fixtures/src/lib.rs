@@ -452,4 +452,31 @@ mod tests {
             "{report}"
         );
     }
+
+    #[test]
+    fn official_pint_when_present() {
+        // 1.1.2 zip has no instance XML. Missing is the pin, not a fetch bug —
+        // do not panic under CORE_INVOICE_REQUIRE_SPEC=1.
+        let dir = core_invoice_formats::corpus("pint-billing-1.1.2/unpacked/trn-invoice/example");
+        if !dir.is_dir() {
+            return;
+        }
+        let mut any = false;
+        let Ok(rd) = std::fs::read_dir(&dir) else {
+            return;
+        };
+        for e in rd.flatten() {
+            let p = e.path();
+            if p.extension().and_then(|e| e.to_str()) != Some("xml") {
+                continue;
+            }
+            any = true;
+            let xml = std::fs::read_to_string(&p).unwrap();
+            let inv = core_invoice_formats::read(&xml).unwrap();
+            assert_eq!(inv.profile, Profile::Pint, "{}", p.display());
+            let report = core_invoice_formats::validate_xml(&xml, Some(Profile::Pint)).unwrap();
+            assert_eq!(report.profile_slug, "pint", "{}", p.display());
+        }
+        let _ = any;
+    }
 }

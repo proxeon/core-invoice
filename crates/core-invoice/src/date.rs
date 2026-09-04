@@ -1,3 +1,5 @@
+//! Calendar [`Date`]: `YYYY-MM-DD`, no time, no timezone. Invalid input fails closed.
+
 use crate::error::DateError;
 use std::fmt;
 
@@ -10,6 +12,7 @@ pub struct Date {
 }
 
 impl Date {
+    /// Calendar day. Invalid Y-M-D is `Err`. Year `0..=9999`.
     pub fn new(year: i32, month: u8, day: u8) -> Result<Self, DateError> {
         if !(0..=9999).contains(&year) || !(1..=12).contains(&month) {
             return Err(DateError::Invalid);
@@ -20,6 +23,7 @@ impl Date {
         Ok(Self { year, month, day })
     }
 
+    /// `YYYY-MM-DD` only. Time and zone suffixes fail closed.
     pub fn parse(s: &str) -> Result<Self, DateError> {
         let s = s.trim();
         if s.len() < 10 || s.as_bytes().get(4) != Some(&b'-') || s.as_bytes().get(7) != Some(&b'-')
@@ -36,12 +40,15 @@ impl Date {
         Self::new(year, month, day)
     }
 
+    /// Year (`0..=9999`).
     pub fn year(self) -> i32 {
         self.year
     }
+    /// Month (`1..=12`).
     pub fn month(self) -> u8 {
         self.month
     }
+    /// Day of month.
     pub fn day(self) -> u8 {
         self.day
     }

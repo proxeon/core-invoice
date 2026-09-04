@@ -1,3 +1,5 @@
+//! Verbatim [`Code`]. List membership is a rule (BR-CL-*), not a constructor.
+
 use std::fmt;
 
 /// Verbatim code. Membership is a rule (BR-CL-*), not a constructor.
@@ -5,14 +7,17 @@ use std::fmt;
 pub struct Code(String);
 
 impl Code {
+    /// Verbatim code as written. No list check.
     pub fn new(value: impl Into<String>) -> Self {
         Self(value.into())
     }
 
+    /// Code as written.
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
+    /// True when empty or whitespace-only.
     pub fn is_empty(&self) -> bool {
         self.0.trim().is_empty()
     }
